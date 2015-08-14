@@ -913,7 +913,20 @@ MENUITEM_FUNCTION(view_album_art_item, 0, ID2P(LANG_VIEW_ALBUMART),
 
 static bool onplay_add_to_shortcuts(void)
 {
-    shortcuts_add(SHORTCUT_BROWSER, selected_file.path);
+    if (selected_file.attr & ATTR_DIRECTORY)
+    {
+        size_t pathlen = strlen(selected_file.path);
+        if (selected_file.path[pathlen - 1] != PATH_SEPCH)
+        {
+            char dirpath[MAX_PATH];
+            strcpy(dirpath, selected_file.path);
+            dirpath[pathlen] = PATH_SEPCH;
+            dirpath[pathlen + 1] = '\0';
+            shortcuts_add(SHORTCUT_BROWSER, dirpath);
+        }
+        else shortcuts_add(SHORTCUT_BROWSER, selected_file.path);
+    }
+    else shortcuts_add(SHORTCUT_FILE, selected_file.path);
     return false;
 }
 MENUITEM_FUNCTION(add_to_faves_item, 0, ID2P(LANG_ADD_TO_FAVES),
