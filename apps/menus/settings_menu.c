@@ -371,6 +371,9 @@ MAKE_MENU(car_adapter_mode_menu, ID2P(LANG_CAR_ADAPTER_MODE), 0, Icon_NOICON,
            &car_adapter_mode, &car_adapter_mode_delay);
 #endif
 #ifdef IPOD_ACCESSORY_PROTOCOL
+#if defined(IPOD_COLOR) || defined(IPOD_4G) || defined(IPOD_MINI) || defined(IPOD_MINI2G)
+MENUITEM_SETTING(serial_port, &global_settings.serial_port, NULL);
+#endif
 MENUITEM_SETTING(serial_bitrate, &global_settings.serial_bitrate, NULL);
 #endif
 #ifdef HAVE_ACCESSORY_SUPPLY
@@ -451,6 +454,9 @@ MAKE_MENU(system_menu, ID2P(LANG_SYSTEM),
             &car_adapter_mode_menu,
 #endif
 #ifdef IPOD_ACCESSORY_PROTOCOL
+#if defined(IPOD_COLOR) || defined(IPOD_4G) || defined(IPOD_MINI) || defined(IPOD_MINI2G)
+            &serial_port,
+#endif
             &serial_bitrate,
 #endif
 #ifdef HAVE_ACCESSORY_SUPPLY
