@@ -115,7 +115,7 @@ target/hosted/sonynwz/nvp-nwz.c
 target/hosted/sonynwz/nwz-db.c
 #endif
 
-#if ((defined(HIBY_LINUX) || defined(FIIO_M3K)) && !defined(SIMULATOR))
+#if ((defined(HIBY_LINUX) || defined(FIIO_M3K_LINUX)) && !defined(SIMULATOR))
 drivers/lcd-memframe.c
 target/hosted/alsa-controls.c
 target/hosted/pcm-alsa.c
@@ -127,6 +127,7 @@ target/hosted/sysfs.c
 target/hosted/backlight-unix.c
 target/hosted/system-hosted.c
 target/hosted/lcd-linuxfb.c
+target/hosted/power-linux.c
 #endif
 
 #if defined(AGPTEK_ROCKER) && !defined(SIMULATOR)
@@ -148,7 +149,7 @@ target/hosted/usb-hiby.c
 target/hosted/button-devinput.c
 #endif
 
-#if (defined(FIIO_M3K)) && !defined(SIMULATOR)
+#if (defined(FIIO_M3K_LINUX)) && !defined(SIMULATOR)
 target/hosted/fiio/buttonlight-fiio.c
 target/hosted/fiio/button-fiio.c
 target/hosted/fiio/debug-fiio.c
@@ -335,9 +336,6 @@ drivers/touchscreen.c
 
 /* Storage */
 #if (CONFIG_PLATFORM & PLATFORM_NATIVE)
-#if (CONFIG_STORAGE & STORAGE_NAND) && (CONFIG_NAND == NAND_IFP7XX)
-drivers/ata_flash.c
-#endif
 #if (CONFIG_STORAGE & STORAGE_NAND) && (CONFIG_NAND == NAND_TCC)
 target/arm/ata-nand-telechips.c
 #endif
@@ -391,12 +389,12 @@ drivers/rtc/rtc_rx5x348ab.c
 drivers/rtc/rtc_mr100.c
 #elif (CONFIG_RTC == RTC_MC13783)
 drivers/rtc/rtc_mc13783.c
-#elif (CONFIG_RTC == RTC_TCC77X)
-drivers/rtc/rtc_tcc77x.c
 #elif (CONFIG_RTC == RTC_JZ4740)
 drivers/rtc/rtc_jz4740.c
 #elif (CONFIG_RTC == RTC_JZ4760)
 drivers/rtc/rtc_jz4760.c
+#elif (CONFIG_RTC == RTC_X1000)
+drivers/rtc/rtc_x1000.c
 #elif (CONFIG_RTC == RTC_S35390A)
 drivers/rtc/rtc_s35390a.c
 #elif (CONFIG_RTC == RTC_S35380A)
@@ -487,6 +485,8 @@ drivers/audio/as3514.c
 drivers/audio/tlv320.c
 #elif defined(HAVE_AK4537)
 drivers/audio/ak4537.c
+#elif defined(HAVE_AK4376)
+drivers/audio/ak4376.c
 #elif defined(HAVE_UDA1341)
 drivers/audio/uda1341.c
 #elif defined(HAVE_CS42L55)
@@ -598,7 +598,7 @@ target/arm/ipod/powermgmt-ipod-pcf.c
 target/arm/pp/i2c-pp.c
 #elif CONFIG_I2C == I2C_PNX0101
 target/arm/pnx0101/i2c-pnx0101.c
-#elif CONFIG_I2C == I2C_TCC780X || CONFIG_I2C == I2C_TCC77X
+#elif CONFIG_I2C == I2C_TCC780X
 target/arm/i2c-telechips.c
 #elif CONFIG_I2C == I2C_S3C2440
 target/arm/s3c2440/i2c-s3c2440.c
@@ -744,8 +744,6 @@ target/arm/pnx0101/crt0-pnx0101.S
 target/arm/tms320dm320/crt0.S
 #elif CONFIG_CPU==S3C2440
 target/arm/s3c2440/crt0.S
-#elif defined(CPU_TCC77X)
-target/arm/tcc77x/crt0.S
 #elif defined(CPU_TCC780X)
 target/arm/tcc780x/crt0.S
 #elif CONFIG_CPU==IMX31L
@@ -836,7 +834,7 @@ target/arm/as3525/usb-drv-as3525.c
 #elif CONFIG_USBOTG == USBOTG_S3C6400X
 target/arm/usb-s3c6400x.c
 #elif CONFIG_USBOTG == USBOTG_DESIGNWARE
-target/arm/usb-designware.c
+drivers/usb-designware.c
 #elif CONFIG_USBOTG == USBOTG_ISP1583
 drivers/isp1583.c
 #elif CONFIG_USBOTG == USBOTG_RK27XX
@@ -892,27 +890,7 @@ target/arm/s5l8700/ipodnano2g/adc-nano2g.c
 target/arm/s5l8700/adc-s5l8700.c
 # endif
 
-#elif CONFIG_I2C == I2C_TCC77X
-target/arm/tcc77x/adc-tcc77x.c
-
 #endif /* CONFIG_I2C */
-
-#ifdef CPU_TCC77X
-target/arm/usb-tcc.c
-target/arm/tcc77x/kernel-tcc77x.c
-target/arm/tcc77x/system-tcc77x.c
-target/arm/tcc77x/timer-tcc77x.c
-# ifndef IAUDIO7
-target/arm/tcc77x/powermgmt-tcc77x.c
-# endif /* !IAUDIO7 */
-# ifndef BOOTLOADER
-#  ifndef SANSA_C100
-target/arm/wmcodec-telechips.c
-#  endif /* !C100 */
-target/arm/pcm-telechips.c
-target/arm/tcc77x/debug-tcc77x.c
-# endif /* !BOOTLOADER */
-#endif /* CPU_TCC77X */
 
 #if CONFIG_CPU == S5L8700 || CONFIG_CPU == S5L8701
 target/arm/s5l8700/kernel-s5l8700.c
@@ -1058,12 +1036,9 @@ target/coldfire/iaudio/audio-iaudio.c
 #endif
 #endif /* IAUDIO_M3 */
 
-#ifdef IRIVER_IFP7XX_SERIES
 #ifdef STUB
-ifp_usb_serial.c
 libc/sscanf.c
 #endif /* STUB */
-#endif /* IRIVER_IFP7XX_SERIES */
 
 #if defined(IRIVER_H300_SERIES) || defined(IRIVER_H100_SERIES)
 target/coldfire/iriver/ata-iriver.c
@@ -1288,7 +1263,8 @@ target/arm/tms320dm320/sansa-connect/crt0-board.S
 target/arm/tms320dm320/sansa-connect/lcd-sansaconnect.c
 target/arm/tms320dm320/sansa-connect/adc-sansaconnect.c
 target/arm/tms320dm320/sansa-connect/power-sansaconnect.c
-target/arm/tms320dm320/sansa-connect/powermgmt-sansaconnect.c
+target/arm/tms320dm320/sansa-connect/tnetv105_cppi.c
+target/arm/tms320dm320/sansa-connect/tnetv105_usb_drv.c
 target/arm/tms320dm320/sansa-connect/usb-sansaconnect.c
 target/arm/tms320dm320/sansa-connect/avr-sansaconnect.c
 target/arm/tms320dm320/sansa-connect/backlight-sansaconnect.c
@@ -1367,47 +1343,6 @@ target/arm/ipod/button-mini1g.c
 #ifdef IPOD_MINI2G
 target/arm/ipod/button-clickwheel.c
 #endif /* IPOD_MINI2G */
-
-#ifdef IRIVER_IFP7XX
-target/arm/pnx0101/iriver-ifp7xx/adc-ifp7xx.c
-target/arm/pnx0101/iriver-ifp7xx/backlight-ifp7xx.c
-target/arm/pnx0101/iriver-ifp7xx/button-ifp7xx.c
-target/arm/pnx0101/iriver-ifp7xx/lcd-ifp7xx.c
-target/arm/pnx0101/iriver-ifp7xx/power-ifp7xx.c
-target/arm/pnx0101/iriver-ifp7xx/powermgmt-ifp7xx.c
-target/arm/pnx0101/iriver-ifp7xx/usb-ifp7xx.c
-#ifndef BOOTLOADER
-target/arm/pnx0101/pcm-pnx0101.c
-#endif /* BOOTLOADER */
-#endif /* IRIVER_IFP7XX */
-
-#ifdef LOGIK_DAX
-drivers/nand_id.c
-target/arm/tcc77x/logikdax/button-logikdax.c
-target/arm/tcc77x/logikdax/power-logikdax.c
-#ifndef BOOTLOADER
-target/arm/tcc77x/logikdax/audio-logikdax.c
-#endif /* BOOTLOADER */
-#endif /* LOGIK_DAX */
-
-#ifdef SANSA_M200
-drivers/nand_id.c
-target/arm/tcc77x/m200/button-m200.c
-target/arm/tcc77x/m200/power-m200.c
-#ifndef BOOTLOADER
-target/arm/tcc77x/m200/audio-m200.c
-#endif /* BOOTLOADER */
-#endif /* SANSA_M200 */
-
-#ifdef SANSA_C100
-drivers/nand_id.c
-target/arm/tcc77x/c100/lcd-S6B33B2.c
-target/arm/tcc77x/c100/button-c100.c
-target/arm/tcc77x/c100/power-c100.c
-#ifndef BOOTLOADER
-target/arm/tcc77x/c100/audio-c100.c
-#endif /* BOOTLOADER */
-#endif /* SANSA_C100 */
 
 #ifdef SANSA_CLIPPLUS
 target/arm/as3525/sansa-clipplus/lcd-clip-plus.c
@@ -1519,19 +1454,6 @@ target/arm/as3525/sansa-clipzip/backlight-clipzip.c
 target/arm/as3525/sansa-clipzip/powermgmt-clipzip.c
 #endif /* !BOOTLOADER */
 #endif /* SANSA_CLIPZIP */
-
-#ifdef IAUDIO_7
-drivers/nand_id.c
-drivers/pcf50606.c
-target/arm/tcc77x/iaudio7/lcd-iaudio7.c
-target/arm/tcc77x/iaudio7/power-iaudio7.c
-target/arm/tcc77x/iaudio7/powermgmt-iaudio7.c
-target/arm/tcc77x/iaudio7/button-iaudio7.c
-target/arm/tcc77x/iaudio7/ata2501.c
-#ifndef BOOTLOADER
-target/arm/tcc77x/iaudio7/audio-iaudio7.c
-#endif /* BOOTLOADER */
-#endif /* IAUDIO_7 */
 
 #ifdef COWON_D2
 drivers/lcd-memframe.c
@@ -1720,6 +1642,36 @@ target/mips/ingenic_jz47xx/pcm-jz4760.c
 drivers/nand_id.c
 #endif /* CONFIG_CPU == JZ4760B */
 
+#if CONFIG_CPU == X1000
+target/mips/ingenic_x1000/crt0.S
+target/mips/ingenic_x1000/aic-x1000.c
+target/mips/ingenic_x1000/clk-x1000.c
+target/mips/ingenic_x1000/debug-x1000.c
+target/mips/ingenic_x1000/dma-x1000.c
+target/mips/ingenic_x1000/gpio-x1000.c
+target/mips/ingenic_x1000/i2c-x1000.c
+target/mips/ingenic_x1000/kernel-x1000.c
+target/mips/ingenic_x1000/lcd-x1000.c
+target/mips/ingenic_x1000/nand-x1000.c
+target/mips/ingenic_x1000/pcm-x1000.c
+target/mips/ingenic_x1000/pwm-x1000.c
+target/mips/ingenic_x1000/sfc-x1000.c
+target/mips/ingenic_x1000/system-x1000.c
+target/mips/ingenic_x1000/timer-x1000.c
+#ifndef USB_NONE
+target/mips/ingenic_x1000/usb-x1000.c
+#endif
+#if (CONFIG_STORAGE & (STORAGE_SD|STORAGE_MMC|STORAGE_ATA))
+target/mips/ingenic_x1000/msc-x1000.c
+#endif
+#if (CONFIG_STORAGE & STORAGE_SD)
+target/mips/ingenic_x1000/sd-x1000.c
+#endif
+target/mips/ingenic_x1000/spl-start.S
+target/mips/ingenic_x1000/spl-x1000.c
+common/ucl_decompress.c
+#endif /* CONFIG_CPU == X1000 */
+
 #if defined(ONDA_VX747) || defined(ONDA_VX747P) || defined(ONDA_VX777)
 target/mips/ingenic_jz47xx/onda_vx747/backlight-onda_vx7X7.c
 target/mips/ingenic_jz47xx/onda_vx747/lcd-onda_vx747.c
@@ -1742,6 +1694,18 @@ target/mips/ingenic_jz47xx/xduoo_x3/lcd-xduoo_x3.c
 target/mips/ingenic_jz47xx/xduoo_x3/power-xduoo_x3.c
 target/mips/ingenic_jz47xx/xduoo_x3/sadc-xduoo_x3.c
 #endif /* XDUOO_X3 */
+
+#if defined(FIIO_M3K)
+target/mips/ingenic_x1000/fiiom3k/audiohw-fiiom3k.c
+target/mips/ingenic_x1000/fiiom3k/backlight-fiiom3k.c
+target/mips/ingenic_x1000/fiiom3k/button-fiiom3k.c
+target/mips/ingenic_x1000/fiiom3k/lcd-fiiom3k.c
+target/mips/ingenic_x1000/fiiom3k/power-fiiom3k.c
+target/mips/ingenic_x1000/fiiom3k/spl-fiiom3k.c
+#ifdef BOOTLOADER
+target/mips/ingenic_x1000/fiiom3k/installer-fiiom3k.c
+#endif
+#endif /* FIIO_M3K */
 
 #if defined(LYRE_PROTO1)
 target/arm/at91sam/lyre_proto1/adc-lyre_proto1.c
@@ -1919,6 +1883,7 @@ target/hosted/lc-unix.c
 target/hosted/ibasso/audiohw-ibasso.c
 target/hosted/ibasso/backlight-ibasso.c
 target/hosted/ibasso/button-ibasso.c
+target/hosted/power-linux.c
 #ifdef DEBUG
 target/hosted/ibasso/debug-ibasso.c
 #endif
@@ -1961,6 +1926,19 @@ target/hosted/sdl/filesystem-sdl.c
 
 #if defined(HAVE_TOUCHPAD) && !defined(HAS_BUTTON_HOLD)
 drivers/touchpad.c
+#endif
+
+/* Hardware drivers */
+#ifndef SIMULATOR
+#ifdef HAVE_I2C_ASYNC
+drivers/i2c-async.c
+#endif
+#ifdef HAVE_AXP_PMU
+drivers/axp-pmu.c
+#endif
+#ifdef HAVE_FT6x06
+drivers/ft6x06.c
+#endif
 #endif
 
 /* firmware/kernel section */

@@ -836,7 +836,13 @@ long gui_wps_show(void)
             case ACTION_WPS_QUICKSCREEN:
             {
                 gwps_leave_wps();
-                if (quick_screen_quick(button))
+                if (global_settings.shortcuts_replaces_qs)
+                {
+                    global_status.last_screen = GO_TO_SHORTCUTMENU;
+                    int ret = quick_screen_quick(button);
+                    return (ret == GO_TO_PREVIOUS ? GO_TO_WPS : ret);
+                }
+                else if (quick_screen_quick(button) > 0)
                     return GO_TO_ROOT;
                 restore = true;
             }

@@ -638,6 +638,7 @@ static int dirbrowse(void)
         return GO_TO_PREVIOUS;  /* No files found for rockbox_browse() */
     }
 
+    send_event(GUI_EVENT_ACTIONUPDATE, (void*)1); /* force a redraw */
     gui_synclist_draw(&tree_lists);
     while(1) {
         bool restore = false;
@@ -645,7 +646,7 @@ static int dirbrowse(void)
             tc.dirlevel = 0; /* shouldnt be needed.. this code needs work! */
 
         keyclick_set_callback(gui_synclist_keyclick_callback, &tree_lists);
-        button = get_action(CONTEXT_TREE,
+        button = get_action(CONTEXT_TREE|ALLOW_SOFTLOCK,
                             list_do_action_timeout(&tree_lists, HZ/2));
         oldbutton = button;
         gui_synclist_do_button(&tree_lists, &button,LIST_WRAP_UNLESS_HELD);
@@ -734,13 +735,18 @@ static int dirbrowse(void)
                 break;
 #ifdef HAVE_QUICKSCREEN
             case ACTION_STD_QUICKSCREEN:
-                /* don't enter f2 from plugin browser */
-                if (*tc.dirfilter < NUM_FILTER_MODES)
+                if (global_settings.shortcuts_replaces_qs)
                 {
-                    if (quick_screen_quick(button))
-                        reload_dir = true;
-                    restore = true;
+                    if (*tc.dirfilter < NUM_FILTER_MODES)
+                    {
+                        global_status.last_screen = GO_TO_SHORTCUTMENU;
+                        return quick_screen_quick(button);
+                    }
+                    break;
                 }
+                else if (quick_screen_quick(button))
+                    reload_dir = true;
+                restore = true;
                 break;
 #endif
 

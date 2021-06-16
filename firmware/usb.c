@@ -41,6 +41,7 @@
 #endif
 #include "logf.h"
 #include "screendump.h"
+#include "powermgmt.h"
 
 #ifndef BOOTLOADER
 #include "misc.h"
@@ -56,7 +57,7 @@
      (defined(HAVE_USBSTACK) && defined(IPOD_NANO2G)) || \
      (defined(HAVE_USBSTACK) && (defined(CREATIVE_ZVx))) || \
      (defined(HAVE_USBSTACK) && (defined(OLYMPUS_MROBE_500))) || \
-     defined(CPU_TCC77X) || defined(CPU_TCC780X) || \
+     defined(CPU_TCC780X) || \
      (CONFIG_USBOTG == USBOTG_JZ4740) || \
      (CONFIG_USBOTG == USBOTG_JZ4760)
 /* TODO: condition should be reset to be only the original
@@ -79,7 +80,7 @@ static int usb_mmc_countdown = 0;
 #ifndef USB_EXTRA_STACK
 #   define USB_EXTRA_STACK 0x0 /*Define in firmware/export/config/[target].h*/
 #endif
-static long usb_stack[(DEFAULT_STACK_SIZE*2 + DUMP_BMP_LINESIZE + USB_EXTRA_STACK)/sizeof(long)];
+static long usb_stack[(DEFAULT_STACK_SIZE*4 + DUMP_BMP_LINESIZE + USB_EXTRA_STACK)/sizeof(long)];
 static const char usb_thread_name[] = "usb";
 static unsigned int usb_thread_entry = 0;
 static bool usb_monitor_enabled = false;
@@ -95,8 +96,8 @@ static bool usb_host_present = false;
 static int usb_num_acks_to_expect = 0;
 static long usb_last_broadcast_tick = 0;
 #ifdef HAVE_USB_POWER
-static int usb_mode = USB_MODE_ASK;
-static int new_usbmode = USB_MODE_ASK;
+static int usb_mode = USBMODE_DEFAULT;
+static int new_usbmode = USBMODE_DEFAULT;
 #endif
 
 static int usb_release_exclusive_storage(void);
@@ -436,6 +437,8 @@ static void NORETURN_ATTR usb_thread(void)
     {
         queue_wait(&usb_queue, &ev);
 
+        reset_poweroff_timer(); /* Any USB event counts */
+
         switch(ev.id)
         {
         /*** Main USB thread duties ***/
@@ -476,6 +479,7 @@ static void NORETURN_ATTR usb_thread(void)
 
             /* Power (charging-only) button */
 #ifdef HAVE_USB_POWER
+            new_usbmode = usb_mode;
             switch (usb_mode) {
             case USB_MODE_CHARGE:
             case USB_MODE_ADB:
@@ -491,7 +495,7 @@ static void NORETURN_ATTR usb_thread(void)
             case USB_MODE_MASS_STORAGE:
                 if (button_status() & ~USBPOWER_BTN_IGNORE)
                     new_usbmode = USB_MODE_CHARGE;
-                    break;
+                break;
 	    }
 
 #ifndef BOOTLOADER

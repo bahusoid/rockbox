@@ -487,10 +487,10 @@ static int onplay_menu(int index)
     int result, ret = 0;
     struct playlist_entry * current_track =
         playlist_buffer_get_track(&viewer.buffer, index);
-    MENUITEM_STRINGLIST(menu_items, ID2P(LANG_PLAYLIST), NULL, 
+    MENUITEM_STRINGLIST(menu_items, ID2P(LANG_PLAYLIST), NULL,
                         ID2P(LANG_CURRENT_PLAYLIST), ID2P(LANG_CATALOG),
                         ID2P(LANG_REMOVE), ID2P(LANG_MOVE), ID2P(LANG_SHUFFLE),
-                        ID2P(LANG_SAVE_DYNAMIC_PLAYLIST),
+                        ID2P(LANG_SAVE),
                         ID2P(LANG_PLAYLISTVIEWER_SETTINGS));
     bool current = (current_track->index == viewer.current_playing_track);
 
@@ -853,6 +853,24 @@ enum playlist_viewer_result playlist_viewer_ex(const char* filename)
             case ACTION_STD_MENU:
                 ret = PLAYLIST_VIEWER_MAINMENU;
                 goto exit;
+#ifdef HAVE_QUICKSCREEN
+            case ACTION_STD_QUICKSCREEN:
+                    if (!global_settings.shortcuts_replaces_qs)
+                    {
+                        quick_screen_quick(button);
+                        update_playlist(true);
+                        gui_synclist_set_voice_callback(&playlist_lists,
+                                                        global_settings.talk_file?
+                                                        &playlist_callback_voice:NULL);
+                        gui_synclist_set_icon_callback(&playlist_lists,
+                                      global_settings.playlist_viewer_icons?
+                                      &playlist_callback_icons:NULL);
+                        gui_synclist_set_title(&playlist_lists, str(LANG_PLAYLIST), Icon_Playlist);
+                        gui_synclist_draw(&playlist_lists);
+                        gui_synclist_speak_item(&playlist_lists);
+                        break;
+                    }
+#endif
             default:
                 if(default_event_handler(button) == SYS_USB_CONNECTED)
                 {

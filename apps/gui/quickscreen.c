@@ -26,6 +26,7 @@
 #include "font.h"
 #include "kernel.h"
 #include "misc.h"
+#include "sound.h"
 #include "action.h"
 #include "settings_list.h"
 #include "lang.h"
@@ -361,7 +362,18 @@ static bool gui_syncquickscreen_run(struct gui_quickscreen * qs, int button_ente
         }
         else if (button == button_enter)
             can_quit = true;
-
+        else if (button == ACTION_QS_VOLUP) {
+            global_settings.volume += sound_steps(SOUND_VOLUME);
+            setvol();
+            FOR_NB_SCREENS(i)
+                skin_update(CUSTOM_STATUSBAR, i, SKIN_REFRESH_NON_STATIC);
+        }
+        else if (button == ACTION_QS_VOLDOWN) {
+            global_settings.volume -= sound_steps(SOUND_VOLUME);
+            setvol();
+            FOR_NB_SCREENS(i)
+                skin_update(CUSTOM_STATUSBAR, i, SKIN_REFRESH_NON_STATIC);
+        }
         if ((button == button_enter) && can_quit)
             break;
 
@@ -390,7 +402,7 @@ static const struct settings_list *get_setting(int gs_value,
     return defaultval;
 }
 
-bool quick_screen_quick(int button_enter)
+int quick_screen_quick(int button_enter)
 {
     struct gui_quickscreen qs;
     bool oldshuffle = global_settings.playlist_shuffle;
@@ -431,7 +443,7 @@ bool quick_screen_quick(int button_enter)
                 playlist_sort(NULL, true);
         }
     }
-    return usb;
+    return (usb ? 1:0);
 }
 
 /* stuff to make the quickscreen configurable */

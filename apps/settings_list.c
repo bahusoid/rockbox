@@ -32,6 +32,7 @@
 #include "backlight.h"
 #include "sound.h"
 #include "settings.h"
+#include "rbpaths.h"
 #include "settings_list.h"
 #include "usb.h"
 #include "audio.h"
@@ -60,6 +61,8 @@
 #ifdef HAVE_HOTKEY
 #include "onplay.h"
 #endif
+
+#include "voice_thread.h"
 
 #if defined(DX50) || defined(DX90)
 #include "governor-ibasso.h"
@@ -389,7 +392,7 @@ static const char* formatter_time_unit_0_is_always(char *buffer, size_t buffer_s
     (void) buffer_size;
     (void) unit;
     if (val == -1)
-        return str(LANG__NEVER);
+        return str(LANG_NEVER);
     else if (val == 0)
         return str(LANG_ALWAYS);
     return buffer;
@@ -398,7 +401,7 @@ static const char* formatter_time_unit_0_is_always(char *buffer, size_t buffer_s
 static int32_t getlang_time_unit_0_is_always(int value, int unit)
 {
     if (value == -1)
-        return LANG__NEVER;
+        return LANG_NEVER;
     else if (value == 0)
         return LANG_ALWAYS;
     else
@@ -857,6 +860,12 @@ const struct settings_list settings[] = {
 #endif
 #endif
 
+#ifdef AUDIOHW_HAVE_POWER_MODE
+    CHOICE_SETTING(F_SOUNDSETTING, power_mode, LANG_DAC_POWER_MODE, 0,
+                   "dac_power_mode", "high,low", sound_set_power_mode,
+                   2, ID2P(LANG_DAC_POWER_HIGH), ID2P(LANG_DAC_POWER_LOW)),
+#endif
+
     /* playback */
     OFFON_SETTING(0, playlist_shuffle, LANG_SHUFFLE, false, "shuffle", NULL),
     SYSTEM_SETTING(NVRAM(4), resume_index, -1),
@@ -1268,6 +1277,8 @@ const struct settings_list settings[] = {
     CHOICE_SETTING(0, recursive_dir_insert, LANG_RECURSE_DIRECTORY , RECURSE_ON,
                    "recursive directory insert", off_on_ask, NULL , 3 ,
                    ID2P(LANG_OFF), ID2P(LANG_ON), ID2P(LANG_ASK)),
+    OFFON_SETTING(0, playlist_reload_after_save, LANG_PLAYLIST_RELOAD_AFTER_SAVE,
+                  false, "reload after saving playlist", NULL),
     /* bookmarks */
     CHOICE_SETTING(0, autocreatebookmark, LANG_BOOKMARK_SETTINGS_AUTOCREATE,
                    BOOKMARK_NO, "autocreate bookmarks",
@@ -1327,6 +1338,8 @@ const struct settings_list settings[] = {
                   "talk filetype", NULL),
     OFFON_SETTING(F_TEMPVAR, talk_battery_level, LANG_TALK_BATTERY_LEVEL, false,
                   "Announce Battery Level", NULL),
+    INT_SETTING(0, talk_mixer_amp, LANG_TALK_MIXER_LEVEL, 100,
+        "talk mixer level", UNIT_PERCENT, 0, 100, 5, NULL, NULL, voice_set_mixer_level),
 
 #ifdef HAVE_RECORDING
      /* recording */
@@ -1784,6 +1797,15 @@ const struct settings_list settings[] = {
     OFFON_SETTING(0, warnon_erase_dynplaylist, LANG_WARN_ERASEDYNPLAYLIST_MENU,
                   true, "warn when erasing dynamic playlist",NULL),
 
+    OFFON_SETTING(0, show_shuffled_adding_options, LANG_SHOW_SHUFFLED_ADDING_OPTIONS, true,
+                      "show shuffled adding options", NULL),
+    CHOICE_SETTING(0, show_queue_options, LANG_SHOW_QUEUE_OPTIONS, 1,
+                      "show queue options", "off,on,in submenu",
+                      NULL, 3,
+                      ID2P(LANG_SET_BOOL_NO),
+                      ID2P(LANG_SET_BOOL_YES),
+                      ID2P(LANG_IN_SUBMENU)),
+
 #ifdef HAVE_BACKLIGHT
 #ifdef HAS_BUTTON_HOLD
     CHOICE_SETTING(0, backlight_on_button_hold, LANG_BACKLIGHT_ON_BUTTON_HOLD,
@@ -2157,21 +2179,22 @@ const struct settings_list settings[] = {
                    "Powersave",
                    "Performance"),
 #endif
-#if defined(HAVE_USB_POWER) && !defined(USB_NONE) && !defined(SIMULATOR)
+#if defined(DX50) || defined(DX90) || (defined(HAVE_USB_POWER) && !defined(USB_NONE) && !defined(SIMULATOR))
     CHOICE_SETTING(0,
                    usb_mode,
                    LANG_USB_MODE,
-                   USB_MODE_MASS_STORAGE,
+                   USBMODE_DEFAULT,
                    "usb mode",
                    "ask,mass storage,charge"
 #if defined(DX50) || defined(DX90)
                    ",adb"
 #endif
                    ,
-                   usb_set_mode,
 #if defined(DX50) || defined(DX90)
+                   ibasso_set_usb_mode,
                    4,
 #else
+                   usb_set_mode,
                    3,
 #endif
                    ID2P(LANG_ASK),

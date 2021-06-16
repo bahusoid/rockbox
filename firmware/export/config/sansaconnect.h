@@ -147,7 +147,7 @@
 #define BATTERY_CAPACITY_INC 100     /* capacity increment */
 #define BATTERY_TYPES_COUNT  1       /* only one type */
 
-#define CONFIG_BATTERY_MEASURE VOLTAGE_MEASURE
+#define CONFIG_BATTERY_MEASURE PERCENTAGE_MEASURE
 
 /* define current usage levels */
 #if 0
@@ -155,9 +155,6 @@
 #define CURRENT_NORMAL     85
 #define CURRENT_BACKLIGHT  200
 #endif
-
-/* Hardware controlled charging with monitoring */
-//#define CONFIG_CHARGING CHARGING_MONITOR
 
 #define CONFIG_CPU DM320
 
@@ -182,11 +179,18 @@
 /* Offset ( in the firmware file's header ) to the real data */
 #define FIRMWARE_OFFSET_FILE_DATA 8
 
-#if 0
+/* Hardware controlled charging */
+#define CONFIG_CHARGING CHARGING_SIMPLE
+
+#define CONFIG_USBOTG USBOTG_TNETV105
+
 #define HAVE_USBSTACK
+#define HAVE_USB_POWER
+#define HAVE_USB_CHARGING_ENABLE
+#define HAVE_BOOTLOADER_USB_MODE
 #define USB_VENDOR_ID 0x0781
 #define USB_PRODUCT_ID 0x7480
-#endif
+#define USB_NUM_ENDPOINTS 5
 
 #define INCLUDE_TIMEOUT_API
 

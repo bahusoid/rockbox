@@ -29,6 +29,21 @@
 #include "button-target.h"
 #include "usb_drv.h"
 
+/* Bit 0 - 20: Cached Address */
+#define CACHE_ADDRESS_MASK ((1<<21)-1)
+/* Bit 22: Cache line dirty */
+#define CACHE_LINE_DIRTY    (1<<22)
+/* Bit 23: Cache line valid */
+#define CACHE_LINE_VALID    (1<<23)
+/* Cache Size - 8K*/
+#define CACHE_SIZE       0x2000
+
+/*Initial memory address used to prime cache
+ * could be targeted to a more 'important' address
+ * Note:  Don't start at 0x0, as the compiler thinks it's a
+ * null pointer dereference and will helpfully blow up the code. */
+#define CACHED_INIT_ADDR CACHEALIGN_UP(0x2000)
+
 #if !defined(BOOTLOADER) || defined(HAVE_BOOTLOADER_USB_MODE)
 extern void TIMER1(void);
 extern void TIMER2(void);
@@ -218,6 +233,39 @@ void ICODE_ATTR commit_dcache(void)
     }
 }
 
+static void ICODE_ATTR cache_invalidate_special(void)
+{
+    /* Cache lines which are not marked as valid can cause memory
+     * corruption when there are many writes to and code fetches from
+     * cached memory. This workaround points all cache status to the
+     * maximum line address and marked valid but not dirty. Since that area
+     * is never accessed, the cache lines don't affect anything, and
+     * they're effectively discarded. Interrupts must be disabled here
+     * because any change they make to cached memory could be discarded.
+     *  A status word is 32 bits and is mirrored four times for each cache line
+        bit 0-20	line_address >> 11
+        bit 21		unused?
+        bit 22		line_dirty
+        bit 23		line_valid
+        bit 24-31	unused?
+     */
+    register volatile unsigned long *p;
+    if (CURRENT_CORE == CPU)
+    {
+        for (p = &CACHE_STATUS_BASE_CPU;
+             p < (&CACHE_STATUS_BASE_CPU) + CACHE_SIZE/sizeof(*p);
+             p += CACHEALIGN_SIZE/sizeof(*p))
+            *p = CACHE_LINE_VALID | CACHE_ADDRESS_MASK;
+    }
+    else
+    {
+        for (p = &CACHE_STATUS_BASE_COP;
+             p < (&CACHE_STATUS_BASE_COP) + CACHE_SIZE/sizeof(*p);
+             p += CACHEALIGN_SIZE/sizeof(*p))
+            *p = CACHE_LINE_VALID | CACHE_ADDRESS_MASK;
+    }
+}
+
 void ICODE_ATTR commit_discard_idcache(void)
 {
     if (CACHE_CTL & CACHE_CTL_ENABLE)
@@ -225,21 +273,7 @@ void ICODE_ATTR commit_discard_idcache(void)
         register int istat = disable_interrupt_save(IRQ_FIQ_STATUS);
 
         commit_dcache();
-
-        /* Cache lines which are not marked as valid can cause memory
-         * corruption when there are many writes to and code fetches from
-         * cached memory. This workaround points all cache status words past
-         * end of RAM and marks them as valid, but not dirty. Since that area
-         * is never accessed, the cache lines don't affect anything, and
-         * they're effectively discarded. Interrupts must be disabled here
-         * because any change they make to cached memory could be discarded.
-         */
-
-        register volatile unsigned long *p;
-        for (p = &CACHE_STATUS_BASE;
-             p < (&CACHE_STATUS_BASE) + 512*16/sizeof(*p);
-             p += 16/sizeof(*p))
-            *p = ((MEMORYSIZE*0x100000) >> 11) | 0x800000;
+        cache_invalidate_special();
 
         restore_interrupt(istat);
     }
@@ -258,7 +292,7 @@ static void init_cache(void)
 
 #ifndef BOOTLOADER
     /* what's this do? */
-    CACHE_PRIORITY |= CURRENT_CORE == CPU ? 0x10 : 0x20;
+    CACHE_PRIORITY |= (CURRENT_CORE == CPU) ? 0x10 : 0x20;
 #endif
 
     /* Cache if (addr & mask) >> 16 == (mask & match) >> 16:
@@ -278,11 +312,8 @@ static void init_cache(void)
      * can run from cached RAM, rewriting of cache status words may not
      * be safe and the cache is filled instead by reading. */
 
-    /* Note:  Don't start at 0x0, as the compiler thinks it's a
-       null pointer dereference and will helpfully blow up the code. */
-
-    register volatile char *p;
-    for (p = (volatile char *)0x1000; p < (volatile char *)0x3000; p += 0x10)
+    register volatile char *p = (volatile char *)CACHED_INIT_ADDR;
+    for (;p < (volatile char *)CACHED_INIT_ADDR + CACHE_SIZE; p += CACHEALIGN_SIZE)
         (void)*p;
 }
 #endif /* BOOTLOADER || HAVE_BOOTLOADER_USB_MODE */
@@ -335,9 +366,9 @@ static void pp_set_cpu_frequency(long frequency)
       /* Note1: The PP5022 PLL must be run at >= 96MHz
        * Bits 20..21 select the post divider (1/2/4/8).
        * PP5026 is similar to PP5022 except it doesn't
-       * have this limitation (and the post divider?) 
+       * have this limitation (and the post divider?)
        * Note2: CLOCK_SOURCE is set via 0=32kHz, 1=16MHz,
-       * 2=24MHz, 3=33MHz, 4=48MHz, 5=SLOW, 6=FAST, 7=PLL. 
+       * 2=24MHz, 3=33MHz, 4=48MHz, 5=SLOW, 6=FAST, 7=PLL.
        * SLOW = 24MHz / (DIV_SLOW + 1), DIV = Bits 16-19
        * FAST = PLL   / (DIV_FAST + 1), DIV = Bits 20-23 */
       case CPUFREQ_SLEEP:

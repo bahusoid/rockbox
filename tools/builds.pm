@@ -22,25 +22,25 @@ $releasenotes="/wiki/ReleaseNotes315";
         name => 'Archos FM Recorder',
         status => 0,
         ram => 2,
-        release => '3.15', 
+        release => '3.15',
     },
     'archosondiofm' => {
         name => 'Archos Ondio FM',
         status => 0,
         ram => 2,
-        release => '3.15', 
+        release => '3.15',
     },
     'archosondiosp' => {
         name => 'Archos Ondio SP',
         status => 0,
         ram => 2,
-        release => '3.15', 
+        release => '3.15',
     },
     'archosplayer' => {
         name => 'Archos Player/Studio',
         status => 0,
         ram => 2,
-        release => '3.15', 
+        release => '3.15',
     },
     'archosrecorder' => {
         name => 'Archos Recorder v1',
@@ -53,7 +53,7 @@ $releasenotes="/wiki/ReleaseNotes315";
         status => 0,
         ram => 2,
         manual => "archosfmrecorder",
-        release => '3.15', 
+        release => '3.15',
     },
     'cowond2' => {
         name => 'Cowon D2',
@@ -102,10 +102,6 @@ $releasenotes="/wiki/ReleaseNotes315";
     'hifimanhm801' => {
         name => 'HiFiMAN HM-801',
         status => 2,
-    },
-    'iaudio7' => {
-        name => 'iAudio 7',
-        status => 1,
     },
     'iaudiom3' => {
         name => 'iAudio M3',
@@ -191,14 +187,6 @@ $releasenotes="/wiki/ReleaseNotes315";
         name => 'iriver H320/340',
         status => 3,
     },
-    'iriverifp7xx' => {
-        name => 'iriver iFP-7xx',
-        status => 1,
-    },
-    'logikdax' => {
-        name => 'Logik DAX',
-        status => 1,
-    },
     'lyreproto1' => {
         name => 'Lyre Prototype 1',
         status => 1,
@@ -271,10 +259,6 @@ $releasenotes="/wiki/ReleaseNotes315";
         name => 'Samsung YP-S3',
         status => 1,
     },
-    'sansac100' => {
-        name => 'SanDisk Sansa c100',
-        status => 1,
-    },
     'sansac200' => {
         name => 'SanDisk Sansa c200',
         status => 3,
@@ -323,10 +307,6 @@ $releasenotes="/wiki/ReleaseNotes315";
         name => 'SanDisk Sansa Fuze+',
         status => 3,
         icon => 'sansafuzeplus',
-    },
-    'sansam200' => {
-        name => 'SanDisk Sansa m200',
-        status => 1,
     },
     'sansam200v4' => {
         name => 'SanDisk Sansa m200 v4',
@@ -448,9 +428,13 @@ $releasenotes="/wiki/ReleaseNotes315";
         name => 'xDuoo X20',
         status => 2,
     },
+    'fiiom3klinux' => {
+        name => 'FiiO M3K (Linux)',
+        status => 1,
+    },
     'fiiom3k' => {
         name => 'FiiO M3K',
-        status => 1,
+        status => 2,
     },
     'aigoerosq' => {
         name => 'AIGO EROS Q / K',
@@ -605,6 +589,17 @@ sub allbuilds {
 	},
         'enabled' => 1,
     },
+    'nederlands' => {
+	'lang' => 'nederlands',
+	'name' => 'Nederlands (Dutch)',
+        'short' => 'nl',
+        'defengine' => 'espeak',
+	'engines' => {
+	    'espeak' => '-vnl',
+	    'gtts' => '-l nl',
+	},
+	'enabled' => 1,
+    },
     'norsk' => {
 	'lang' => 'norsk',
 	'name' => 'Norsk (Norwegian)',
@@ -635,6 +630,7 @@ sub allbuilds {
 	    'espeak' => '-vru',
 	    'gtts' => '-l ru',
 	},
+        'enabled' => 1,
     },
     'slovak' => {
 	'lang' => 'slovak',

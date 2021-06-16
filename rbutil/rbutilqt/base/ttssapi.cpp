@@ -19,7 +19,7 @@
 #include "ttssapi.h"
 #include "utils.h"
 #include "rbsettings.h"
-#include "systeminfo.h"
+#include "playerbuildinfo.h"
 #include "Logger.h"
 
 TTSSapi::TTSSapi(QObject* parent) : TTSBase(parent)
@@ -40,16 +40,13 @@ TTSBase::Capabilities TTSSapi::capabilities()
 void TTSSapi::generateSettings()
 {
     // language
-    QMap<QString, QStringList> languages = SystemInfo::languages();
-    QStringList langs;
-    for(int i = 0; i < languages.size(); ++i) {
-        langs.append(languages.values().at(i).at(0));
-    }
+    QMap<QString, QVariant> langmap = PlayerBuildInfo::instance()->value(
+                PlayerBuildInfo::LanguageList).toMap();
     EncTtsSetting* setting = new EncTtsSetting(this,
             EncTtsSetting::eSTRINGLIST, tr("Language:"),
             RbSettings::subValue(m_TTSType, RbSettings::TtsLanguage),
-            langs);
-    connect(setting,SIGNAL(dataChanged()),this,SLOT(updateVoiceList()));
+            langmap.keys());
+    connect(setting, &EncTtsSetting::dataChanged, this, &TTSSapi::updateVoiceList);
     insertSetting(eLANGUAGE,setting);
     // voice
     setting = new EncTtsSetting(this,
@@ -58,7 +55,7 @@ void TTSSapi::generateSettings()
             getVoiceList(RbSettings::subValue(m_TTSType,
                     RbSettings::TtsLanguage).toString()),
             EncTtsSetting::eREFRESHBTN);
-    connect(setting,SIGNAL(refresh()),this,SLOT(updateVoiceList()));
+    connect(setting, &EncTtsSetting::refresh, this, &TTSSapi::updateVoiceList);
     insertSetting(eVOICE,setting);
     //speed
     int speed = RbSettings::subValue(m_TTSType, RbSettings::TtsSpeed).toInt();
@@ -124,7 +121,7 @@ bool TTSSapi::start(QString *errStr)
     execstring.replace("%speed",m_TTSSpeed);
 
     LOG_INFO() << "Start:" << execstring;
-    voicescript = new QProcess(NULL);
+    voicescript = new QProcess(nullptr);
     //connect(voicescript,SIGNAL(readyReadStandardError()),this,SLOT(error()));
     voicescript->start(execstring);
     LOG_INFO() << "wait for process";
@@ -190,7 +187,7 @@ QStringList TTSSapi::getVoiceList(QString language)
     execstring.replace("%lang",language);
 
     LOG_INFO() << "Start:" << execstring;
-    voicescript = new QProcess(NULL);
+    voicescript = new QProcess(nullptr);
     voicescript->start(execstring);
     LOG_INFO() << "wait for process";
     if(!voicescript->waitForStarted()) {

@@ -38,6 +38,14 @@
 #include "option_select.h"
 #include "misc.h"
 
+static const char* vol_limit_format(char* buffer, size_t buffer_size, int value,
+                      const char* unit)
+{
+    (void)unit;
+    format_sound_value(buffer, buffer_size, SOUND_VOLUME, value);
+    return buffer;
+}
+
 static int volume_limit_callback(int action,
                                  const struct menu_item_ex *this_item,
                                  struct gui_synclist *this_list)
@@ -51,13 +59,13 @@ static int volume_limit_callback(int action,
     volume_limit_int_setting.min = sound_min(SOUND_VOLUME);
     volume_limit_int_setting.max = sound_max(SOUND_VOLUME);
     volume_limit_int_setting.step = sound_steps(SOUND_VOLUME);
-    volume_limit_int_setting.formatter = NULL;
+    volume_limit_int_setting.formatter = vol_limit_format;
     volume_limit_int_setting.get_talk_id = NULL;
 
     struct settings_list setting;
     setting.flags = F_BANFROMQS|F_INT_SETTING|F_T_INT|F_NO_WRAP;
     setting.lang_id = LANG_VOLUME_LIMIT;
-    setting.default_val.int_ = sound_max(SOUND_VOLUME);
+    setting.default_val.int_ = volume_limit_int_setting.max;
     setting.int_setting = &volume_limit_int_setting;
 
     switch (action)
@@ -122,8 +130,8 @@ MENUITEM_SETTING(depth_3d, &global_settings.depth_3d, NULL);
 MENUITEM_SETTING(roll_off, &global_settings.roll_off, NULL);
 #endif
 
-#ifdef AUDIOHW_HAVE_FUNCTIONAL_MODE
-MENUITEM_SETTING(func_mode, &global_settings.func_mode, NULL);
+#ifdef AUDIOHW_HAVE_POWER_MODE
+MENUITEM_SETTING(power_mode, &global_settings.power_mode, NULL);
 #endif
 
     /* Crossfeed Submenu */
@@ -240,8 +248,8 @@ MAKE_MENU(sound_settings, ID2P(LANG_SOUND_SETTINGS), NULL, Icon_Audio,
 #ifdef AUDIOHW_HAVE_FILTER_ROLL_OFF
           ,&roll_off
 #endif
-#ifdef AUDIOHW_HAVE_FUNCTIONAL_MODE
-          ,&func_mode
+#ifdef AUDIOHW_HAVE_POWER_MODE
+          ,&power_mode
 #endif
           ,&crossfeed_menu, &equalizer_menu, &dithering_enabled
           ,&surround_menu, &pbe_menu, &afr_enabled
@@ -253,4 +261,3 @@ MAKE_MENU(sound_settings, ID2P(LANG_SOUND_SETTINGS), NULL, Icon_Audio,
          ,&speaker_mode
 #endif
          );
-

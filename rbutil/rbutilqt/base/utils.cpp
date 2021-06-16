@@ -20,7 +20,7 @@
 #include "rockboxinfo.h"
 #include "system.h"
 #include "rbsettings.h"
-#include "systeminfo.h"
+#include "playerbuildinfo.h"
 #include "Logger.h"
 
 #if !defined(_UNICODE)
@@ -381,12 +381,14 @@ QString Utils::checkEnvironment(bool permission)
     RockboxInfo rbinfo(RbSettings::value(RbSettings::Mountpoint).toString());
     QString installed = rbinfo.target();
     if(!installed.isEmpty() && installed !=
-       SystemInfo::platformValue(SystemInfo::ConfigureModel).toString())
+       RbSettings::value(RbSettings::CurrentPlatform).toString().split(".").at(0))
     {
         text += tr("<li>Target mismatch detected.<br/>"
                 "Installed target: %1<br/>Selected target: %2.</li>")
-            .arg(SystemInfo::platformValue(SystemInfo::PlatformName, installed).toString(),
-                 SystemInfo::platformValue(SystemInfo::PlatformName).toString());
+            .arg(PlayerBuildInfo::instance()->value(
+                     PlayerBuildInfo::DisplayName, installed).toString(),
+                 PlayerBuildInfo::instance()->value(
+                     PlayerBuildInfo::DisplayName).toString());
     }
 
     if(!text.isEmpty())
@@ -1044,3 +1046,17 @@ bool Utils::ejectDevice(QString device)
     return false;
 }
 
+
+qint64 Utils::recursiveFolderSize(QString path)
+{
+    qint64 size = 0;
+    QList<QFileInfo> items = QDir(path).entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
+    for (auto item: items) {
+        size += item.size();
+    }
+    QList<QString> folders = QDir(path).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (auto folder: folders) {
+        size += recursiveFolderSize(path + "/" + folder);
+    }
+    return size;
+}

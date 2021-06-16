@@ -35,14 +35,15 @@
  * Insert LAST_ITEM_IN_LIST at the end of each mapping
  */
 static const struct button_mapping button_context_standard[] = {
-    { ACTION_STD_PREV,        BUTTON_PREV,                      BUTTON_NONE },
-    { ACTION_STD_PREVREPEAT,  BUTTON_PREV|BUTTON_REPEAT,        BUTTON_NONE },
-    { ACTION_STD_NEXT,        BUTTON_NEXT,                      BUTTON_NONE },
-    { ACTION_STD_NEXTREPEAT,  BUTTON_NEXT|BUTTON_REPEAT,        BUTTON_NONE },
+    { ACTION_STD_PREV,        BUTTON_NEXT,                      BUTTON_NONE },
+    { ACTION_STD_PREVREPEAT,  BUTTON_NEXT|BUTTON_REPEAT,        BUTTON_NONE },
+    { ACTION_STD_NEXT,        BUTTON_PREV,                      BUTTON_NONE },
+    { ACTION_STD_NEXTREPEAT,  BUTTON_PREV|BUTTON_REPEAT,        BUTTON_NONE },  /* Backwards! */
     { ACTION_STD_CONTEXT,     BUTTON_PLAY|BUTTON_REPEAT,        BUTTON_PLAY },
     { ACTION_STD_CANCEL,      BUTTON_HOME|BUTTON_REL,           BUTTON_HOME },
     { ACTION_STD_OK,          BUTTON_PLAY|BUTTON_REL,           BUTTON_PLAY },
     { ACTION_STD_MENU,        BUTTON_OPTION|BUTTON_REL,         BUTTON_OPTION },
+    { ACTION_STD_KEYLOCK,     BUTTON_POWER,                     BUTTON_NONE },
 
     LAST_ITEM_IN_LIST
 }; /* button_context_standard */
@@ -145,10 +146,10 @@ static const struct button_mapping button_context_quickscreen[] = {
 /** Settings - General Mappings **/
 static const struct button_mapping button_context_settings[] = {
     { ACTION_SETTINGS_RESET,  BUTTON_POWER|BUTTON_REL,          BUTTON_POWER },
-    { ACTION_STD_PREV,        BUTTON_PREV,                      BUTTON_NONE },
-    { ACTION_STD_PREVREPEAT,  BUTTON_PREV|BUTTON_REPEAT,        BUTTON_NONE },
-    { ACTION_STD_NEXT,        BUTTON_NEXT,                      BUTTON_NONE },
-    { ACTION_STD_NEXTREPEAT,  BUTTON_NEXT|BUTTON_REPEAT,        BUTTON_NONE },
+    { ACTION_STD_PREV,        BUTTON_NEXT,                      BUTTON_NONE },
+    { ACTION_STD_PREVREPEAT,  BUTTON_NEXT|BUTTON_REPEAT,        BUTTON_NONE },
+    { ACTION_STD_NEXT,        BUTTON_PREV,                      BUTTON_NONE },
+    { ACTION_STD_NEXTREPEAT,  BUTTON_PREV|BUTTON_REPEAT,        BUTTON_NONE }, /* Backwards! */
     { ACTION_STD_OK,          BUTTON_PLAY|BUTTON_REL,           BUTTON_PLAY },
     { ACTION_STD_CANCEL,      BUTTON_HOME|BUTTON_REL,           BUTTON_HOME },
 

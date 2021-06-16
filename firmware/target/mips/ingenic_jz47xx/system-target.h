@@ -29,7 +29,7 @@
 #include "mipsregs.h"
 
 #define CACHE_SIZE       16*1024
-#define CACHE_LINE_SIZE  32
+#define CACHEALIGN_BITS  5
 #include "mmu-mips.h"
 
 #define CFG_UART_BASE    UART1_BASE      /* Base of the UART channel */
@@ -38,6 +38,7 @@
 #define NEED_GENERIC_BYTESWAPS
 
 #define STORAGE_WANTS_ALIGN
+#define STORAGE_NEEDS_BOUNCE_BUFFER
 
 /* This one returns the old status */
 static inline int set_interrupt_status(int status, int mask)

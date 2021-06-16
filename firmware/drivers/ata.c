@@ -18,6 +18,9 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
+
+//#define LOGF_ENABLE
+
 #include <stdbool.h>
 #include <inttypes.h>
 #include "led.h"
@@ -31,6 +34,7 @@
 #include "ata-defines.h"
 #include "fs_defines.h"
 #include "storage.h"
+#include "logf.h"
 
 #define SELECT_DEVICE1  0x10
 #define SELECT_LBA      0x40
@@ -46,10 +50,14 @@
 #define CMD_WRITE_MULTIPLE         0xC5
 #define CMD_WRITE_MULTIPLE_EXT     0x39
 #define CMD_SET_MULTIPLE_MODE      0xC6
+#ifdef HAVE_ATA_SMART
+#define CMD_SMART                  0xB0
+#endif
 #define CMD_STANDBY_IMMEDIATE      0xE0
 #define CMD_STANDBY                0xE2
 #define CMD_IDENTIFY               0xEC
 #define CMD_SLEEP                  0xE6
+#define CMD_FLUSH_CACHE            0xE7
 #define CMD_SET_FEATURES           0xEF
 #define CMD_SECURITY_FREEZE_LOCK   0xF5
 #ifdef HAVE_ATA_DMA
@@ -164,8 +172,8 @@ static inline bool ata_power_off_timed_out(void)
 static ICODE_ATTR int wait_for_bsy(void)
 {
     long timeout = current_tick + HZ*30;
-    
-    do 
+
+    do
     {
         if (!(ATA_IN8(ATA_STATUS) & STATUS_BSY))
             return 1;
@@ -184,8 +192,8 @@ static ICODE_ATTR int wait_for_rdy(void)
         return 0;
 
     timeout = current_tick + HZ*10;
-    
-    do 
+
+    do
     {
         if (ATA_IN8(ATA_ALT_STATUS) & STATUS_RDY)
             return 1;
@@ -202,6 +210,7 @@ static ICODE_ATTR int wait_for_rdy(void)
 
 static int ata_perform_wakeup(int state)
 {
+    logf("ata WAKE %ld", current_tick);
     if (state > ATA_OFF) {
         if (perform_soft_reset()) {
             return -1;
@@ -220,6 +229,8 @@ static int ata_perform_wakeup(int state)
 
 static int ata_perform_sleep(void)
 {
+    logf("ata SLEEP %ld", current_tick);
+
     ATA_OUT8(ATA_SELECT, ata_device);
 
     if(!wait_for_rdy()) {
@@ -227,16 +238,59 @@ static int ata_perform_sleep(void)
         return -1;
     }
 
-    ATA_OUT8(ATA_COMMAND, CMD_SLEEP);
+    /* STANDBY IMMEDIATE
+        - writes all cached data
+        - transitions to PM2:Standby
+        - enters Standby_z power condition
 
-    if (!wait_for_rdy())
-    {
+      This places the device into a state where power-off is safe, but
+      it is not the lowest-theoretical power state -- that is SLEEP, but
+      that is bugged on some SSDs (FC1307A-based).
+
+      TODO: Is there a practical downside to using STANDBY_IMMEDIATE instead
+      of SLEEP, assuming the former spins down the drive?
+    */
+    if (ata_disk_isssd()) {
+        ATA_OUT8(ATA_COMMAND, CMD_STANDBY_IMMEDIATE);
+    } else {
+        ATA_OUT8(ATA_COMMAND, CMD_SLEEP);
+    }
+
+    if (!wait_for_rdy()) {
         DEBUGF("ata_perform_sleep() - CMD failed\n");
         return -2;
     }
 
     return 0;
 }
+
+static int ata_perform_flush_cache(void)
+{
+    /* Don't issue the flush cache command if the device
+       doesn't support it, even though it's mandatory.
+    */
+    if (!(identify_info[83] & (1 << 12)))
+       return 0;
+
+    logf("ata FLUSH CACHE %ld", current_tick);
+
+    ATA_OUT8(ATA_SELECT, ata_device);
+
+    if(!wait_for_rdy()) {
+        DEBUGF("ata_perform_flush_cache() - not RDY\n");
+        return -1;
+    }
+
+    ATA_OUT8(ATA_COMMAND, CMD_FLUSH_CACHE);
+
+    if (!wait_for_rdy()) {
+        DEBUGF("ata_perform_flush_cache() - CMD failed\n");
+        return -2;
+    }
+
+    return 0;
+}
+
 
 static ICODE_ATTR int wait_for_start_of_transfer(void)
 {
@@ -250,15 +304,15 @@ static ICODE_ATTR int wait_for_end_of_transfer(void)
 {
     if (!wait_for_bsy())
         return 0;
-    return (ATA_IN8(ATA_ALT_STATUS) & 
+    return (ATA_IN8(ATA_ALT_STATUS) &
             (STATUS_BSY|STATUS_RDY|STATUS_DF|STATUS_DRQ|STATUS_ERR))
            == STATUS_RDY;
-}    
+}
 
 #if (CONFIG_LED == LED_REAL)
 /* Conditionally block LED access for the ATA driver, so the LED can be
  * (mis)used for other purposes */
-static void ata_led(bool on) 
+static void ata_led(bool on)
 {
     ata_led_on = on;
     if (ata_led_enabled)
@@ -334,15 +388,27 @@ static ICODE_ATTR void copy_write_sectors(const unsigned char* buf,
 
 int ata_disk_isssd(void)
 {
-    /* offset 217 is "Nominal Rotation rate"
+    /*
+       offset 217 is "Nominal Rotation rate"
        0x0000 == Not reported
        0x0001 == Solid State
        0x0401 -> 0xffe == RPM
        All others reserved
 
-       Some CF cards return 0x0100 (ie byteswapped 0x0001) so accept either
+       Some CF cards return 0x0100 (ie byteswapped 0x0001) so accept either.
+
+       However, this is a very recent change, and we can't rely on it,
+       especially for the FC1307A CF->SD adapters.
+
+       So we have to resort to other heuristics.
+
+       offset 83 b2 is set to show device implementes CFA commands
+       offset 0 is 0x848a for CF, but that's not guaranteed, because reasons.
+
+       These don't guarantee this is an SSD but it's better than nothing.
      */
-    return (identify_info[217] == 0x0001 || identify_info[217] == 0x0100);
+    return (identify_info[83] & (1<<2) ||
+            identify_info[217] == 0x0001 || identify_info[217] == 0x0100);
 }
 
 static int ata_transfer_sectors(unsigned long start,
@@ -591,7 +657,7 @@ static int cache_sector(unsigned long sector)
 {
     int rc;
 
-    sector &= ~(phys_sector_mult - 1); 
+    sector &= ~(phys_sector_mult - 1);
               /* round down to physical sector boundary */
 
     /* check whether the sector is already cached */
@@ -602,7 +668,7 @@ static int cache_sector(unsigned long sector)
     sector_cache.inuse = false;
     rc = ata_transfer_sectors(sector, phys_sector_mult, sector_cache.data, false);
     if (!rc)
-    {    
+    {
         sector_cache.sectornum = sector;
         sector_cache.inuse = true;
     }
@@ -627,19 +693,19 @@ int ata_read_sectors(IF_MD(int drive,)
     (void)drive; /* unused for now */
 #endif
     mutex_lock(&ata_mtx);
-    
+
     offset = start & (phys_sector_mult - 1);
-    
+
     if (offset) /* first partial sector */
     {
         int partcount = MIN(incount, phys_sector_mult - offset);
-        
+
         rc = cache_sector(start);
         if (rc)
         {
             rc = rc * 10 - 1;
             goto error;
-        }                          
+        }
         memcpy(inbuf, sector_cache.data + offset * SECTOR_SIZE,
                partcount * SECTOR_SIZE);
 
@@ -651,7 +717,7 @@ int ata_read_sectors(IF_MD(int drive,)
     {
         offset = incount & (phys_sector_mult - 1);
         incount -= offset;
-        
+
         if (incount)
         {
             rc = ata_transfer_sectors(start, incount, inbuf, false);
@@ -693,9 +759,9 @@ int ata_write_sectors(IF_MD(int drive,)
     (void)drive; /* unused for now */
 #endif
     mutex_lock(&ata_mtx);
-    
+
     offset = start & (phys_sector_mult - 1);
-    
+
     if (offset) /* first partial sector */
     {
         int partcount = MIN(count, phys_sector_mult - offset);
@@ -705,7 +771,7 @@ int ata_write_sectors(IF_MD(int drive,)
         {
             rc = rc * 10 - 1;
             goto error;
-        }                          
+        }
         memcpy(sector_cache.data + offset * SECTOR_SIZE, buf,
                partcount * SECTOR_SIZE);
         rc = flush_current_sector();
@@ -713,7 +779,7 @@ int ata_write_sectors(IF_MD(int drive,)
         {
             rc = rc * 10 - 2;
             goto error;
-        }                          
+        }
         start += partcount;
         buf += partcount * SECTOR_SIZE;
         count -= partcount;
@@ -722,7 +788,7 @@ int ata_write_sectors(IF_MD(int drive,)
     {
         offset = count & (phys_sector_mult - 1);
         count -= offset;
-        
+
         if (count)
         {
             rc = ata_transfer_sectors(start, count, (void*)buf, true);
@@ -742,7 +808,7 @@ int ata_write_sectors(IF_MD(int drive,)
                 rc = rc * 10 - 4;
                 goto error;
             }
-            memcpy(sector_cache.data, buf, offset * SECTOR_SIZE); 
+            memcpy(sector_cache.data, buf, offset * SECTOR_SIZE);
             rc = flush_current_sector();
             if (rc)
             {
@@ -814,15 +880,11 @@ bool ata_disk_is_active(void)
 
 void ata_sleepnow(void)
 {
-    /* Don't enter sleep if the device doesn't support
-       power management. */
-    if (!(identify_info[82] & (1 << 3)))
-       return;
-
     if (ata_state >= ATA_SPINUP) {
+        logf("ata SLEEPNOW %ld", current_tick);
         mutex_lock(&ata_mtx);
         if (ata_state == ATA_ON) {
-            if (!ata_perform_sleep()) {
+            if (!ata_perform_flush_cache() && !ata_perform_sleep()) {
                 ata_state = ATA_SLEEPING;
                 schedule_ata_power_off();
             }
@@ -900,6 +962,8 @@ static int perform_soft_reset(void)
     int ret;
     int retry_count;
 
+    logf("ata SOFT RESET %ld", current_tick);
+
     ATA_OUT8(ATA_SELECT, SELECT_LBA | ata_device );
     ATA_OUT8(ATA_CONTROL, CONTROL_nIEN|CONTROL_SRST );
     sleep(1); /* >= 5us */
@@ -940,7 +1004,7 @@ static int perform_soft_reset(void)
 int ata_soft_reset(void)
 {
     int ret = -6;
-    
+
     mutex_lock(&ata_mtx);
 
     if (ata_state > ATA_OFF) {
@@ -955,7 +1019,9 @@ int ata_soft_reset(void)
 static int ata_power_on(void)
 {
     int rc;
-    
+
+    logf("ata ON %ld", current_tick);
+
     ide_power_enable(true);
     sleep(HZ/4); /* allow voltage to build up */
 
@@ -1053,7 +1119,7 @@ static int set_features(void)
         unsigned char parameter;
     } features[] = {
         { 83, 14, 0x03, 0 },   /* force PIO mode */
-        { 83, 3, 0x05, 0x80 }, /* adv. power management: lowest w/o standby */
+        { 83, 3, 0x05, 0x80 }, /* adv. power management: lowest w/o standby */  // TODO: What about FC1307A that doesn't advertise this properly?
         { 83, 9, 0x42, 0x80 }, /* acoustic management: lowest noise */
         { 82, 6, 0xaa, 0 },    /* enable read look-ahead */
 #ifdef HAVE_ATA_DMA
@@ -1086,7 +1152,7 @@ static int set_features(void)
     }
     else
         features[4].id_word = 88;
-    
+
     features[4].id_bit = dma_mode & 7;
     features[4].parameter = dma_mode;
 #endif /* HAVE_ATA_DMA */
@@ -1158,7 +1224,7 @@ static int STORAGE_INIT_ATTR init_and_check(bool hard_reset)
     rc = check_registers();
     if (rc)
         return -30 + rc;
-    
+
     return 0;
 }
 
@@ -1229,7 +1295,7 @@ int STORAGE_INIT_ATTR ata_init(void)
         {                                    /* (needs BigLBA addressing) */
             if (identify_info[102] || identify_info[103])
                 panicf("Unsupported disk size: >= 2^32 sectors");
-                
+
             total_sectors = identify_info[100] | (identify_info[101] << 16);
             lba48 = true; /* use BigLBA */
         }
@@ -1268,7 +1334,7 @@ int STORAGE_INIT_ATTR ata_init(void)
             if (rc == 0)
                 phys_sector_mult = 1;
         }
- 
+
         if (phys_sector_mult > (MAX_PHYS_SECTOR_SIZE/SECTOR_SIZE))
             panicf("Unsupported physical sector size: %d",
                    phys_sector_mult * SECTOR_SIZE);
@@ -1287,7 +1353,7 @@ error:
 }
 
 #if (CONFIG_LED == LED_REAL)
-void ata_set_led_enabled(bool enabled) 
+void ata_set_led_enabled(bool enabled)
 {
     ata_led_enabled = enabled;
     if (ata_led_enabled)
@@ -1358,7 +1424,7 @@ int ata_num_drives(int first_drive)
 {
     /* We don't care which logical drive number(s) we have been assigned */
     (void)first_drive;
-    
+
     return 1;
 }
 #endif
@@ -1377,6 +1443,7 @@ int ata_event(long id, intptr_t data)
             if (state == ATA_SLEEPING && ata_power_off_timed_out()) {
                 mutex_lock(&ata_mtx);
                 if (ata_state == ATA_SLEEPING) {
+                    logf("ata OFF %ld", current_tick);
                     ide_power_enable(false);
                     ata_state = ATA_OFF;
                 }
@@ -1393,6 +1460,7 @@ int ata_event(long id, intptr_t data)
     }
 #ifndef USB_NONE
     else if (id == SYS_USB_CONNECTED) {
+        logf("deq USB %ld", current_tick);
         if (ATA_ACTIVE_IN_USB) {
             /* There is no need to force ATA power on */
             STG_EVENT_ASSERT_ACTIVE(STORAGE_ATA);

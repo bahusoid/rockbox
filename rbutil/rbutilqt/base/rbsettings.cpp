@@ -17,7 +17,7 @@
  ****************************************************************************/
 
 #include "rbsettings.h"
-#include "systeminfo.h"
+#include "playerbuildinfo.h"
 #include <QSettings>
 #include "Logger.h"
 
@@ -46,7 +46,9 @@ const static struct {
     { RbSettings::InstallRockbox,       "install_rockbox",      "true" },
     { RbSettings::InstallFonts,         "install_fonts",        "true" },
     { RbSettings::InstallThemes,        "install_themes",       "false" },
-    { RbSettings::InstallGamefiles,     "install_gamefiles",    "true" },
+    { RbSettings::InstallPluginData,    "install_plugin_data",  "true" },
+    { RbSettings::InstallVoice,         "install_voice",        "false" },
+    { RbSettings::InstallManual,        "install_manual",       "false" },
 #if defined(Q_OS_WIN32)
     { RbSettings::Tts,                  "tts",                  "sapi" },
 #elif defined(Q_OS_MACX)
@@ -82,11 +84,11 @@ const static struct {
 };
 
 //! pointer to setting object to NULL
-QSettings* RbSettings::userSettings = NULL;
+QSettings* RbSettings::userSettings = nullptr;
 
 void RbSettings::ensureRbSettingsExists()
 {
-    if(userSettings == NULL)
+    if(userSettings == nullptr)
     {
         // portable installation:
         // check for a configuration file in the program folder.
@@ -96,13 +98,13 @@ void RbSettings::ensureRbSettingsExists()
         if(config.isFile())
         {
             userSettings = new QSettings(QCoreApplication::instance()->applicationDirPath()
-                + "/RockboxUtility.ini", QSettings::IniFormat, NULL);
+                + "/RockboxUtility.ini", QSettings::IniFormat, nullptr);
             LOG_INFO() << "configuration: portable";
         }
         else
         {
             userSettings = new QSettings(QSettings::IniFormat,
-            QSettings::UserScope, "rockbox.org", "RockboxUtility",NULL);
+            QSettings::UserScope, "rockbox.org", "RockboxUtility",nullptr);
             LOG_INFO() << "configuration: system";
         }
     }
@@ -123,7 +125,7 @@ void RbSettings::sync()
     {
         char* realuser = getenv("SUDO_UID");
         char* realgroup = getenv("SUDO_GID");
-        if(realuser != NULL && realgroup != NULL)
+        if(realuser != nullptr && realgroup != nullptr)
         {
             int realuid = atoi(realuser);
             int realgid = atoi(realgroup);
@@ -194,7 +196,8 @@ QString RbSettings::constructSettingPath(QString path, QString substitute)
         }
         else {
             path.replace(":tts:", userSettings->value("tts").toString());
-            path.replace(":encoder:", SystemInfo::platformValue(SystemInfo::Encoder, platform).toString());
+            path.replace(":encoder:", PlayerBuildInfo::instance()->value(
+                             PlayerBuildInfo::Encoder, platform).toString());
         }
         path.replace(":platform:", platform);
     }

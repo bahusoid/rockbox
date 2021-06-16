@@ -15,12 +15,14 @@
 
 /* define this if you have access to the quickscreen */
 #define HAVE_QUICKSCREEN
+#define HAVE_HOTKEY
 
 #define HAVE_HEADPHONE_DETECTION
 #define HAVE_LINEOUT_DETECTION
 
 /* KeyPad configuration for plugins */
 #define CONFIG_KEYPAD EROSQ_PAD
+#define HAVE_SCROLLWHEEL
 
 /* define this if the target has volume keys which can be used in the lists */
 #define HAVE_VOLUME_IN_LIST
@@ -35,8 +37,7 @@
 
 /* Audio codec */
 #define HAVE_EROSQ_LINUX_CODEC
-/* Rockbox has to handle the volume level */
-#define HAVE_SW_VOLUME_CONTROL
+#define HAVE_ALSA_32BIT
 
 /* We don't have hardware controls */
 #define HAVE_SW_TONE_CONTROLS

@@ -36,7 +36,10 @@
 #include "../open_plugin.h"
 
 #define ROCK_EXT "rock"
+#define ROCK_LEN 5
+
 #define OP_EXT "opx"
+#define OP_LEN 4
 
 #define OP_PLUGIN_RESTART (PLUGIN_GOTO_PLUGIN | 0x8000)
 
@@ -51,7 +54,7 @@ const off_t op_entry_sz = sizeof(struct open_plugin_entry_t);
 /* we only need the names for the first menu so don't bother reading paths yet */
 const off_t op_name_sz = OPEN_PLUGIN_NAMESZ + (op_entry.name - (char*)&op_entry);
 
-static uint32_t op_entry_add_path(const char *key, const char *plugin, const char *parameter);
+static uint32_t op_entry_add_path(const char *key, const char *plugin, const char *parameter, bool use_key);
 
 static bool _yesno_pop(const char* text)
 {
@@ -106,7 +109,7 @@ static int op_entry_read_opx(const char *path)
     int len;
 
     len = rb->strlen(path);
-    if(len > 4 && rb->strcasecmp(&((path)[len-4]), "." OP_EXT) == 0)
+    if(len > OP_LEN && rb->strcasecmp(&((path)[len-OP_LEN]), "." OP_EXT) == 0)
     {
         fd_opx = rb->open(path, O_RDONLY);
         if (fd_opx)
@@ -136,8 +139,8 @@ static void op_entry_export(int selection)
     if( !rb->kbd_input( filename, MAX_PATH, NULL ) )
     {
         len = rb->strlen(filename);
-        if(len > 4 && filename[len] != PATH_SEPCH &&
-            rb->strcasecmp(&((filename)[len-4]), "." OP_EXT) != 0)
+        if(len > OP_LEN && filename[len] != PATH_SEPCH &&
+            rb->strcasecmp(&((filename)[len-OP_LEN]), "." OP_EXT) != 0)
         {
             rb->strcat(filename, "." OP_EXT);
         }
@@ -175,7 +178,7 @@ static int op_entry_set_path(void)
     if (op_entry.path[0] == '\0')
         rb->strcpy(op_entry.path, PLUGIN_DIR"/");
 
-    rb->browse_context_init(&browse, SHOW_ALL, BROWSE_SELECTONLY, "",
+    rb->browse_context_init(&browse, SHOW_ALL, BROWSE_SELECTONLY, rb->str(LANG_ADD),
                          Icon_Plugin, op_entry.path, NULL);
 
     browse.buf = tmp_buf;
@@ -289,12 +292,13 @@ static int op_entry_transfer(int fd, int fd_tmp,
     return entries + 1;
 }
 
-static uint32_t op_entry_add_path(const char *key, const char *plugin, const char *parameter)
+static uint32_t op_entry_add_path(const char *key, const char *plugin, const char *parameter, bool use_key)
 {
     int len;
     uint32_t hash;
     char *pos = "";;
     int fd_tmp = -1;
+    use_key = (use_key == true && key != NULL);
 
     if (key)
     {
@@ -313,13 +317,19 @@ static uint32_t op_entry_add_path(const char *key, const char *plugin, const cha
     if (plugin)
     {
         /* name */
+        if (use_key)
+        {
+            op_entry.lang_id = -1;
+            rb->strlcpy(op_entry.name, key, OPEN_PLUGIN_NAMESZ);
+        }
+
         if (pathbasename(plugin, (const char **)&pos) == 0)
             pos = "\0";
         if (op_entry.name[0] == '\0' || op_entry.lang_id >= 0)
             rb->strlcpy(op_entry.name, pos, OPEN_PLUGIN_NAMESZ);
 
         len = rb->strlen(pos);
-        if(len > 5 && rb->strcasecmp(&(pos[len-5]), "." ROCK_EXT) == 0)
+        if(len > ROCK_LEN && rb->strcasecmp(&(pos[len-ROCK_LEN]), "." ROCK_EXT) == 0)
         {
             fd_tmp = rb->open(OPEN_PLUGIN_DAT ".tmp", O_WRONLY | O_CREAT | O_TRUNC, 0666);
             if (fd_tmp < 0)
@@ -398,7 +408,7 @@ void op_entry_browse_add(int selection)
         else
             key = op_entry.path;
 
-        op_entry_add_path(key, op_entry.path, NULL);
+        op_entry_add_path(key, op_entry.path, NULL, false);
     }
 }
 
@@ -470,7 +480,7 @@ static int op_entry_run(void)
     char* param;
     if (op_entry.hash != 0 && op_entry.path[0] != '\0')
     {
-        rb->splash(1, ID2P(LANG_OPEN_PLUGIN));
+        //rb->splash(1, ID2P(LANG_OPEN_PLUGIN));
         path = op_entry.path;
         param = op_entry.param;
         if (param[0] == '\0')
@@ -681,7 +691,7 @@ static void edit_menu(int selection)
         if (param[0] == '\0')
             param = NULL;
 
-        op_entry_add_path(NULL, op_entry.path, param);
+        op_entry_add_path(NULL, op_entry.path, param, false);
         fd_dat = rb->open(OPEN_PLUGIN_DAT, O_RDWR, 0666);
     }
 }
@@ -737,16 +747,26 @@ enum plugin_status plugin_start(const void* parameter)
     bool exit = false;
 
     const int creat_flags = O_RDWR | O_CREAT;
+
+reopen_datfile:
     fd_dat = rb->open(OPEN_PLUGIN_DAT, creat_flags, 0666);
     if (!fd_dat)
         exit = true;
 
     items = rb->lseek(fd_dat, 0, SEEK_END) / op_entry_sz;
-    if (items == 0 && !parameter)
+    if (parameter)
     {
-        rb->plugin_open(rb->plugin_get_current_filename(), NULL);
-        rb->close(fd_dat);
-        return PLUGIN_GOTO_PLUGIN;
+        path = (char*)parameter;
+        while (path[0] == ' ')
+            path++;
+
+        if (rb->strncasecmp(path, "-add", 4) == 0)
+        {
+            parameter = NULL;
+            op_entry_browse_add(-1);
+            rb->close(fd_dat);
+            goto reopen_datfile;
+        }
     }
 
     if (parameter)
@@ -787,7 +807,7 @@ enum plugin_status plugin_start(const void* parameter)
             else
             {
                 op_entry_read(fd_dat, selection, op_entry_sz);
-                if (op_entry_add_path(parameter, parameter, "\0") > 0)
+                if (op_entry_add_path(parameter, parameter, "\0", false) > 0)
                 {
                     selection = 0;
                     items++;
@@ -798,6 +818,22 @@ enum plugin_status plugin_start(const void* parameter)
             }
         }/* OP_EXT */
     }
+
+    if (items < 1 && !exit)
+    {
+        char* cur_filename = rb->plugin_get_current_filename();
+
+        if (op_entry_add_path(rb->str(LANG_ADD), cur_filename, "-add", true))
+        {
+            rb->close(fd_dat);
+            parameter = NULL;
+            goto reopen_datfile;
+        }
+        rb->close(fd_dat);
+        return PLUGIN_ERROR;
+    }
+
+
 
     if (!exit)
     {

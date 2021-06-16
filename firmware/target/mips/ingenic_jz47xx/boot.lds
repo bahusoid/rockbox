@@ -58,7 +58,7 @@ SECTIONS
         KEEP(*(.vectors.4));
         KEEP(*(.vectors));
 
-        *(.icode);
+        *(.icode*);
         *(.irodata);
         *(.idata);
         KEEP(*(.vectors*))
@@ -91,4 +91,11 @@ SECTIONS
          . += 0x400;
          irqstackend = .;
     } > IRAM
+
+    /DISCARD/ :
+    {
+        *(.MIPS.abiflags);
+        *(.eh_frame);
+        *(.rel.dyn);
+    }
 }

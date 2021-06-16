@@ -32,7 +32,6 @@
 #include "button.h"
 #include "audio.h"
 #include "dsp_proc_settings.h"
-#include "rbpaths.h"
 
 struct opt_items {
     unsigned const char* string;
@@ -109,6 +108,12 @@ enum
     NUM_REPEAT_MODES
 };
 
+enum
+{
+    QUEUE_HIDE = 0,
+    QUEUE_SHOW_AT_TOPLEVEL,
+    QUEUE_SHOW_IN_SUBMENU
+};
 
 /* dir filter options */
 /* Note: Any new filter modes need to be added before NUM_FILTER_MODES.
@@ -571,9 +576,12 @@ struct user_settings
     bool constrain_next_folder; /* whether next_folder is constrained to
                                    directories within start_directory */
     int  recursive_dir_insert; /* should directories be inserted recursively */
+    bool playlist_reload_after_save; /* reload and resume playlist after saving */
     bool fade_on_stop; /* fade on pause/unpause/stop */
     bool playlist_shuffle;
     bool warnon_erase_dynplaylist; /* warn when erasing dynamic playlist */
+    bool show_shuffled_adding_options; /* whether to display options for adding shuffled tracks to dynamic playlist */
+    int show_queue_options; /* how and whether to display options to queue tracks */
 
     /* playlist viewer settings */
     bool playlist_viewer_icons; /* display icons on viewer */
@@ -588,6 +596,7 @@ struct user_settings
     bool talk_file_clip; /* use file .talk clips */
     bool talk_filetype; /* say file type */
     bool talk_battery_level;
+    int  talk_mixer_amp; /* Relative volume of voices, MIX_AMP_MPUTE->MIX_AMP_UNITY */
 
     /* file browser sorting */
     bool sort_case; /* dir sort order: 0=case insensitive, 1=sensitive */
@@ -773,8 +782,8 @@ struct user_settings
     int roll_off;
 #endif
 
-#ifdef AUDIOHW_HAVE_FUNCTIONAL_MODE
-    int func_mode;
+#ifdef AUDIOHW_HAVE_POWER_MODE
+    int power_mode;
 #endif
 
 #ifdef AUDIOHW_HAVE_EQ
@@ -823,7 +832,7 @@ struct user_settings
 #if defined(DX50) || defined(DX90)
     int governor;
 #endif
-#ifdef HAVE_USB_POWER
+#if defined(DX50) || defined(DX90) || (defined(HAVE_USB_POWER) && !defined(USB_NONE) && !defined(SIMULATOR))
     int usb_mode;
 #endif
 };

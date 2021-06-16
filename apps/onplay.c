@@ -66,6 +66,7 @@
 
 static int context;
 static const char *selected_file = NULL;
+static char selected_file_path[MAX_PATH];
 static int selected_file_attr = 0;
 static int onplay_result = ONPLAY_OK;
 extern struct menu_item_ex file_menu; /* settings_menu.c  */
@@ -446,6 +447,8 @@ static bool playing_time(void)
 /* CONTEXT_WPS playlist options */
 static bool shuffle_playlist(void)
 {
+    if (!warn_on_pl_erase())
+        return false;
     playlist_sort(NULL, true);
     playlist_randomise(NULL, current_tick, true);
 
@@ -453,6 +456,7 @@ static bool shuffle_playlist(void)
 }
 static bool save_playlist(void)
 {
+    /* save_playlist_screen should load the newly saved playlist and resume */
     save_playlist_screen(NULL);
     return false;
 }
@@ -475,7 +479,14 @@ MAKE_ONPLAYMENU( wps_playlist_menu, ID2P(LANG_PLAYLIST),
 /* CONTEXT_[TREE|ID3DB] playlist options */
 static bool add_to_playlist(int position, bool queue)
 {
-    bool new_playlist = !(audio_status() & AUDIO_STATUS_PLAY);
+    bool new_playlist = false;
+    if (!(audio_status() & AUDIO_STATUS_PLAY))
+    {
+        new_playlist = true;
+        if (position == PLAYLIST_REPLACE)
+            position = PLAYLIST_INSERT;
+    }
+
     const char *lines[] = {
         ID2P(LANG_RECURSE_DIRECTORY_QUESTION),
         selected_file
@@ -555,7 +566,9 @@ static bool view_playlist(void)
 
 static int playlist_insert_func(void *param)
 {
-    if (((intptr_t)param == PLAYLIST_REPLACE) && !warn_on_pl_erase())
+    if (((intptr_t)param == PLAYLIST_REPLACE ||
+         ((intptr_t)param == PLAYLIST_INSERT_SHUFFLED && !(audio_status() & AUDIO_STATUS_PLAY))) &&
+        !warn_on_pl_erase())
         return 0;
     add_to_playlist((intptr_t)param, false);
     return 0;
@@ -568,22 +581,8 @@ static int playlist_queue_func(void *param)
 }
 
 static int treeplaylist_wplayback_callback(int action,
-                                        const struct menu_item_ex* this_item,
-                                        struct gui_synclist *this_list)
-{
-    (void)this_item;
-    (void)this_list;
-    switch (action)
-    {
-        case ACTION_REQUEST_MENUITEM:
-            if (audio_status() & AUDIO_STATUS_PLAY)
-                return action;
-            else
-                return ACTION_EXIT_MENUITEM;
-            break;
-    }
-    return action;
-}
+                                           const struct menu_item_ex* this_item,
+                                           struct gui_synclist *this_list);
 
 static int treeplaylist_callback(int action,
                                  const struct menu_item_ex *this_item,
@@ -592,7 +591,7 @@ static int treeplaylist_callback(int action,
 /* insert items */
 MENUITEM_FUNCTION(i_pl_item, MENU_FUNC_USEPARAM, ID2P(LANG_INSERT),
                   playlist_insert_func, (intptr_t*)PLAYLIST_INSERT,
-                  NULL, Icon_Playlist);
+                  treeplaylist_wplayback_callback, Icon_Playlist);
 MENUITEM_FUNCTION(i_first_pl_item, MENU_FUNC_USEPARAM, ID2P(LANG_INSERT_FIRST),
                   playlist_insert_func, (intptr_t*)PLAYLIST_INSERT_FIRST,
                   treeplaylist_wplayback_callback, Icon_Playlist);
@@ -610,47 +609,101 @@ MENUITEM_FUNCTION(i_last_shuf_pl_item, MENU_FUNC_USEPARAM,
 /* queue items */
 MENUITEM_FUNCTION(q_pl_item, MENU_FUNC_USEPARAM, ID2P(LANG_QUEUE),
                   playlist_queue_func, (intptr_t*)PLAYLIST_INSERT,
-                  treeplaylist_wplayback_callback, Icon_Playlist);
+                  treeplaylist_callback, Icon_Playlist);
 MENUITEM_FUNCTION(q_first_pl_item, MENU_FUNC_USEPARAM, ID2P(LANG_QUEUE_FIRST),
                   playlist_queue_func, (intptr_t*)PLAYLIST_INSERT_FIRST,
-                  treeplaylist_wplayback_callback, Icon_Playlist);
+                  treeplaylist_callback, Icon_Playlist);
 MENUITEM_FUNCTION(q_last_pl_item, MENU_FUNC_USEPARAM, ID2P(LANG_QUEUE_LAST),
                   playlist_queue_func, (intptr_t*)PLAYLIST_INSERT_LAST,
-                  treeplaylist_wplayback_callback, Icon_Playlist);
+                  treeplaylist_callback, Icon_Playlist);
 MENUITEM_FUNCTION(q_shuf_pl_item, MENU_FUNC_USEPARAM,
                   ID2P(LANG_QUEUE_SHUFFLED), playlist_queue_func,
                   (intptr_t*)PLAYLIST_INSERT_SHUFFLED,
-                  treeplaylist_wplayback_callback, Icon_Playlist);
+                  treeplaylist_callback, Icon_Playlist);
 MENUITEM_FUNCTION(q_last_shuf_pl_item, MENU_FUNC_USEPARAM,
                   ID2P(LANG_QUEUE_LAST_SHUFFLED), playlist_queue_func,
                   (intptr_t*)PLAYLIST_INSERT_LAST_SHUFFLED,
                   treeplaylist_callback, Icon_Playlist);
-/* replace playlist */
-MENUITEM_FUNCTION(replace_pl_item, MENU_FUNC_USEPARAM, ID2P(LANG_REPLACE),
-                  playlist_insert_func, (intptr_t*)PLAYLIST_REPLACE,
-                  treeplaylist_wplayback_callback, Icon_Playlist);
 
-/* others */
-MENUITEM_FUNCTION(view_playlist_item, 0, ID2P(LANG_VIEW),
-                  view_playlist, NULL,
+/* queue items in submenu */
+MENUITEM_FUNCTION(q_pl_submenu_item, MENU_FUNC_USEPARAM, ID2P(LANG_QUEUE),
+                  playlist_queue_func, (intptr_t*)PLAYLIST_INSERT,
+                  NULL, Icon_Playlist);
+MENUITEM_FUNCTION(q_first_pl_submenu_item, MENU_FUNC_USEPARAM, ID2P(LANG_QUEUE_FIRST),
+                  playlist_queue_func, (intptr_t*)PLAYLIST_INSERT_FIRST,
+                  NULL, Icon_Playlist);
+MENUITEM_FUNCTION(q_last_pl_submenu_item, MENU_FUNC_USEPARAM, ID2P(LANG_QUEUE_LAST),
+                  playlist_queue_func, (intptr_t*)PLAYLIST_INSERT_LAST,
+                  NULL, Icon_Playlist);
+MENUITEM_FUNCTION(q_shuf_pl_submenu_item, MENU_FUNC_USEPARAM,
+                  ID2P(LANG_QUEUE_SHUFFLED), playlist_queue_func,
+                  (intptr_t*)PLAYLIST_INSERT_SHUFFLED,
+                  treeplaylist_callback, Icon_Playlist);
+MENUITEM_FUNCTION(q_last_shuf_pl_submenu_item, MENU_FUNC_USEPARAM,
+                  ID2P(LANG_QUEUE_LAST_SHUFFLED), playlist_queue_func,
+                  (intptr_t*)PLAYLIST_INSERT_LAST_SHUFFLED,
                   treeplaylist_callback, Icon_Playlist);
 
-MAKE_ONPLAYMENU( tree_playlist_menu, ID2P(LANG_CURRENT_PLAYLIST),
-                 treeplaylist_callback, Icon_Playlist,
+MAKE_ONPLAYMENU(queue_menu, ID2P(LANG_QUEUE_MENU),
+                treeplaylist_wplayback_callback, Icon_Playlist,
+                &q_pl_submenu_item,
+                &q_first_pl_submenu_item,
+                &q_last_pl_submenu_item,
+                &q_shuf_pl_submenu_item,
+                &q_last_shuf_pl_submenu_item);
 
-                 /* view */
-                 &view_playlist_item,
+static int treeplaylist_wplayback_callback(int action,
+                                        const struct menu_item_ex* this_item,
+                                        struct gui_synclist *this_list)
+{
+    (void)this_list;
+    switch (action)
+    {
+        case ACTION_REQUEST_MENUITEM:
+            if ((audio_status() & AUDIO_STATUS_PLAY) &&
+                (this_item != &queue_menu ||
+                 global_settings.show_queue_options == QUEUE_SHOW_IN_SUBMENU))
+                    return action;
+            else
+                return ACTION_EXIT_MENUITEM;
+            break;
+    }
+    return action;
+}
 
-                 /* insert */
-                 &i_pl_item, &i_first_pl_item, &i_last_pl_item,
-                 &i_shuf_pl_item, &i_last_shuf_pl_item,
-                 /* queue */
+/* replace playlist */
+MENUITEM_FUNCTION(replace_pl_item, MENU_FUNC_USEPARAM, ID2P(LANG_CLEAR_LIST_AND_PLAY_NEXT),
+                  playlist_insert_func, (intptr_t*)PLAYLIST_REPLACE,
+                  NULL, Icon_Playlist);
 
-                 &q_pl_item, &q_first_pl_item, &q_last_pl_item,
-                 &q_shuf_pl_item, &q_last_shuf_pl_item,
+MENUITEM_FUNCTION(replace_shuf_pl_item, MENU_FUNC_USEPARAM,
+                  ID2P(LANG_CLEAR_LIST_AND_PLAY_SHUFFLED), playlist_insert_func,
+                  (intptr_t*)PLAYLIST_INSERT_SHUFFLED,
+                  treeplaylist_callback, Icon_Playlist);
 
-                 /* replace */
-                 &replace_pl_item
+MAKE_ONPLAYMENU(tree_playlist_menu, ID2P(LANG_CURRENT_PLAYLIST),
+                treeplaylist_callback, Icon_Playlist,
+
+                /* insert */
+                &i_pl_item,
+                &i_first_pl_item,
+                &i_last_pl_item,
+                &i_shuf_pl_item,
+                &i_last_shuf_pl_item,
+
+                /* queue */
+                &q_pl_item,
+                &q_first_pl_item,
+                &q_last_pl_item,
+                &q_shuf_pl_item,
+                &q_last_shuf_pl_item,
+
+                /* Queue submenu */
+                &queue_menu,
+
+                /* replace */
+                &replace_pl_item,
+                &replace_shuf_pl_item
                );
 static int treeplaylist_callback(int action,
                                  const struct menu_item_ex *this_item,
@@ -662,38 +715,57 @@ static int treeplaylist_callback(int action,
         case ACTION_REQUEST_MENUITEM:
             if (this_item == &tree_playlist_menu)
             {
-                if (((selected_file_attr & FILE_ATTR_MASK) ==
-                        FILE_ATTR_AUDIO) ||
-                    ((selected_file_attr & FILE_ATTR_MASK) == FILE_ATTR_M3U)||
-                     (selected_file_attr & ATTR_DIRECTORY))
-                {
-                    return action;
-                }
+                if ((selected_file_attr & FILE_ATTR_MASK) == FILE_ATTR_AUDIO ||
+                    (selected_file_attr & FILE_ATTR_MASK) == FILE_ATTR_M3U ||
+                    (selected_file_attr & ATTR_DIRECTORY))
+                        return action;
             }
-            else if (this_item == &view_playlist_item)
+            else if ((this_item == &q_pl_item ||
+                      this_item == &q_first_pl_item ||
+                      this_item == &q_last_pl_item) &&
+                     global_settings.show_queue_options == QUEUE_SHOW_AT_TOPLEVEL &&
+                     (audio_status() & AUDIO_STATUS_PLAY))
             {
-                if ((selected_file_attr & FILE_ATTR_MASK) == FILE_ATTR_M3U &&
-                        context == CONTEXT_TREE)
-                {
-                    return action;
-                }
+                return action;
             }
             else if (this_item == &i_shuf_pl_item)
             {
-                if ((audio_status() & AUDIO_STATUS_PLAY) ||
-                    (selected_file_attr & ATTR_DIRECTORY) ||
-                    ((selected_file_attr & FILE_ATTR_MASK) == FILE_ATTR_M3U))
+                if (global_settings.show_shuffled_adding_options &&
+                    (audio_status() & AUDIO_STATUS_PLAY))
+                {
+                    return action;
+                }
+            }
+            else if (this_item == &replace_shuf_pl_item)
+            {
+                if (global_settings.show_shuffled_adding_options &&
+                    !(audio_status() & AUDIO_STATUS_PLAY) &&
+                     ((selected_file_attr & ATTR_DIRECTORY) ||
+                     ((selected_file_attr & FILE_ATTR_MASK) == FILE_ATTR_M3U)))
+                {
+                    return action;
+                }
+            }
+            else if (this_item == &q_shuf_pl_submenu_item ||
+                     (this_item == &q_shuf_pl_item &&
+                      global_settings.show_queue_options == QUEUE_SHOW_AT_TOPLEVEL))
+            {
+                if (global_settings.show_shuffled_adding_options &&
+                    (audio_status() & AUDIO_STATUS_PLAY))
                 {
                     return action;
                 }
             }
             else if (this_item == &i_last_shuf_pl_item ||
-                     this_item == &q_last_shuf_pl_item)
+                     this_item == &q_last_shuf_pl_submenu_item ||
+                     (this_item == &q_last_shuf_pl_item &&
+                      global_settings.show_queue_options == QUEUE_SHOW_AT_TOPLEVEL))
             {
-                if ((playlist_amount() > 0) &&
+                if (global_settings.show_shuffled_adding_options &&
+                    (playlist_amount() > 0) &&
                     (audio_status() & AUDIO_STATUS_PLAY) &&
                     ((selected_file_attr & ATTR_DIRECTORY) ||
-                    ((selected_file_attr & FILE_ATTR_MASK) == FILE_ATTR_M3U)))
+                     ((selected_file_attr & FILE_ATTR_MASK) == FILE_ATTR_M3U)))
                 {
                     return action;
                 }
@@ -949,7 +1021,9 @@ static int remove_dir(struct dirrecurse_params *parm)
 /* share code for file and directory deletion, saves space */
 static int delete_file_dir(void)
 {
-    if (confirm_delete(selected_file) != YESNO_YES) {
+    const char *to_delete=selected_file;
+    const int   to_delete_attr=selected_file_attr;
+    if (confirm_delete(to_delete) != YESNO_YES) {
         return 1;
     }
 
@@ -958,9 +1032,9 @@ static int delete_file_dir(void)
 
     int rc = -1;
 
-    if (selected_file_attr & ATTR_DIRECTORY) { /* true if directory */
+    if (to_delete_attr & ATTR_DIRECTORY) { /* true if directory */
         struct dirrecurse_params parm;
-        parm.append = strlcpy(parm.path, selected_file, sizeof (parm.path));
+        parm.append = strlcpy(parm.path, to_delete, sizeof (parm.path));
 
         if (parm.append < sizeof (parm.path)) {
             cpu_boost(true);
@@ -968,7 +1042,7 @@ static int delete_file_dir(void)
             cpu_boost(false);
         }
     } else {
-        rc = remove(selected_file);
+        rc = remove(to_delete);
     }
 
     if (rc < OPRC_SUCCESS) {
@@ -1657,10 +1731,15 @@ MAKE_ONPLAYMENU( wps_onplay_menu, ID2P(LANG_ONPLAY_MENU_TITLE),
            &pitch_screen_item,
 #endif
          );
+
+MENUITEM_FUNCTION(view_playlist_item, 0, ID2P(LANG_VIEW),
+                  view_playlist, NULL,
+                  onplaymenu_callback, Icon_Playlist);
+
 /* used when onplay() is not called in the CONTEXT_WPS context */
 MAKE_ONPLAYMENU( tree_onplay_menu, ID2P(LANG_ONPLAY_MENU_TITLE),
            onplaymenu_callback, Icon_file_view_menu,
-           &tree_playlist_menu, &cat_playlist_menu,
+           &view_playlist_item, &tree_playlist_menu, &cat_playlist_menu,
            &rename_file_item, &clipboard_cut_item, &clipboard_copy_item,
            &clipboard_paste_item, &delete_file_item, &delete_dir_item,
 #if LCD_DEPTH > 1
@@ -1685,6 +1764,15 @@ static int onplaymenu_callback(int action,
                 list_stop_handler();
                 return ACTION_STD_CANCEL;
             }
+            break;
+        case ACTION_REQUEST_MENUITEM:
+            if (this_item == &view_playlist_item)
+            {
+                if ((selected_file_attr & FILE_ATTR_MASK) == FILE_ATTR_M3U &&
+                        context == CONTEXT_TREE)
+                    return action;
+            }
+            return ACTION_EXIT_MENUITEM;
             break;
         case ACTION_EXIT_MENUITEM:
             return ACTION_EXIT_AFTER_THIS_MENUITEM;
@@ -1835,7 +1923,13 @@ int onplay(char* file, int attr, int from, bool hotkey)
     const struct menu_item_ex *menu;
     onplay_result = ONPLAY_OK;
     context = from;
-    selected_file = file;
+    if (file == NULL)
+        selected_file = NULL;
+    else
+    {
+        strlcpy(selected_file_path, file, MAX_PATH);
+        selected_file = selected_file_path;
+    }
     selected_file_attr = attr;
     int menu_selection;
 #ifdef HAVE_HOTKEY

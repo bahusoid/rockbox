@@ -331,6 +331,8 @@ int main (int argc, char** argv)
             modelnum = 108;
         else if (!strcmp(&argv[1][5], "e350")) /* Sony NWZ-E350 series */
             modelnum = 109;
+        else if (!strcmp(&argv[1][5], "fiiom3k")) /* FiiO M3K */
+            modelnum = 114;
         else {
             fprintf(stderr, "unsupported model: %s\n", &argv[1][5]);
             return 2;
@@ -661,22 +663,22 @@ static int iaudio_encode(char *iname, char *oname, char *idstring)
 
 static int ipod_encode(char *iname, char *oname, int fw_ver, bool fake_rsrc)
 {
-    static const char *apple_stop_sign = "{{~~  /-----\\   "\
-                                         "{{~~ /       \\  "\
-                                         "{{~~|         | "\
-                                         "{{~~| S T O P | "\
-                                         "{{~~|         | "\
-                                         "{{~~ \\       /  "\
-                                         "{{~~  \\-----/   "\
-                                         "Copyright(C) 200"\
-                                         "1 Apple Computer"\
-                                         ", Inc.----------"\
-                                         "----------------"\
-                                         "----------------"\
-                                         "----------------"\
-                                         "----------------"\
-                                         "----------------"\
-                                         "---------------";
+    static const char apple_stop_sign[] = "{{~~  /-----\\   "\
+                                          "{{~~ /       \\  "\
+                                          "{{~~|         | "\
+                                          "{{~~| S T O P | "\
+                                          "{{~~|         | "\
+                                          "{{~~ \\       /  "\
+                                          "{{~~  \\-----/   "\
+                                          "Copyright(C) 200"\
+                                          "1 Apple Computer"\
+                                          ", Inc.----------"\
+                                          "----------------"\
+                                          "----------------"\
+                                          "----------------"\
+                                          "----------------"\
+                                          "----------------"\
+                                          "---------------";
     size_t len;
     int length;
     int rsrclength;

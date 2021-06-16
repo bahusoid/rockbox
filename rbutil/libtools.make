@@ -113,10 +113,16 @@ $(LIBUCL): $(OBJDIR)$(LIBUCL)
 $(OBJDIR)$(LIBUCL):
 	$(SILENT)$(MAKE) -C $(TOP)/../tools/ucl/src TARGET_DIR=$(OBJDIR) CC=$(CC) $@
 
-LIBBZIP2 = libbzip2.a
+LIBBZIP2 = libbz2.a
 $(LIBBZIP2): $(OBJDIR)$(LIBBZIP2)
 $(OBJDIR)$(LIBBZIP2):
 	$(SILENT)$(MAKE) -C $(TOP)/bzip2 TARGET_DIR=$(OBJDIR) CC=$(CC) $@
+
+LIBMICROTAR = libmicrotar.a
+$(LIBMICROTAR): $(OBJDIR)$(LIBMICROTAR)
+
+$(OBJDIR)$(LIBMICROTAR):
+	$(SILENT)$(MAKE) -C $(TOP)/../lib/microtar/src TARGET_DIR=$(OBJDIR) CC=$(CC) $@
 
 # building the standalone executable
 $(BINARY): $(OBJS) $(EXTRADEPS) $(addprefix $(OBJDIR),$(EXTRALIBOBJS)) $(TARGET_DIR)lib$(OUTPUT).a

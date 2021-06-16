@@ -128,21 +128,25 @@ static bool is_action_filtered(int action, unsigned int mask, int context)
         case ACTION_FM_PLAY:
             match = has_flag(mask, SEL_ACTION_PLAY);
             break;
-        case ACTION_STD_PREVREPEAT:
-        case ACTION_STD_NEXTREPEAT:
+        //case ACTION_STD_PREVREPEAT: // seek not exempted outside of WPS
+        //case ACTION_STD_NEXTREPEAT:
         case ACTION_WPS_SEEKBACK:
         case ACTION_WPS_SEEKFWD:
         case ACTION_WPS_STOPSEEK:
             match = has_flag(mask, SEL_ACTION_SEEK);
             break;
-        case ACTION_STD_PREV:
-        case ACTION_STD_NEXT:
+        //case ACTION_STD_PREV: // skip/scrollwheel not exempted outside of WPS
+        //case ACTION_STD_NEXT:
         case ACTION_WPS_SKIPNEXT:
         case ACTION_WPS_SKIPPREV:
         case ACTION_FM_NEXT_PRESET:
         case ACTION_FM_PREV_PRESET:
             match = has_flag(mask, SEL_ACTION_SKIP);
             break;
+#ifdef HAVE_VOLUME_IN_LIST
+        case ACTION_LIST_VOLUP: // volume exempted outside of WPS if the device supports it
+        case ACTION_LIST_VOLDOWN:
+#endif
         case ACTION_WPS_VOLUP:
         case ACTION_WPS_VOLDOWN:
             match = has_flag(mask, SEL_ACTION_VOL);
@@ -586,6 +590,13 @@ static inline void action_code_lookup(action_last_t *last, action_cur_t *cur)
 
     cur->is_prebutton = false;
 
+#ifdef HAVE_LOCKED_ACTIONS
+    /* This only applies to the first context, to allow locked contexts to
+     * specify a fall through to their non-locked version */
+    if (is_keys_locked())
+        context |= CONTEXT_LOCKED;
+#endif
+
     for(;;)
     {
         /* logf("context = %x",context); */
@@ -672,27 +683,48 @@ static inline int do_auto_softlock(action_last_t *last, action_cur_t *cur)
     if (is_timeout)
     {
         do_key_lock(true);
+
+#if defined(HAVE_TOUCHPAD)
+        /* if the touchpad is supposed to be off and the current buttonpress
+         * is from the touchpad, nullify both button and action. */
+        if (!has_flag(action_last.softlock_mask, SEL_ACTION_ENABLED) ||
+            has_flag(action_last.softlock_mask, SEL_ACTION_NOTOUCH))
+        {
+            cur->button = touchpad_filter(cur->button);
+            if (cur->button == BUTTON_NONE)
+            {
+                action = ACTION_NONE;
+            }
+        }
+#endif
     }
     else if (action == ACTION_STD_KEYLOCK)
     {
-        last->unlock_combo = cur->button;/* set unlock combo to allow unlock */
-        last->softlock_mask ^= SEL_ACTION_ALOCK_OK;
-        action_handle_backlight(true, false);
-            /* If we don't wait for a moment for the backlight queue
-             *  to process, the user will never see the message */
-        if (!is_backlight_on(false))
+        if (!has_flag(last->softlock_mask, SEL_ACTION_ALWAYSAUTOLOCK)) // normal operation, clear/arm autolock
         {
-            sleep(HZ/2);
-        }
+            last->unlock_combo = cur->button;/* set unlock combo to allow unlock */
+            last->softlock_mask ^= SEL_ACTION_ALOCK_OK;
+            action_handle_backlight(true, false);
+                /* If we don't wait for a moment for the backlight queue
+                 *  to process, the user will never see the message */
+            if (!is_backlight_on(false))
+            {
+                sleep(HZ/2);
+            }
 
-        if (has_flag(last->softlock_mask, SEL_ACTION_ALOCK_OK))
+            if (has_flag(last->softlock_mask, SEL_ACTION_ALOCK_OK))
+            {
+                splash(HZ/2, ID2P(LANG_ACTION_AUTOLOCK_ON));
+                action = ACTION_REDRAW;
+            }
+            else
+            {
+                splash(HZ/2, ID2P(LANG_ACTION_AUTOLOCK_OFF));
+            }
+        } else if (!has_flag(last->softlock_mask, SEL_ACTION_ALOCK_OK)) // always autolock, but not currently armed
         {
-            splash(HZ/2, ID2P(LANG_ACTION_AUTOLOCK_ON));
-            action = ACTION_REDRAW;
-        }
-        else
-        {
-            splash(HZ/2, ID2P(LANG_ACTION_AUTOLOCK_OFF));
+            last->unlock_combo = cur->button;/* set unlock combo to allow unlock */
+            last->softlock_mask ^= SEL_ACTION_ALOCK_OK;
         }
     }
 
@@ -717,8 +749,11 @@ static inline void do_softlock(action_last_t *last, action_cur_t *cur)
 #else
     int  action = cur->action;
 
-    if (!last->screen_has_lock)
-    { /* no need to check softlock return immediately */
+    /* check to make sure we don't get stuck without a way to unlock - if locked,
+     * we can still use unlock_combo to unlock */
+    if (!last->screen_has_lock && !last->keys_locked)
+    {
+        /* no need to check softlock return immediately */
         return;
     }
 
@@ -730,10 +765,19 @@ static inline void do_softlock(action_last_t *last, action_cur_t *cur)
     {
         action = do_auto_softlock(last, cur);
     }
+
     /* Lock/Unlock toggled by ACTION_STD_KEYLOCK presses*/
     if ((action == ACTION_STD_KEYLOCK)
          || (last->keys_locked && last->unlock_combo == cur->button))
     {
+#ifdef HAVE_BACKLIGHT
+	// if backlight is off and keys are unlocked, do nothing and exit.
+	// The backlight should come on without locking keypad.
+	if ((!last->keys_locked) && (!is_backlight_on(false)))
+	{
+	    return;
+	}
+#endif
         last->unlock_combo = cur->button;
         do_key_lock(!last->keys_locked);
         notify_user = true;
@@ -788,13 +832,16 @@ static inline void do_softlock(action_last_t *last, action_cur_t *cur)
             sleep(HZ/2);
         }
 #endif
-        if (last->keys_locked)
+        if (!has_flag(last->softlock_mask, SEL_ACTION_ALLNONOTIFY))
         {
-            splash(HZ/2, ID2P(LANG_KEYLOCK_ON));
-        }
-        else
-        {
-            splash(HZ/2, ID2P(LANG_KEYLOCK_OFF));
+            if (last->keys_locked)
+            {
+                splash(HZ/2, ID2P(LANG_KEYLOCK_ON));
+            }
+            else
+            {
+                splash(HZ/2, ID2P(LANG_KEYLOCK_OFF));
+            }
         }
 
         action       = ACTION_REDRAW;
@@ -1150,7 +1197,7 @@ void set_selective_backlight_actions(bool selective, unsigned int mask,
 #ifndef HAS_BUTTON_HOLD
 bool is_keys_locked(void)
 {
-    return (action_last.screen_has_lock && action_last.keys_locked);
+    return (action_last.keys_locked);
 }
 
 /* Enable selected actions to bypass a locked state */
@@ -1166,7 +1213,57 @@ void set_selective_softlock_actions(bool selective, unsigned int mask)
         action_last.softlock_mask = SEL_ACTION_NONE;
     }
 }
+
+
+void action_autosoftlock_init(void)
+{
+    action_cur_t cur;
+    int i = 0;
+
+    if (action_last.unlock_combo == BUTTON_NONE)
+    {
+        /* search CONTEXT_WPS, should be here */
+        cur.items = get_context_mapping(CONTEXT_WPS);
+        while (cur.items[i].button_code != BUTTON_NONE)
+        {
+            if (cur.items[i].action_code == ACTION_STD_KEYLOCK)
+            {
+                action_last.unlock_combo = cur.items[i].button_code;
+                break;
+            }
+            i = i + 1;
+        }
+
+        /* not there... let's try std
+        * I doubt any targets will need this, but... */
+        if (action_last.unlock_combo == BUTTON_NONE)
+        {
+            i = 0;
+            cur.items = get_context_mapping(CONTEXT_STD);
+            while (cur.items[i].button_code != BUTTON_NONE)
+            {
+                if (cur.items[i].action_code == ACTION_STD_KEYLOCK)
+                {
+                    action_last.unlock_combo = cur.items[i].button_code;
+                    break;
+                }
+                i = i + 1;
+            }
+        }
+    }
+
+    /* if we have autolock and alwaysautolock, go ahead and arm it */
+    if (has_flag(action_last.softlock_mask, SEL_ACTION_AUTOLOCK) &&
+        has_flag(action_last.softlock_mask, SEL_ACTION_ALWAYSAUTOLOCK) &&
+        (action_last.unlock_combo != BUTTON_NONE))
+    {
+        action_last.softlock_mask = action_last.softlock_mask | SEL_ACTION_ALOCK_OK;
+    }
+
+    return;
+}
 #endif /* !HAS_BUTTON_HOLD */
+
 /*
 *******************************************************************************
 * END EXPORTED ACTION FUNCTIONS ***********************************************

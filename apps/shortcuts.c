@@ -33,6 +33,7 @@
 #include "list.h"
 #include "settings.h"
 #include "settings_list.h"
+#include "string-extra.h"
 #include "lang.h"
 #include "menu.h"
 #include "misc.h"
@@ -395,8 +396,6 @@ static const char * shortcut_menu_get_name(int selected_item, void * data,
                                            char * buffer, size_t buffer_len)
 {
     (void)data;
-    (void)buffer;
-    (void)buffer_len;
     struct shortcut *sc = get_shortcut(selected_item);
     if (!sc)
         return "";
@@ -409,6 +408,16 @@ static const char * shortcut_menu_get_name(int selected_item, void * data,
         /* No translation support as only soft_shutdown has LANG_SHUTDOWN defined */
         return type_strings[SHORTCUT_SHUTDOWN];
     }
+    else if (sc->type == SHORTCUT_BROWSER && (sc->u.path)[0] != '\0')
+    {
+        char* pos;
+        if (path_basename(sc->u.path, (const char **)&pos) > 0)
+        {
+            if (snprintf(buffer, buffer_len, "%s (%s)", pos, sc->u.path) < (int)buffer_len)
+                return buffer;
+        }
+    }
+
     return sc->name[0] ? sc->name : sc->u.path;
 }
 
@@ -416,6 +425,8 @@ static int shortcut_menu_get_action(int action, struct gui_synclist *lists)
 {
     (void)lists;
     if (action == ACTION_STD_OK)
+        return ACTION_STD_CANCEL;
+    else if (action == ACTION_STD_QUICKSCREEN && action != ACTION_STD_CONTEXT)
         return ACTION_STD_CANCEL;
     else if (action == ACTION_STD_CONTEXT)
     {
@@ -441,17 +452,22 @@ static int shortcut_menu_get_action(int action, struct gui_synclist *lists)
 static enum themable_icons shortcut_menu_get_icon(int selected_item, void * data)
 {
     (void)data;
+    int icon;
     struct shortcut *sc = get_shortcut(selected_item);
     if (!sc)
         return Icon_NOICON;
     if (sc->icon == Icon_NOICON)
     {
+
         switch (sc->type)
         {
             case SHORTCUT_FILE:
                 return filetype_get_icon(filetype_get_attr(sc->u.path));
             case SHORTCUT_BROWSER:
-                return Icon_Folder;
+                icon = filetype_get_icon(filetype_get_attr(sc->u.path));
+                if (icon <= 0)
+                    icon = Icon_Folder;
+                return icon;
             case SHORTCUT_SETTING:
                 return Icon_Menu_setting;
             case SHORTCUT_DEBUGITEM:
@@ -504,9 +520,11 @@ static int shortcut_menu_speak_item(int selected_item, void * data)
                                     if (info.attribute & ATTR_DIRECTORY)
                                         talk_dir_or_spell(sc->u.path, NULL, false);
                                     else talk_file_or_spell(path, filename, NULL, false);
+                                    closedir(dir);
                                     return 0;
                                 }
                             }
+                            closedir(dir);
                         }
                     }
                     else
@@ -587,6 +605,7 @@ int do_shortcut_menu(void *ignored)
             sc = get_shortcut(list.selection);
             if (!sc)
                 continue;
+
             switch (sc->type)
             {
                 case SHORTCUT_PLAYLISTMENU:
@@ -609,7 +628,6 @@ int do_shortcut_menu(void *ignored)
                     /* else fall through */
                 case SHORTCUT_BROWSER:
                 {
-
                     if(open_plugin_add_path(ID2P(LANG_SHORTCUTS), sc->u.path, NULL) != 0)
                     {
                         done = GO_TO_PLUGIN;

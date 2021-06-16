@@ -97,6 +97,7 @@ __pycache__
 /rbutil/mknwzboot/mknwzboot
 /rbutil/mkzenboot/mkzenboot
 /rbutil/sansapatcher/sansapatcher
+/rbutil/jztool/jztool
 /rbutil/tools/bin2c
 
 # /tools/
@@ -118,6 +119,7 @@ __pycache__
 /tools/mknkboot
 /tools/mktccboot
 /tools/mkzenboot
+/tools/mkspl-x1000
 /tools/iaudio_bl_flash.c
 /tools/iaudio_bl_flash.h
 /tools/.vagrant
@@ -164,6 +166,9 @@ __pycache__
 # /utils/jz4760_tools
 /utils/jz4760_tools/packtools
 /utils/jz4760_tools/usbboot
+
+# /utils/ingenic_tools
+/utils/ingenic_tools/usbboot
 
 # /utils/nwztools
 /utils/nwztools/scsitools/scsitool
@@ -289,3 +294,10 @@ __pycache__
 /utils/zenutils/source/zen_crypt/CMakeFiles
 /utils/zenutils/source/zen_crypt/cmake_install.cmake
 /utils/zenutils/source/zen_crypt/Makefile
+
+# /utils/regtools/
+/utils/regtools/headergen_v1
+/utils/regtools/headergen_v2
+/utils/regtools/regtool
+/utils/regtools/swiss_knife
+/utils/regtools/tester_v1

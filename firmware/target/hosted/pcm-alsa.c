@@ -62,9 +62,14 @@
 #define DEFAULT_PLAYBACK_DEVICE "plughw:0,0"
 #define DEFAULT_CAPTURE_DEVICE "default"
 
+#if MIX_FRAME_SAMPLES < 512
+#error "MIX_FRAME_SAMPLES needs to be at least 512!"
+#elif MIX_FRAME_SAMPLES < 1024
+#warning "MIX_FRAME_SAMPLES <1024 may cause dropouts!"
+#endif
+
 static const snd_pcm_access_t access_ = SND_PCM_ACCESS_RW_INTERLEAVED; /* access mode */
-#if defined(SONY_NWZ_LINUX) || defined(HAVE_FIIO_LINUX_CODEC)
-/* Sony NWZ must use 32-bit per sample */
+#if defined(HAVE_ALSA_32BIT)
 static const snd_pcm_format_t format = SND_PCM_FORMAT_S32_LE;    /* sample format */
 typedef int32_t sample_t;
 #else
@@ -82,6 +87,8 @@ static sample_t *frames = NULL;
 
 static const void  *pcm_data = 0;
 static size_t       pcm_size = 0;
+
+static unsigned int xruns = 0;
 
 static snd_async_handler_t *ahandler = NULL;
 static pthread_mutex_t pcm_mtx;
@@ -117,17 +124,21 @@ static int set_hwparams(snd_pcm_t *handle)
     snd_pcm_hw_params_malloc(&params);
 
     /* Size playback buffers based on sample rate.
-       Note these are in FRAMES, and are sized to be about 10ms
-       for the buffer and 2.5ms for the period */
+
+       Buffer size must be at least 4x period size!
+
+       Note these are in FRAMES, and are sized to be about 8.5ms
+       for the buffer and 2.1ms for the period
+     */
     if (pcm_sampr > SAMPR_96) {
-        buffer_size = MIX_FRAME_SAMPLES * 16 * 4; /* 32k */
-        period_size = MIX_FRAME_SAMPLES * 4 * 4;  /*  4k */
+        buffer_size = MIX_FRAME_SAMPLES * 4 * 4;
+        period_size = MIX_FRAME_SAMPLES * 4;
     } else if (pcm_sampr > SAMPR_48) {
-        buffer_size = MIX_FRAME_SAMPLES * 16 * 2; /* 16k */
-        period_size = MIX_FRAME_SAMPLES * 4 * 2;  /*  2k */
+        buffer_size = MIX_FRAME_SAMPLES * 2 * 4;
+        period_size = MIX_FRAME_SAMPLES * 2;
     } else {
-        buffer_size = MIX_FRAME_SAMPLES * 16; /*  4k */
-        period_size = MIX_FRAME_SAMPLES * 4;  /*  1k */
+        buffer_size = MIX_FRAME_SAMPLES * 4;
+        period_size = MIX_FRAME_SAMPLES;
     }
 
     /* choose all parameters */
@@ -250,6 +261,7 @@ error:
     return err;
 }
 
+#if defined(HAVE_ALSA_32BIT)
 /* Digital volume explanation:
  * with very good approximation (<0.1dB) the convertion from dB to multiplicative
  * factor, for dB>=0, is 2^(dB/3). We can then notice that if we write dB=3*k+r
@@ -265,7 +277,7 @@ static int dig_vol_mult_r = 2 << 16; /* multiplicative factor to apply to each s
 void pcm_set_mixer_volume(int vol_db_l, int vol_db_r)
 {
     if(vol_db_l > 0 || vol_db_r > 0 || vol_db_l < -43 || vol_db_r < -43)
-        panicf("invalid pcm alsa volume");
+        panicf("invalid pcm alsa volume %d %d",   vol_db_l, vol_db_r);
     if(format != SND_PCM_FORMAT_S32_LE)
         panicf("this function assumes 32-bit sample size");
     vol_db_l += 48; /* -42dB .. 0dB => 5dB .. 48dB */
@@ -291,6 +303,7 @@ void pcm_set_mixer_volume(int vol_db_l, int vol_db_r)
         dig_vol_mult_r = 1 << vol_shift_r | 1 << (vol_shift_r - 1);
     logf("r: %d dB -> factor = %d", vol_db_r - 48, dig_vol_mult_r);
 }
+#endif
 
 /* copy pcm samples to a spare buffer, suitable for snd_pcm_writei() */
 static bool copy_frames(bool first)
@@ -331,37 +344,40 @@ static bool copy_frames(bool first)
             panicf("Wrong pcm_size");
         /* the compiler will optimize this test away */
         nframes = MIN((ssize_t)pcm_size/4, frames_left);
-        if (format == SND_PCM_FORMAT_S32_LE)
-        {
-            /* We have to convert 16-bit to 32-bit, the need to multiply the
-             * sample by some value so the sound is not too low */
-            const int16_t *pcm_ptr = pcm_data;
-            sample_t *sample_ptr = &frames[2*(period_size-frames_left)];
-            for (int i = 0; i < nframes; i++)
-            {
-                *sample_ptr++ = *pcm_ptr++ * dig_vol_mult_l;
-                *sample_ptr++ = *pcm_ptr++ * dig_vol_mult_r;
-            }
-        }
-        else
-        {
+
 #ifdef HAVE_RECORDING
-            switch (current_alsa_mode)
-            {
-            case SND_PCM_STREAM_PLAYBACK:
+        switch (current_alsa_mode)
+        {
+        case SND_PCM_STREAM_PLAYBACK:
 #endif
+#if defined(HAVE_ALSA_32BIT)
+            if (format == SND_PCM_FORMAT_S32_LE)
+            {
+                /* We have to convert 16-bit to 32-bit, the need to multiply the
+                 * sample by some value so the sound is not too low */
+                const int16_t *pcm_ptr = pcm_data;
+                sample_t *sample_ptr = &frames[2*(period_size-frames_left)];
+                for (int i = 0; i < nframes; i++)
+                {
+                    *sample_ptr++ = *pcm_ptr++ * dig_vol_mult_l;
+                    *sample_ptr++ = *pcm_ptr++ * dig_vol_mult_r;
+                }
+            }
+            else
+#endif
+            {
                 /* Rockbox and PCM have same format: memcopy */
                 memcpy(&frames[2*(period_size-frames_left)], pcm_data, nframes * 4);
+	    }
 #ifdef HAVE_RECORDING
-                break;
-            case SND_PCM_STREAM_CAPTURE:
-                memcpy(pcm_data_rec, &frames[2*(period_size-frames_left)], nframes * 4);
-                break;
-            default:
-                break;
-            }
-#endif
+            break;
+        case SND_PCM_STREAM_CAPTURE:
+            memcpy(pcm_data_rec, &frames[2*(period_size-frames_left)], nframes * 4);
+            break;
+        default:
+            break;
         }
+#endif
         pcm_data += nframes*4;
         pcm_size -= nframes*4;
         frames_left -= nframes;
@@ -407,7 +423,8 @@ static void async_callback(snd_async_handler_t *ahandler)
 
     if (state == SND_PCM_STATE_XRUN)
     {
-        logf("underrun!");
+        xruns++;
+        logf("initial underrun!");
         err = snd_pcm_recover(handle, -EPIPE, 0);
         if (err < 0) {
             logf("XRUN Recovery error: %s", snd_strerror(err));
@@ -432,8 +449,20 @@ static void async_callback(snd_async_handler_t *ahandler)
         {
             if (copy_frames(false))
             {
+            retry:
                 err = snd_pcm_writei(handle, frames, period_size);
-                if (err < 0 && err != period_size && err != -EAGAIN)
+                if (err == -EPIPE)
+                {
+                    logf("mid underrun!");
+                    xruns++;
+                    err = snd_pcm_recover(handle, -EPIPE, 0);
+                    if (err < 0) {
+                       logf("XRUN Recovery error: %s", snd_strerror(err));
+                       goto abort;
+                    }
+                    goto retry;
+                }
+                else if (err != period_size)
                 {
                     logf("Write error: written %i expected %li", err, period_size);
                     break;
@@ -452,7 +481,18 @@ static void async_callback(snd_async_handler_t *ahandler)
         while (snd_pcm_avail_update(handle) >= period_size)
         {
             int err = snd_pcm_readi(handle, frames, period_size);
-            if (err < 0 && err != period_size && err != -EAGAIN)
+            if (err == -EPIPE)
+            {
+                logf("rec mid underrun!");
+                xruns++;
+                err = snd_pcm_recover(handle, -EPIPE, 0);
+                if (err < 0) {
+                   logf("XRUN Recovery error: %s", snd_strerror(err));
+                   goto abort;
+                }
+		continue;  /* buffer contents trashed, no sense in trying to copy */
+            }
+            else if (err != period_size)
             {
                 logf("Read error: read %i expected %li", err, period_size);
                 break;
@@ -751,9 +791,14 @@ void pcm_play_dma_postinit(void)
 #endif
 }
 
-int pcm_alsa_get_rate(void)
+unsigned int pcm_alsa_get_rate(void)
 {
     return real_sample_rate;
+}
+
+unsigned int pcm_alsa_get_xruns(void)
+{
+    return xruns;
 }
 
 #ifdef HAVE_RECORDING

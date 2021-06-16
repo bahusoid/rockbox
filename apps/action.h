@@ -32,6 +32,9 @@
 #define CONTEXT_CUSTOM  0x40000000 /* | this against anything to get your context number */
 #define CONTEXT_CUSTOM2 0x20000000 /* as above */
 #define CONTEXT_PLUGIN  0x10000000 /* for plugins using get_custom_action */
+#ifdef HAVE_LOCKED_ACTIONS
+#define CONTEXT_LOCKED  0x04000000 /* flag to use alternate keymap when screen is locked */
+#endif
 
 #define LAST_ITEM_IN_LIST { CONTEXT_STOPSEARCHING, BUTTON_NONE, BUTTON_NONE }
 #define LAST_ITEM_IN_LIST__NEXTLIST(a) { a, BUTTON_NONE, BUTTON_NONE }
@@ -50,8 +53,8 @@
 #define SEL_ACTION_SEEK       0x004U
 #define SEL_ACTION_SKIP       0x008U
 #define SEL_ACTION_NOUNMAPPED 0x010U/* disable backlight on unmapped buttons */
-                                    /* Available 0x020U*/
-                                    /* Available 0x040U*/
+#define SEL_ACTION_ALLNONOTIFY  0x020U/* disable switch for all softlock notifications */
+#define SEL_ACTION_ALWAYSAUTOLOCK 0x040U/* always prime autolock, requires autolock enabled */
 #define SEL_ACTION_NOTOUCH    0x080U/* disable touch screen/pad on screen lock */
 #define SEL_ACTION_AUTOLOCK   0x100U/* autolock on backlight off */
 #define SEL_ACTION_NOEXT      0x200U/* disable selective backlight while charge*/
@@ -65,10 +68,17 @@
 #if !defined(HAS_BUTTON_HOLD)
 /* returns true if keys_locked and screen_has_lock */
 bool is_keys_locked(void);
+
 /* Enable selected actions to bypass a locked state
 * mask is combination of Selective action selection flags */
 void set_selective_softlock_actions(bool selective, unsigned int mask);
-#endif
+
+/* search the standard and wps contexts for ACTION_STD_KEYLOCK,
+ * load it into unlock_combo if we find it,
+ * also arm autolock if enabled. */
+void action_autosoftlock_init(void);
+
+#endif /* !defined(HAS_BUTTON_HOLD) */
 
 #if defined(HAVE_BACKLIGHT)
 /* Enable selected actions to leave the backlight off
@@ -245,6 +255,8 @@ enum {
     ACTION_QS_RIGHT,
     ACTION_QS_DOWN,
     ACTION_QS_TOP,
+    ACTION_QS_VOLUP,
+    ACTION_QS_VOLDOWN,
 
     /* pitchscreen */
     /* obviously ignore if you dont have thise screen */

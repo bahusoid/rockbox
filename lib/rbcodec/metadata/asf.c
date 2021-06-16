@@ -274,13 +274,13 @@ static int asf_parse_header(int fd, struct mp3entry* id3,
                     }
 
                     fileprop = 1;
-                    
+
                     /* Get the number of logical packets - uint64_t at offset 32
                      * (little endian byte order) */
                     lseek(fd, 32, SEEK_CUR);
                     read_uint64le(fd, &wfx->numpackets);
                     /*DEBUGF("read packets:  %llx %lld\n", wfx->numpackets, wfx->numpackets);*/
-                    
+
                     /* Now get the play duration - uint64_t at offset 40 */
                     read_uint64le(fd, &play_duration);
                     id3->length = play_duration / 10000;
@@ -338,7 +338,7 @@ static int asf_parse_header(int fd, struct mp3entry* id3,
                         read_uint16le(fd, &wfx->datalen);
 
                         /*sanity check the included bitrate by comparing to file size and length*/
-                        unsigned int estimated_bitrate =  (wfx->packet_size*wfx->numpackets)/id3->length*8000;
+                        unsigned int estimated_bitrate = id3->length ? (wfx->packet_size*wfx->numpackets)/id3->length*8000 : 0;
 
                         /*in theory we could just use the estimated bitrate always,
                           but its safer to underestimate*/
@@ -375,6 +375,11 @@ static int asf_parse_header(int fd, struct mp3entry* id3,
                             lseek(fd,current.size - 24 - 72 - wfx->datalen,SEEK_CUR);
                             wfx->audiostream = flags&0x7f;
                             id3->codectype = AFMT_WMAVOICE;
+                        } else if (wfx->codec_id == ASF_CODEC_ID_MP3) {
+                            lseek(fd,current.size - 24 - 72,SEEK_CUR);
+                            wfx->audiostream = flags&0x7f;
+                            id3->codectype = AFMT_MPA_L3;
+                            id3->is_asf_stream = true;
                         } else {
                             DEBUGF("Unsupported WMA codec (Lossless, Voice, etc)\n");
                             lseek(fd,current.size - 24 - 72,SEEK_CUR);
@@ -479,22 +484,22 @@ static int asf_parse_header(int fd, struct mp3entry* id3,
                         } else if (!strcmp("WM/Picture", utf8buf)) {
                             uint32_t datalength, strlength;
                             /* Expected is either "01 00 xx xx 03 yy yy yy yy" or
-                             * "03 yy yy yy yy". xx is the size of the WM/Picture 
-                             * container in bytes. yy equals the raw data length of 
+                             * "03 yy yy yy yy". xx is the size of the WM/Picture
+                             * container in bytes. yy equals the raw data length of
                              * the embedded image. */
                             lseek(fd, -4, SEEK_CUR);
                             read(fd, &type, 1);
                             if (type == 1) {
                                 lseek(fd, 3, SEEK_CUR);
                                 read(fd, &type, 1);
-                                /* In case the parsing will fail in the next step we 
+                                /* In case the parsing will fail in the next step we
                                  * might at least be able to skip the whole section. */
                                 datalength = length - 1;
                             }
                             if (type == 3) {
                                 /* Read the raw data length of the embedded image. */
                                 read_uint32le(fd, &datalength);
-                            
+
                                 /* Reset utf8 buffer */
                                 utf8 = utf8buf;
                                 utf8length = 512;
@@ -523,7 +528,7 @@ static int asf_parse_header(int fd, struct mp3entry* id3,
                                     id3->has_embedded_albumart = true;
                                 }
                             }
-                            
+
                             lseek(fd, datalength, SEEK_CUR);
 #endif
                         } else {

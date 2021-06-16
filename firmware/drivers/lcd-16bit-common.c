@@ -341,12 +341,18 @@ void ICODE_ATTR lcd_mono_bitmap_part(const unsigned char *src, int src_x,
     if (y + height > LCD_HEIGHT)
         height = LCD_HEIGHT - y;
 #endif
-
     src += stride * (src_y >> 3) + src_x; /* move starting point */
     src_y  &= 7;
     src_end = src + width;
     dst_col = FBADDR(x, y);
 
+    /* 'Bugfix' mono_bitmap_part reads ahead in the buffer,
+     * if the height is <= char bit pixels other memory gets read
+     * the other option is to check in the hot code path but this appears
+     * sufficient
+     */
+    if (height <= CHAR_BIT)
+        stride = 0;
 
     if (drmode & DRMODE_INVERSEVID)
     {

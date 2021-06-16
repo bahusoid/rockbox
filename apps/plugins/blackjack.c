@@ -104,22 +104,6 @@ enum {
 #define BJACK_RIGHT         BUTTON_RIGHT
 #define BJACK_LEFT          BUTTON_LEFT
 
-#elif CONFIG_KEYPAD == IRIVER_IFP7XX_PAD
-#define BJACK_SELECT_NAME    "MODE"
-#define BJACK_STAY_NAME     "MODE"
-#define BJACK_QUIT_NAME     "PLAY"
-#define BJACK_DOUBLE_NAME   "SELECT"
-#define BJACK_SELECT        BUTTON_MODE
-#define BJACK_QUIT          BUTTON_PLAY
-#define BJACK_MAX           (BUTTON_EQ|BUTTON_UP)
-#define BJACK_MIN           (BUTTON_EQ|BUTTON_DOWN)
-#define BJACK_STAY          BUTTON_MODE
-#define BJACK_DOUBLEDOWN    BUTTON_SELECT
-#define BJACK_UP            BUTTON_UP
-#define BJACK_DOWN          BUTTON_DOWN
-#define BJACK_RIGHT         BUTTON_RIGHT
-#define BJACK_LEFT          BUTTON_LEFT
-
 #elif CONFIG_KEYPAD == GIGABEAT_PAD
 #define BJACK_SELECT_NAME    "SELECT"
 #define BJACK_STAY_NAME     "VOL-"
@@ -559,7 +543,7 @@ enum {
 #define BJACK_RIGHT         BUTTON_NEXT
 #define BJACK_LEFT          BUTTON_PREV
 
-#elif CONFIG_KEYPAD == FIIO_M3K_PAD
+#elif CONFIG_KEYPAD == FIIO_M3K_LINUX_PAD
 #define BJACK_SELECT_NAME   "PLAY"
 #define BJACK_STAY_NAME     "NEXT"
 #define BJACK_QUIT_NAME     "POWER"
@@ -606,6 +590,22 @@ enum {
 #define BJACK_DOWN          BUTTON_NEXT
 #define BJACK_RIGHT         BUTTON_SCROLL_FWD
 #define BJACK_LEFT          BUTTON_SCROLL_BACK
+
+#elif CONFIG_KEYPAD == FIIO_M3K_PAD
+#define BJACK_SELECT_NAME   "SELECT"
+#define BJACK_STAY_NAME     "PLAY"
+#define BJACK_QUIT_NAME     "POWER"
+#define BJACK_DOUBLE_NAME   "MENU"
+#define BJACK_SELECT        BUTTON_SELECT
+#define BJACK_QUIT          BUTTON_POWER
+#define BJACK_MAX           BUTTON_VOL_UP
+#define BJACK_MIN           BUTTON_VOL_DOWN
+#define BJACK_STAY          BUTTON_PLAY
+#define BJACK_DOUBLEDOWN    BUTTON_MENU
+#define BJACK_UP            BUTTON_UP
+#define BJACK_DOWN          BUTTON_DOWN
+#define BJACK_RIGHT         BUTTON_RIGHT
+#define BJACK_LEFT          BUTTON_LEFT
 
 #else
 #error No keymap defined!
@@ -1069,7 +1069,7 @@ static void blackjack_savegame(struct game_context* bj) {
 /*****************************************************************************
 * blackjack_get_yes_no() gets a yes/no answer from the user
 ******************************************************************************/
-static unsigned int blackjack_get_yes_no(char message[20]) {
+static unsigned int blackjack_get_yes_no(const char *message) {
     int button;
     unsigned int w, h, b, choice = 0;
     bool breakout = false;
@@ -1130,7 +1130,7 @@ static unsigned int blackjack_get_yes_no(char message[20]) {
 /*****************************************************************************
 * blackjack_get_amount() gets an amount from the player to be used
 ******************************************************************************/
-static signed int blackjack_get_amount(const char message[20],
+static signed int blackjack_get_amount(const char *message,
                                        signed int lower_limit,
                                        signed int upper_limit,
                                        signed int start) {

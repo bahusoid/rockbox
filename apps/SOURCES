@@ -197,8 +197,6 @@ keymaps/keymap-gigabeat.c
 keymaps/keymap-gigabeat-s.c
 #elif CONFIG_KEYPAD == IRIVER_H10_PAD
 keymaps/keymap-h10.c
-#elif CONFIG_KEYPAD == IRIVER_IFP7XX_PAD
-keymaps/keymap-ifp7xx.c
 #elif CONFIG_KEYPAD == SANSA_E200_PAD
 keymaps/keymap-e200.c
 #elif CONFIG_KEYPAD == SANSA_C200_PAD
@@ -231,12 +229,6 @@ keymaps/keymap-sa9200.c
 keymaps/keymap-hdd1630.c
 #elif CONFIG_KEYPAD == PHILIPS_HDD6330_PAD
 keymaps/keymap-hdd6330.c
-#elif CONFIG_KEYPAD == IAUDIO67_PAD
-keymaps/keymap-iaudio67.c
-#elif CONFIG_KEYPAD == SANSA_C100_PAD
-keymaps/keymap-c100.c
-#elif CONFIG_KEYPAD == LOGIK_DAX_PAD
-keymaps/keymap-logikdax.c
 #elif CONFIG_KEYPAD == SANSA_FUZE_PAD
 keymaps/keymap-fuze.c
 #elif CONFIG_KEYPAD == ONDAVX747_PAD
@@ -300,6 +292,8 @@ keymaps/keymap-xduoox3.c
 keymaps/keymap-xduoox3ii.c
 #elif CONFIG_KEYPAD == XDUOO_X20_PAD
 keymaps/keymap-xduoox20.c
+#elif CONFIG_KEYPAD == FIIO_M3K_LINUX_PAD
+keymaps/keymap-fiiom3klinux.c
 #elif CONFIG_KEYPAD == FIIO_M3K_PAD
 keymaps/keymap-fiiom3k.c
 #elif CONFIG_KEYPAD == EROSQ_PAD

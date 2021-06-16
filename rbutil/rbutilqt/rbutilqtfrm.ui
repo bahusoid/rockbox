@@ -19,6 +19,40 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout_3">
+    <item row="0" column="0">
+     <widget class="QLabel" name="logoLabel">
+      <property name="minimumSize">
+       <size>
+        <width>200</width>
+        <height>62</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>200</width>
+        <height>62</height>
+       </size>
+      </property>
+      <property name="baseSize">
+       <size>
+        <width>200</width>
+        <height>62</height>
+       </size>
+      </property>
+      <property name="text">
+       <string comment="Welcome to Rockbox Utility, the installation and housekeeping tool for Rockbox."/>
+      </property>
+      <property name="pixmap">
+       <pixmap resource="rbutilqt.qrc">:/icons/rockbox-logo.svg</pixmap>
+      </property>
+      <property name="scaledContents">
+       <bool>true</bool>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+    </item>
     <item row="0" column="1">
      <widget class="QGroupBox" name="groupBoxDevice">
       <property name="sizePolicy">
@@ -125,31 +159,6 @@
       </layout>
      </widget>
     </item>
-    <item row="0" column="0">
-     <widget class="QLabel" name="logoLabel">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="baseSize">
-       <size>
-        <width>0</width>
-        <height>0</height>
-       </size>
-      </property>
-      <property name="text">
-       <string comment="Welcome to Rockbox Utility, the installation and housekeeping tool for Rockbox."/>
-      </property>
-      <property name="pixmap">
-       <pixmap resource="rbutilqt.qrc">:/icons/rblogo.png</pixmap>
-      </property>
-      <property name="scaledContents">
-       <bool>false</bool>
-      </property>
-     </widget>
-    </item>
     <item row="1" column="0" colspan="2">
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
@@ -171,34 +180,7 @@
         <string>Install accessibility add-ons</string>
        </attribute>
        <layout class="QGridLayout">
-        <item row="0" column="0">
-         <widget class="QToolButton" name="buttonVoice">
-          <property name="text">
-           <string>Install Voice files</string>
-          </property>
-          <property name="icon">
-           <iconset resource="rbutilqt.qrc">
-            <normaloff>:/icons/audio-volume-high.svg</normaloff>:/icons/audio-volume-high.svg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>56</width>
-            <height>46</height>
-           </size>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1">
-         <widget class="QLabel" name="labelVoice">
-          <property name="text">
-           <string>&lt;b&gt;Install Voice file&lt;/b&gt;&lt;br/&gt;Voice files are needed to make Rockbox speak the user interface. Speaking is enabled by default, so if you installed the voice file Rockbox will speak.</string>
-          </property>
-          <property name="wordWrap">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="0">
+        <item row="1" column="0">
          <widget class="QToolButton" name="buttonTalk">
           <property name="text">
            <string>Install Talk files</string>
@@ -215,14 +197,14 @@
           </property>
          </widget>
         </item>
-        <item row="2" column="1">
+        <item row="1" column="1">
          <widget class="QLabel" name="labelTalk">
           <property name="text">
            <string>&lt;b&gt;Create Talk Files&lt;/b&gt;&lt;br/&gt;Talkfiles are needed to let Rockbox speak File and Foldernames</string>
           </property>
          </widget>
         </item>
-        <item row="3" column="0">
+        <item row="2" column="0">
          <spacer>
           <property name="orientation">
            <enum>Qt::Vertical</enum>
@@ -235,7 +217,7 @@
           </property>
          </spacer>
         </item>
-        <item row="3" column="1">
+        <item row="2" column="1">
          <spacer>
           <property name="orientation">
            <enum>Qt::Vertical</enum>
@@ -248,7 +230,7 @@
           </property>
          </spacer>
         </item>
-        <item row="1" column="0">
+        <item row="0" column="0">
          <widget class="QToolButton" name="buttonCreateVoice">
           <property name="text">
            <string>Create Voice files</string>
@@ -265,7 +247,7 @@
           </property>
          </widget>
         </item>
-        <item row="1" column="1">
+        <item row="0" column="1">
          <widget class="QLabel" name="labelCreateVoice">
           <property name="text">
            <string>&lt;b&gt;Create Voice file&lt;/b&gt;&lt;br/&gt;Voice files are needed to make Rockbox speak the  user interface. Speaking is enabled by default, so
@@ -388,14 +370,6 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="manual">
-       <attribute name="title">
-        <string>&amp;Manual</string>
-       </attribute>
-       <attribute name="toolTip">
-        <string>View and download the manual</string>
-       </attribute>
-      </widget>
       <widget class="QWidget" name="info">
        <attribute name="title">
         <string>Inf&amp;o</string>
@@ -411,7 +385,7 @@
      <x>0</x>
      <y>0</y>
      <width>650</width>
-     <height>23</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_File">
@@ -444,7 +418,6 @@
      <property name="title">
       <string>&amp;Accessibility</string>
      </property>
-     <addaction name="actionInstall_Voice_File"/>
      <addaction name="actionCreate_Voice_File"/>
      <addaction name="actionCreate_Talk_Files"/>
     </widget>
@@ -509,7 +482,7 @@
   </action>
   <action name="actionComplete_Installation">
    <property name="icon">
-    <iconset resource="rbutilqt.qrc">
+    <iconset>
      <normaloff>:/icons/bootloader_btn.png</normaloff>:/icons/bootloader_btn.png</iconset>
    </property>
    <property name="text">
@@ -518,7 +491,7 @@
   </action>
   <action name="actionSmall_Installation">
    <property name="icon">
-    <iconset resource="rbutilqt.qrc">
+    <iconset>
      <normaloff>:/icons/rbinstall_btn.png</normaloff>:/icons/rbinstall_btn.png</iconset>
    </property>
    <property name="text">
@@ -527,7 +500,7 @@
   </action>
   <action name="actionInstall_Bootloader">
    <property name="icon">
-    <iconset resource="rbutilqt.qrc">
+    <iconset>
      <normaloff>:/icons/bootloader_btn.png</normaloff>:/icons/bootloader_btn.png</iconset>
    </property>
    <property name="text">
@@ -536,7 +509,7 @@
   </action>
   <action name="actionInstall_Rockbox">
    <property name="icon">
-    <iconset resource="rbutilqt.qrc">
+    <iconset>
      <normaloff>:/icons/rbinstall_btn.png</normaloff>:/icons/rbinstall_btn.png</iconset>
    </property>
    <property name="text">
@@ -545,7 +518,7 @@
   </action>
   <action name="actionFonts_Package">
    <property name="icon">
-    <iconset resource="rbutilqt.qrc">
+    <iconset>
      <normaloff>:/icons/font_btn.png</normaloff>:/icons/font_btn.png</iconset>
    </property>
    <property name="text">
@@ -664,7 +637,6 @@
   <tabstop>buttonChangeDevice</tabstop>
   <tabstop>buttonRemoveBootloader</tabstop>
   <tabstop>buttonRemoveRockbox</tabstop>
-  <tabstop>buttonVoice</tabstop>
   <tabstop>buttonCreateVoice</tabstop>
   <tabstop>buttonTalk</tabstop>
  </tabstops>

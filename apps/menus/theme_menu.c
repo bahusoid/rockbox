@@ -27,6 +27,7 @@
 #include "lang.h"
 #include "action.h"
 #include "settings.h"
+#include "rbpaths.h"
 #include "menu.h"
 #include "tree.h"
 #include "list.h"
@@ -42,6 +43,9 @@
 #include "statusbar-skinned.h"
 #include "skin_engine/skin_engine.h"
 #include "icons.h"
+#ifdef HAVE_LCD_COLOR
+#include "filetypes.h"
+#endif
 
 #ifdef HAVE_BACKDROP_IMAGE
 /**
@@ -116,7 +120,10 @@ static int reset_color(void)
     global_settings.lse_color = LCD_DEFAULT_BG;
     global_settings.lst_color = LCD_DEFAULT_FG;
     global_settings.list_separator_color = LCD_DARKGRAY;
-    
+    global_settings.colors_file[0] = '-';
+    global_settings.colors_file[1] = '\0';
+
+    read_color_theme_file();
     settings_save();
     settings_apply(false);
     settings_apply_skins();

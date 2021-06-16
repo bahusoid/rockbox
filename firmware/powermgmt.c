@@ -131,7 +131,8 @@ static int battery_type = 0;
 /* Power history: power_history[0] is the newest sample */
 unsigned short power_history[POWER_HISTORY_LEN] = {0};
 
-#if (CONFIG_CPU == JZ4732) || (CONFIG_CPU == JZ4760B) || (CONFIG_PLATFORM & PLATFORM_HOSTED)
+#if (CONFIG_CPU == JZ4732) || (CONFIG_CPU == JZ4760B) || \
+    (CONFIG_CPU == X1000) || (CONFIG_PLATFORM & PLATFORM_HOSTED)
 static char power_stack[DEFAULT_STACK_SIZE + POWERMGMT_DEBUG_STACK];
 #else
 static char power_stack[DEFAULT_STACK_SIZE/2 + POWERMGMT_DEBUG_STACK];
@@ -705,14 +706,14 @@ static void power_thread(void)
     power_thread_inputs = power_input_status();
 #endif
 
+    /* call target specific init now */
+    powermgmt_init_target();
     /* initialize voltage averaging (if available) */
     average_init();
     /* get initial battery level value (in %) */
     init_battery_percent();
     /* get some initial data for the power curve */
     collect_power_history();
-    /* call target specific init now */
-    powermgmt_init_target();
 
     next_power_hist = current_tick + HZ*60;
 

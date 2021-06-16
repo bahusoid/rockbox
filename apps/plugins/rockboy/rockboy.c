@@ -122,16 +122,6 @@ static void setoptions (void)
         options.SELECT  = BUTTON_NONE;
         options.MENU    = (BUTTON_SELECT | BUTTON_REPEAT);
 
-#elif CONFIG_KEYPAD == IRIVER_IFP7XX_PAD
-        options.UP      = BUTTON_UP;
-        options.DOWN    = BUTTON_DOWN;
-
-        options.A       = BUTTON_PLAY;
-        options.B       = BUTTON_EQ;
-        options.START   = BUTTON_MODE;
-        options.SELECT  = (BUTTON_SELECT | BUTTON_REL);
-        options.MENU    = (BUTTON_SELECT | BUTTON_REPEAT);
-
 #elif CONFIG_KEYPAD == GIGABEAT_PAD
         options.UP      = BUTTON_UP;
         options.DOWN    = BUTTON_DOWN;
@@ -435,7 +425,7 @@ static void setoptions (void)
         options.SELECT  = BUTTON_VOL_UP;
         options.MENU    = BUTTON_POWER;
 
-#elif CONFIG_KEYPAD == FIIO_M3K_PAD
+#elif CONFIG_KEYPAD == FIIO_M3K_LINUX_PAD
         options.UP      = BUTTON_PREV;
         options.DOWN    = BUTTON_NEXT;
 
@@ -461,6 +451,17 @@ static void setoptions (void)
         options.LEFT   = BUTTON_SCROLL_BACK;
         options.RIGHT  = BUTTON_SCROLL_FWD;
 
+        options.A       = BUTTON_MENU;
+        options.B       = BUTTON_BACK;
+        options.START   = BUTTON_VOL_DOWN;
+        options.SELECT  = BUTTON_VOL_UP;
+        options.MENU    = BUTTON_POWER;
+
+#elif CONFIG_KEYPAD == FIIO_M3K_PAD
+        options.UP      = BUTTON_UP;
+        options.DOWN    = BUTTON_DOWN;
+        options.LEFT    = BUTTON_LEFT;
+        options.RIGHT   = BUTTON_RIGHT;
         options.A       = BUTTON_MENU;
         options.B       = BUTTON_BACK;
         options.START   = BUTTON_VOL_DOWN;

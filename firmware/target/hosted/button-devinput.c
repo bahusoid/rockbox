@@ -19,7 +19,6 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
-
 #include <poll.h>
 #include <errno.h>
 #include <unistd.h>
@@ -34,6 +33,22 @@
 #include "button.h"
 #include "panic.h"
 
+#ifdef HAVE_SCROLLWHEEL
+#include "powermgmt.h"
+#if defined(HAVE_BACKLIGHT) || defined(HAVE_BUTTON_LIGHT)
+#include "backlight.h"
+#endif
+#endif /* HAVE_SCROLLWHEEL */
+
+/* TODO:  HAVE_SCROLLWHEEL is a hack.  Instead of posting the exact number
+   of clicks, instead do it similar to the ipod clickwheel and post
+   the wheel angular velocity (degrees per second)
+
+   * Track the relative position  (ie based on click events)
+   * Use WHEELCLICKS_PER_ROTATION to convert clicks to angular distance
+   * Compute to angular velocity (degrees per second)
+
+ */
 #define NR_POLL_DESC    4
 
 static int num_devices = 0;
@@ -72,20 +87,26 @@ void button_close_device(void)
     num_devices = 0;
 }
 
+#ifdef BUTTON_DELAY_RELEASE
+static int button_delay_release = 0;
+static int delay_tick = 0;
+#endif
+
 int button_read_device(void)
 {
     static int button_bitmap = 0;
     struct input_event event;
 
-#if defined(BUTTON_SCROLL_BACK)
-    // FIXME TODO:  Make this work via HAVE_SCROLL_WHEEL instead
+#ifdef HAVE_SCROLLWHEEL
+    int wheel_ticks = 0;
+#endif
 
-    /* Wheel gives us press+release back to back, clear them after time elapses */
-    static long last_tick = 0;
-    if (button_bitmap & (BUTTON_SCROLL_BACK|BUTTON_SCROLL_FWD) &&
-        current_tick - last_tick >= 2)
+#ifdef BUTTON_DELAY_RELEASE
+    /* First de-assert delayed-release buttons */
+    if (button_delay_release && current_tick >= delay_tick)
     {
-        button_bitmap &= ~(BUTTON_SCROLL_BACK|BUTTON_SCROLL_FWD);
+        button_bitmap &= ~button_delay_release;
+        button_delay_release = 0;
     }
 #endif
 
@@ -100,37 +121,77 @@ int button_read_device(void)
                 int size = read(poll_fds[i].fd, &event, sizeof(event));
                 if(size == (int)sizeof(event))
                 {
-                    int keycode = event.code;
+                    /* map linux event code to rockbox button bitmap */
+                    int bmap = button_map(event.code);
+
                     /* event.value == 0x10000 means press
                      * event.value == 0 means release
                      */
-                    bool press = event.value ? true : false;
-
-                    /* map linux event code to rockbox button bitmap */
-                    if(press)
+                    if(event.value)
                     {
-                        int bmap = button_map(keycode);
-#if defined(BUTTON_SCROLL_BACK)
-                        /* Keep track of when the last wheel tick happened */
-                        if (bmap & (BUTTON_SCROLL_BACK|BUTTON_SCROLL_FWD))
-                            last_tick = current_tick;
+#ifdef HAVE_SCROLLWHEEL
+			/* Filter out wheel ticks */
+                        if (bmap & BUTTON_SCROLL_BACK)
+                            wheel_ticks--;
+                        else if (bmap & BUTTON_SCROLL_FWD)
+                            wheel_ticks++;
+                        bmap &= ~(BUTTON_SCROLL_BACK|BUTTON_SCROLL_FWD);
+#endif
+#ifdef BUTTON_DELAY_RELEASE
+                        bmap &= ~BUTTON_DELAY_RELEASE;
 #endif
                         button_bitmap |= bmap;
                     }
                     else
                     {
-                        int bmap = button_map(keycode);
-#if defined(BUTTON_SCROLL_BACK)
+#ifdef BUTTON_DELAY_RELEASE
+                        /* Delay the release of any requested buttons */
+                        if (bmap & BUTTON_DELAY_RELEASE)
+                        {
+                            button_delay_release |= bmap & ~BUTTON_DELAY_RELEASE;
+                            delay_tick = current_tick + HZ/20;
+                            bmap = 0;
+                        }
+#endif
+
+#ifdef HAVE_SCROLLWHEEL
                         /* Wheel gives us press+release back to back; ignore the release */
                         bmap &= ~(BUTTON_SCROLL_BACK|BUTTON_SCROLL_FWD);
 #endif
                         button_bitmap &= ~bmap;
-
                     }
                 }
             }
         }
     }
+
+#ifdef HAVE_SCROLLWHEEL
+    /* Reset backlight and poweroff timers */
+    if (wheel_ticks) {
+#ifdef HAVE_BACKLIGHT
+        backlight_on();
+#endif
+#ifdef HAVE_BUTTON_LIGHT
+        buttonlight_on();
+#endif
+        reset_poweroff_timer();
+    }
+
+    if (wheel_ticks > 0)
+    {
+        while (wheel_ticks-- > 0)
+        {
+            queue_post(&button_queue, BUTTON_SCROLL_FWD, 0);
+        }
+    }
+    else if (wheel_ticks < 0)
+    {
+        while (wheel_ticks++ < 0)
+        {
+            queue_post(&button_queue, BUTTON_SCROLL_BACK, 0);
+        }
+    }
+#endif /* HAVE_SCROLLWHEEL */
 
     return button_bitmap;
 }

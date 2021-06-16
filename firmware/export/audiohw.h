@@ -41,6 +41,7 @@
 #define LIN_GAIN_CAP          (1 << 11)
 #define MIC_GAIN_CAP          (1 << 12)
 #define FILTER_ROLL_OFF_CAP   (1 << 13)
+#define POWER_MODE_CAP        (1 << 14)
 
 /* Used by every driver to export its min/max/default values for its audio
    settings. */
@@ -193,6 +194,8 @@ struct sound_settings_info
 #include "jz4740-codec.h"
 #elif defined(HAVE_AK4537)
 #include "ak4537.h"
+#elif defined(HAVE_AK4376)
+#include "ak4376.h"
 #elif defined(HAVE_RK27XX_CODEC)
 #include "rk27xx_codec.h"
 #elif defined(HAVE_AIC3X)
@@ -391,6 +394,10 @@ enum AUDIOHW_EQ_SETTINGS
 #define AUDIOHW_HAVE_FILTER_ROLL_OFF
 #endif
 
+#if (AUDIOHW_CAPS & POWER_MODE_CAP)
+#define AUDIOHW_HAVE_POWER_MODE
+#endif
+
 #endif /* AUDIOHW_CAPS */
 
 #ifdef HAVE_SW_TONE_CONTROLS
@@ -584,6 +591,16 @@ void audiohw_set_depth_3d(int val);
  *          FILTER_ROLL_OFF_CAP
  */
 void audiohw_set_filter_roll_off(int val);
+#endif
+
+#ifdef AUDIOHW_HAVE_POWER_MODE
+/**
+ * Set DAC's power saving mode.
+ * @param enable 0 - highest performance, 1 - battery saving
+ * NOTE: AUDIOHW_CAPS need to contain
+ *          POWER_MODE_CAP
+ */
+void audiohw_set_power_mode(int mode);
 #endif
 
 void audiohw_set_frequency(int fsel);

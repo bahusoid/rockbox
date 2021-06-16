@@ -15,8 +15,6 @@ ipod.c
 iriver-h10.c
 #elif (CONFIG_KEYPAD == IRIVER_H100_PAD) || (CONFIG_KEYPAD == IRIVER_H300_PAD)
 iriver-h100_h300.c
-#elif CONFIG_KEYPAD == IRIVER_IFP7XX_PAD
-iriver-ifp7xx.c
 #elif CONFIG_KEYPAD == SANSA_C200_PAD
 sansa-c200.c
 #elif CONFIG_KEYPAD == SANSA_CLIP_PAD
@@ -33,8 +31,6 @@ mrobe500.c
 mrobe100.c
 #elif CONFIG_KEYPAD == COWON_D2_PAD
 cowon-d2.c
-#elif CONFIG_KEYPAD == IAUDIO67_PAD
-iaudio-6_7.c
 #elif CONFIG_KEYPAD == CREATIVEZVM_PAD
 creative-zvm.c
 #elif CONFIG_KEYPAD == MEIZU_M6SL_PAD
@@ -87,5 +83,7 @@ xduoo-x20.c
 ihifi2.c
 #elif CONFIG_KEYPAD == EROSQ_PAD
 erosq.c
+#elif CONFIG_KEYPAD == FIIO_M3K_PAD
+fiio-m3k.c
 #endif
 #endif /* SIMULATOR */

@@ -30,7 +30,7 @@ else
 fi
 
 # This is the absolute path to where the script resides.
-rockboxdevdir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+rockboxdevdir="$( readlink -f "$( dirname "${BASH_SOURCE[0]}" )" )"
 
 if [ `uname -s` = "Darwin" ]; then
     parallel=`sysctl -n hw.physicalcpu`
@@ -194,7 +194,32 @@ gettool() {
             ;;
 
         alsa-lib)
-            url="ftp://ftp.alsa-project.org/pub/lib/"
+            url="ftp://ftp.alsa-project.org/pub/lib"
+            ;;
+
+        libffi)
+            url="ftp://sourceware.org/pub/libffi"
+            ext="tar.gz"
+            ;;
+
+        glib)
+            url="https://ftp.gnome.org/pub/gnome/sources/glib/2.46"
+            ext="tar.xz"
+            ;;
+
+        zlib)
+            url="https://zlib.net"
+            ext="tar.gz"
+            ;;
+
+        dbus)
+            url="https://dbus.freedesktop.org/releases/dbus"
+            ext="tar.gz"
+            ;;
+
+        expat)
+            url="https://src.fedoraproject.org/repo/pkgs/expat/expat-2.1.0.tar.gz/dd7dab7a5fea97d2a6a43f511449b7cd"
+            ext="tar.gz"
             ;;
 
         linux)
@@ -243,8 +268,10 @@ extract() {
         tar xjf "$dlwhere/$1.tar.bz2"
     elif [ -f "$dlwhere/$1.tar.gz" ]; then
         tar xzf "$dlwhere/$1.tar.gz"
+    elif [ -f "$dlwhere/$1.tar.xz" ]; then
+        tar xJf "$dlwhere/$1.tar.xz"
     else
-        echo "ROCKBOXDEV: I don't know how to extract $1 (no bzip2 or gzip)"
+        echo "ROCKBOXDEV: unknown compression for $1"
         exit
     fi
 }
@@ -262,17 +289,20 @@ run_cmd() {
     fi
 }
 
-# check if the following should be executed or not, depending on RESTART variable:
+# check if the following should be executed or not, depending on RBDEV_RESTART variable:
 # $1=tool
-# If RESTART is empty, always perform step, otherwise only perform is there is
-# an exact match. On the first match, RESTART is reset to "" so that next step
+# If RBDEV_RESTART is empty, always perform step, otherwise only perform is there
+# is an exact match. On the first match, RBDEV_RESTART is reset to "" so that next step
 # are executed
 check_restart() {
-    if [ "$1" = "$RESTART" ]; then
-        RESTART=""
-        true
+    if [ "x$RBDEV_RESTART" = "x" ]; then
+        return 0
+    elif [ "$1" = "$RBDEV_RESTART" ]; then
+        RBDEV_RESTART=""
+        return 0
+    else
+        return 1
     fi
-    [ "$RESTART" = "" ] && true || false
 }
 
 # advanced tool building: create a build directory, run configure, run make
@@ -293,9 +323,9 @@ buildtool() {
     install_opts="$5"
     logfile="$builddir/build-$toolname.log"
 
-    stepname=${RESTART_STEP-$tool}
+    stepname=${RESTART_STEP:-$tool}
     if ! check_restart "$stepname"; then
-        echo "ROCKBOXDEV: Skipping step '$stepname' as requested per RESTART"
+        echo "ROCKBOXDEV: Skipping step '$stepname' as requested per RBDEV_RESTART"
         return
     fi
     echo "ROCKBOXDEV: Starting step '$stepname'"
@@ -318,17 +348,30 @@ buildtool() {
             cp -r ../$toolname/* .
             cfg_dir="."
             ;;
-
         *)
             # out-of-tree
             cfg_dir="../$toolname";
             ;;
     esac
 
-    if [ "$config_opt" != "NO_CONFIGURE" ]; then
+    if [ "$RESTART_STEP" == "gcc-stage1" ] ; then
+	CXXFLAGS="-std=gnu++03"
+    elif [ "$RESTART_STEP" == "gcc-stage2" ] ; then
+	CXXFLAGS="-std=gnu++11"
+    else
+	CXXFLAGS=""
+    fi
+
+    if [ "$tool" == "zlib" ]; then
         echo "ROCKBOXDEV: $toolname/configure"
         # NOTE glibc requires to be compiled with optimization
         CFLAGS='-U_FORTIFY_SOURCE -fgnu89-inline -O2' run_cmd "$logfile" \
+            "$cfg_dir/configure" "--prefix=$prefix" \
+            $config_opt
+    elif [ "$config_opt" != "NO_CONFIGURE" ]; then
+        echo "ROCKBOXDEV: $toolname/configure"
+        # NOTE glibc requires to be compiled with optimization
+        CFLAGS='-U_FORTIFY_SOURCE -fgnu89-inline -O2' CXXFLAGS="$CXXFLAGS" run_cmd "$logfile" \
             "$cfg_dir/configure" "--prefix=$prefix" \
             --disable-docs $config_opt
     fi
@@ -438,7 +481,7 @@ build() {
             ./configure --prefix=$prefix $configure_params
         ;;
         *)
-            CFLAGS='-U_FORTIFY_SOURCE -fgnu89-inline -fcommon' ../$toolname-$version/configure --target=$target --prefix=$prefix --enable-languages=c --disable-libssp --disable-docs $configure_params
+            CFLAGS='-U_FORTIFY_SOURCE -fgnu89-inline -fcommon' CXXFLAGS='-std=gnu++03' ../$toolname-$version/configure --target=$target --prefix=$prefix --enable-languages=c --disable-libssp --disable-docs $configure_params
         ;;
     esac
 
@@ -569,8 +612,8 @@ build_linux_toolchain () {
     extract "linux-$linux_ver"
     extract "glibc-$glibc_ver"
 
-    # we make it possible to restart a build on error by using the RESTART
-    # variable, the format is RESTART="tool" where tool is the toolname at which
+    # we make it possible to restart a build on error by using the RBDEV_RESTART
+    # variable, the format is RBDEV_RESTART="tool" where tool is the toolname at which
     # to restart (binutils, gcc)
 
     # install binutils, with support for sysroot
@@ -599,11 +642,13 @@ build_linux_toolchain () {
     # build glibc using the first stage cross compiler
     # we need to set the prefix to /usr because the glibc runs on the actual
     # target and is indeed installed in /usr
+    RESTART_STEP="glibc" \
     prefix="/usr" \
     buildtool "glibc" "$glibc_ver" "--target=$target --host=$target --build=$MACHTYPE \
         --with-__thread --with-headers=$sysroot/usr/include $glibc_opts" \
         "" "install install_root=$sysroot"
     # build stage 2 compiler
+    RESTART_STEP="gcc-stage2" \
     buildtool "gcc" "$gcc_ver" "$gcc_opts --enable-languages=c,c++ --target=$target \
         --with-sysroot=$sysroot" "" ""
 }
@@ -613,7 +658,7 @@ usage () {
     echo "options:"
     echo "  --help              Display this help"
     echo "  --target=LIST       List of targets to build"
-    echo "  --restart=STEP      Restart build at given STEP (same as RESTART env var)"
+    echo "  --restart=STEP      Restart build at given STEP (same as RBDEV_RESTART env var)"
     echo "  --prefix=PREFIX     Set install prefix (same as RBDEV_PREFIX env var)"
     echo "  --dlwhere=DIR       Set download directory (same as RBDEV_DOWNLOAD env var)"
     echo "  --builddir=DIR      Set build directory (same as RBDEV_BUILD env var)"
@@ -675,12 +720,16 @@ if [ -n "$missingtools" ]; then
     exit 1
 fi
 
-echo "Download directory : $dlwhere (set RBDEV_DOWNLOAD or use --download= to change)"
+dlwhere=$(readlink -f "$dlwhere")
+prefix=$(readlink -f "$prefix")
+builddir=$(readlink -f "$builddir")
+
+echo "Download directory : $dlwhere (set RBDEV_DOWNLOAD or use --dlwhere= to change)"
 echo "Install prefix     : $prefix  (set RBDEV_PREFIX or use --prefix= to change)"
 echo "Build dir          : $builddir (set RBDEV_BUILD or use --builddir= to change)"
 echo "Make options       : $MAKEFLAGS (set MAKEFLAGS or use --makeflags= to change)"
 echo "Restart step       : $RBDEV_RESTART (set RBDEV_RESTART or use --restart= to change)"
-echo "Target arch        : $RBDEV_TARGET (set RBDEV_TARGET or use --target to change)"
+echo "Target arch        : $RBDEV_TARGET (set RBDEV_TARGET or use --target= to change)"
 
 # Verify download directory
 if test -d "$dlwhere"; then
@@ -716,7 +765,7 @@ if [ -z "$RBDEV_TARGET" ]; then
     echo "a   - arm      (ipods, iriver H10, Sansa, D2, Gigabeat, etc)"
     echo "i   - mips     (Jz47xx and ATJ-based players)"
     echo "x   - arm-linux  (Generic Linux ARM: Samsung ypr0, Linux-based Sony NWZ)"
-    echo "y   - mips-linux  (Generic Linux MIPS: AGPTek Rocker)"
+    echo "y   - mips-linux  (Generic Linux MIPS: eg the many HiBy-OS targets)"
     echo "separate multiple targets with spaces"
     echo "(Example: \"m a i\" will build m68k, arm, and mips)"
     echo ""
@@ -809,7 +858,7 @@ do
             #   glibc: 2.16
             #   alsa: 1.0.29
             #
-            # FiiO M3K:
+            # FiiO M3K Linux:
             #   kernel: 3.10.14
             #   glibc: 2.16
             #   alsa: 1.0.26
@@ -831,6 +880,43 @@ do
             extract "alsa-lib-$alsalib_ver"
             prefix="/usr" buildtool "alsa-lib" "$alsalib_ver" \
                 "--host=$target --disable-python" "" "install DESTDIR=$prefix/$target/sysroot"
+            # build libffi
+	    libffi_ver="3.2.1"
+	    gettool "libffi" "$libffi_ver"
+	    extract "libffi-$libffi_ver"
+	    prefix="/usr" buildtool "libffi" "$libffi_ver" \
+               "--includedir=/usr/include --host=$target" "" "install DESTDIR=$prefix/$target/sysroot"
+            (cd $prefix/$target/sysroot/usr/include ; ln -sf ../lib/libffi-$libffi_ver/include/ffi.h . ;  ln -sf ../lib/libffi-$libffi_ver/include/ffitarget.h . )
+
+            # build zlib
+	    zlib_ver="1.2.11"
+	    gettool "zlib" "$zlib_ver"
+	    extract "zlib-$zlib_ver"
+	    CHOST=$target prefix="/usr" buildtool "zlib" "$zlib_ver" \
+                "" "" "install DESTDIR=$prefix/$target/sysroot"
+
+            # build glib
+	    glib_ver="2.46.2"
+	    gettool "glib" "$glib_ver"
+	    extract "glib-$glib_ver"
+	    prefix="/usr" buildtool "glib" "$glib_ver" \
+               "--host=$target --with-sysroot=$prefix/$target/sysroot --disable-libelf glib_cv_stack_grows=no glib_cv_uscore=no ac_cv_func_posix_getpwuid_r=yes ac_cv_func_posix_getgrgid_r=yes" "" "install DESTDIR=$prefix/$target/sysroot"
+
+            # build expat
+	    expat_ver="2.1.0"
+	    gettool "expat" "$expat_ver"
+	    extract "expat-$expat_ver"
+	    prefix="/usr" buildtool "expat" "$expat_ver" \
+               "--host=$target --includedir=/usr/include --enable-abstract-sockets" "" "install DESTDIR=$prefix/$target/sysroot "
+
+            # build dbus
+	    dbus_ver="1.10.2"
+	    gettool "dbus" "$dbus_ver"
+	    extract "dbus-$dbus_ver"
+	    prefix="/usr" buildtool "dbus" "$dbus_ver" \
+               "--host=$target --with-sysroot=$prefix/$target/sysroot --includedir=/usr/include --enable-abstract-sockets ac_cv_lib_expat_XML_ParserCreate_MM=yes --disable-systemd --disable-launchd --enable-x11-autolaunch=no --with-x=no -disable-selinux --disable-apparmor --disable-doxygen-docs " "" "install DESTDIR=$prefix/$target/sysroot "
+
+
             ;;
         *)
             echo "ROCKBOXDEV: Unsupported architecture option: $arch"

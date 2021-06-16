@@ -738,6 +738,7 @@ void root_menu(void)
 {
     int previous_browser = GO_TO_FILEBROWSER;
     int selected = 0;
+    int shortcut_origin = GO_TO_ROOT;
 
     push_current_activity(ACTIVITY_MAINMENU);
 
@@ -822,20 +823,29 @@ void root_menu(void)
             case GO_TO_PLUGIN:
             {
                 char *key;
-                switch (last_screen)
+                if (global_status.last_screen == GO_TO_SHORTCUTMENU)
                 {
-                    case GO_TO_ROOT:
-                        key = ID2P(LANG_START_SCREEN);
-                        break;
-                    case GO_TO_WPS:
-                        key = ID2P(LANG_OPEN_PLUGIN_SET_WPS_CONTEXT_PLUGIN);
-                        break;
-                    case GO_TO_SHORTCUTMENU:
-                        key = ID2P(LANG_SHORTCUTS);
-                        break;
-                    default:
-                        key = ID2P(LANG_OPEN_PLUGIN);
-                        break;
+                    shortcut_origin = last_screen;
+                    global_status.last_screen = last_screen;
+                    key = ID2P(LANG_SHORTCUTS);
+                }
+                else
+                {
+                    switch (last_screen)
+                    {
+                        case GO_TO_ROOT:
+                            key = ID2P(LANG_START_SCREEN);
+                            break;
+                        case GO_TO_WPS:
+                            key = ID2P(LANG_OPEN_PLUGIN_SET_WPS_CONTEXT_PLUGIN);
+                            break;
+                        case GO_TO_SHORTCUTMENU:
+                            key = ID2P(LANG_SHORTCUTS);
+                            break;
+                        default:
+                            key = ID2P(LANG_OPEN_PLUGIN);
+                            break;
+                    }
                 }
 
                 open_plugin_get_entry(key, &open_plugin_entry);
@@ -845,6 +855,18 @@ void root_menu(void)
                     param = NULL;
 
                 next_screen = load_plugin_screen(path, param);
+
+                if (next_screen != GO_TO_PLUGIN)
+                    open_plugin_add_path(NULL, NULL, NULL);
+
+                /* shortcuts may take several trips through the GO_TO_PLUGIN case
+                   make sure we preserve and restore the origin */
+                if (next_screen == GO_TO_PREVIOUS && shortcut_origin != GO_TO_ROOT)
+                {
+                    if (shortcut_origin != GO_TO_WPS)
+                        next_screen = shortcut_origin;
+                    shortcut_origin = GO_TO_ROOT;
+                }
 
                 previous_browser = (next_screen != GO_TO_WPS) ? GO_TO_FILEBROWSER : GO_TO_PLUGIN;
                 break;

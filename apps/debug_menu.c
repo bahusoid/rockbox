@@ -1428,6 +1428,15 @@ static int disk_callback(int btn, struct gui_synclist *lists)
                 '0' + (i & 7));
     }
 #endif /* HAVE_ATA_DMA */
+    i = identify_info[0] & (1 << 15);
+    simplelist_addline(
+            "CF compatible: %s", i ? "yes" : "no");
+    i = identify_info[0] & (1 << 6);
+    simplelist_addline(
+            "Fixed device: %s", i ? "yes" : "no");
+    i = identify_info[0] & (1 << 7);
+    simplelist_addline(
+            "Removeable media: %s", i ? "yes" : "no");
     return btn;
 }
 
@@ -2528,7 +2537,7 @@ static const struct {
         { "Screendump", dbg_screendump },
 #endif
         { "Skin Engine RAM usage", dbg_skin_engine },
-#if ((CONFIG_PLATFORM & PLATFORM_NATIVE) || defined(SONY_NWZ_LINUX) || defined(HIBY_LINUX) || defined(FIIO_M3K)) && !defined(SIMULATOR)
+#if ((CONFIG_PLATFORM & PLATFORM_NATIVE) || defined(SONY_NWZ_LINUX) || defined(HIBY_LINUX) || defined(FIIO_M3K_LINUX)) && !defined(SIMULATOR)
         { "View HW info", dbg_hw_info },
 #endif
 #if (CONFIG_PLATFORM & PLATFORM_NATIVE)

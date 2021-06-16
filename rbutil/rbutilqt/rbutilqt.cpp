@@ -35,10 +35,8 @@
 #include "system.h"
 #include "systrace.h"
 #include "rbsettings.h"
-#include "serverinfo.h"
-#include "systeminfo.h"
+#include "playerbuildinfo.h"
 #include "ziputil.h"
-#include "manualwidget.h"
 #include "infowidget.h"
 #include "selectiveinstallwidget.h"
 #include "backupdialog.h"
@@ -90,20 +88,8 @@ RbUtilQt::RbUtilQt(QWidget *parent) : QMainWindow(parent)
     HttpGet::setGlobalProxy(proxy());
     // init startup & autodetection
     ui.setupUi(this);
-#if defined(Q_OS_LINUX)
     QIcon windowIcon(":/icons/rockbox-clef.svg");
     this->setWindowIcon(windowIcon);
-#endif
-#if defined(Q_OS_WIN32)
-    QIcon windowIcon = QIcon();
-    windowIcon.addFile(":/icons/rockbox-16.png");
-    windowIcon.addFile(":/icons/rockbox-32.png");
-    windowIcon.addFile(":/icons/rockbox-48.png");
-    windowIcon.addFile(":/icons/rockbox-64.png");
-    windowIcon.addFile(":/icons/rockbox-128.png");
-    windowIcon.addFile(":/icons/rockbox-256.png");
-    this->setWindowIcon(windowIcon);
-#endif
 #if defined(Q_OS_MACX)
     // don't translate menu entries that are handled specially on OS X
     // (Configure, Quit). Qt handles them for us if they use english string.
@@ -136,12 +122,6 @@ RbUtilQt::RbUtilQt(QWidget *parent) : QMainWindow(parent)
     m_gotInfo = false;
     m_auto = false;
 
-    // insert ManualWidget() widget in manual tab
-    QGridLayout *mantablayout = new QGridLayout(this);
-    ui.manual->setLayout(mantablayout);
-    manual = new ManualWidget(this);
-    mantablayout->addWidget(manual);
-
     // selective "install" tab.
     QGridLayout *selectivetablayout = new QGridLayout(this);
     ui.selective->setLayout(selectivetablayout);
@@ -165,13 +145,11 @@ RbUtilQt::RbUtilQt(QWidget *parent) : QMainWindow(parent)
     connect(ui.buttonEject, SIGNAL(clicked()), this, SLOT(eject()));
     connect(ui.buttonTalk, SIGNAL(clicked()), this, SLOT(createTalkFiles()));
     connect(ui.buttonCreateVoice, SIGNAL(clicked()), this, SLOT(createVoiceFile()));
-    connect(ui.buttonVoice, SIGNAL(clicked()), this, SLOT(installVoice()));
     connect(ui.buttonRemoveRockbox, SIGNAL(clicked()), this, SLOT(uninstall()));
     connect(ui.buttonRemoveBootloader, SIGNAL(clicked()), this, SLOT(uninstallBootloader()));
     connect(ui.buttonBackup, SIGNAL(clicked()), this, SLOT(backup()));
 
     // actions accessible from the menu
-    connect(ui.actionInstall_Voice_File, SIGNAL(triggered()), this, SLOT(installVoice()));
     connect(ui.actionCreate_Voice_File, SIGNAL(triggered()), this, SLOT(createVoiceFile()));
     connect(ui.actionCreate_Talk_Files, SIGNAL(triggered()), this, SLOT(createTalkFiles()));
     connect(ui.actionRemove_bootloader, SIGNAL(triggered()), this, SLOT(uninstallBootloader()));
@@ -233,7 +211,7 @@ void RbUtilQt::downloadInfo()
     ui.statusbar->showMessage(tr("Downloading build information, please wait ..."));
     LOG_INFO() << "downloading build info";
     daily->setFile(&buildInfo);
-    daily->getFile(QUrl(SystemInfo::value(SystemInfo::BuildInfoUrl).toString()));
+    daily->getFile(QUrl(PlayerBuildInfo::instance()->value(PlayerBuildInfo::BuildInfoUrl).toString()));
 }
 
 
@@ -250,9 +228,9 @@ void RbUtilQt::downloadDone(bool error)
     }
     LOG_INFO() << "network status:" << daily->errorString();
 
-    // read info into ServerInfo object
+    // read info into PlayerBuildInfo object
     buildInfo.open();
-    ServerInfo::readBuildInfo(buildInfo.fileName());
+    PlayerBuildInfo::instance()->setBuildInfo(buildInfo.fileName());
     buildInfo.close();
 
     ui.statusbar->showMessage(tr("Download build information finished."), 5000);
@@ -358,7 +336,6 @@ void RbUtilQt::updateSettings()
 {
     LOG_INFO() << "updating current settings";
     updateDevice();
-    manual->updateManual();
     QString c = RbSettings::value(RbSettings::CachePath).toString();
     HttpGet::setGlobalCache(c.isEmpty() ? QDir::tempPath() : c);
     HttpGet::setGlobalProxy(proxy());
@@ -371,7 +348,7 @@ void RbUtilQt::updateSettings()
                 " or review your settings."));
         configDialog();
     }
-    else if(chkConfig(0)) {
+    else if(chkConfig(nullptr)) {
         QApplication::processEvents();
         QMessageBox::critical(this, tr("Configuration error"),
             tr("Your configuration is invalid. This is most likely due "
@@ -390,25 +367,26 @@ void RbUtilQt::updateDevice()
 
     /* Enable bootloader installation, if possible */
     bool bootloaderInstallable =
-        SystemInfo::platformValue(SystemInfo::BootloaderMethod) != "none";
+        PlayerBuildInfo::instance()->value(PlayerBuildInfo::BootloaderMethod).toString() != "none";
 
     /* Enable bootloader uninstallation, if possible */
     bool bootloaderUninstallable = bootloaderInstallable &&
-        SystemInfo::platformValue(SystemInfo::BootloaderMethod) != "fwpatcher";
+        PlayerBuildInfo::instance()->value(PlayerBuildInfo::BootloaderMethod) != "fwpatcher";
     ui.labelRemoveBootloader->setEnabled(bootloaderUninstallable);
     ui.buttonRemoveBootloader->setEnabled(bootloaderUninstallable);
     ui.actionRemove_bootloader->setEnabled(bootloaderUninstallable);
 
     /* Disable the whole tab widget if configuration is invalid */
-    bool configurationValid = !chkConfig(0);
+    bool configurationValid = !chkConfig(nullptr);
     ui.tabWidget->setEnabled(configurationValid);
     ui.menuA_ctions->setEnabled(configurationValid);
 
     // displayed device info
-    QString brand = SystemInfo::platformValue(SystemInfo::Brand).toString();
+    QString brand = PlayerBuildInfo::instance()->value(PlayerBuildInfo::Brand).toString();
     QString name
-        = QString("%1 (%2)").arg(SystemInfo::platformValue(SystemInfo::Name).toString(),
-            ServerInfo::platformValue(ServerInfo::CurStatus).toString());
+        = QString("%1 (%2)").arg(
+            PlayerBuildInfo::instance()->value(PlayerBuildInfo::DisplayName).toString(),
+            PlayerBuildInfo::instance()->statusAsString());
     ui.labelDevice->setText(QString("<b>%1 %2</b>").arg(brand, name));
 
     QString mountpoint = RbSettings::value(RbSettings::Mountpoint).toString();
@@ -423,7 +401,7 @@ void RbUtilQt::updateDevice()
     }
 
     QPixmap pm;
-    QString m = SystemInfo::platformValue(SystemInfo::PlayerPicture).toString();
+    QString m = PlayerBuildInfo::instance()->value(PlayerBuildInfo::PlayerPicture).toString();
     pm.load(":/icons/players/" + m + "-small.png");
     pm = pm.scaledToHeight(QFontMetrics(QApplication::font()).height() * 3);
     ui.labelPlayerPic->setPixmap(pm);
@@ -444,78 +422,6 @@ void RbUtilQt::installdone(bool error)
     LOG_INFO() << "install done";
     m_installed = true;
     m_error = error;
-}
-
-void RbUtilQt::installVoice()
-{
-    if(chkConfig(this)) return;
-
-    if(m_gotInfo == false)
-    {
-       QMessageBox::warning(this, tr("Warning"),
-       tr("The Application is still downloading Information about new Builds."
-          " Please try again shortly."));
-        return;
-    }
-
-    QString mountpoint = RbSettings::value(RbSettings::Mountpoint).toString();
-    RockboxInfo installInfo(mountpoint);
-
-    QString voiceurl;
-    QString logversion;
-    QString relversion = installInfo.release();
-    // if no version is found abort.
-    if(installInfo.revision().isEmpty() && relversion.isEmpty()) {
-        QMessageBox::critical(this, tr("No Rockbox installation found"),
-                tr("Could not determine the installed Rockbox version. "
-                    "Please install a Rockbox build before installing "
-                    "voice files."));
-        return;
-    }
-    if(relversion.isEmpty()) {
-        // release is empty for development builds.
-        // No voice files are available for development builds.
-        QMessageBox::critical(this, tr("No voice file available"),
-                tr("The installed version of Rockbox is a development version. "
-                    "Pre-built voices are only available for release versions "
-                    "of Rockbox. Please generate a voice yourself using the "
-                    "\"Create voice file\" functionality."));
-        return;
-    }
-    else {
-        voiceurl = SystemInfo::value(SystemInfo::ReleaseVoiceUrl).toString();
-        logversion = installInfo.release();
-    }
-    if(QMessageBox::question(this, tr("Confirm Installation"),
-       tr("Do you really want to install the voice file?"),
-       QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
-        return;
-
-    QString model = SystemInfo::platformValue(SystemInfo::BuildserverModel).toString();
-    // replace placeholder in voice url
-    voiceurl.replace("%MODEL%", model);
-    voiceurl.replace("%RELVERSION%", relversion);
-
-    LOG_INFO() << "voicefile URL:" << voiceurl;
-
-    // create logger
-    logger = new ProgressLoggerGui(this);
-    logger->show();
-    // create zip installer
-    installer = new ZipInstaller(this);
-
-    installer->setUrl(voiceurl);
-    installer->setLogSection("Voice");
-    installer->setLogVersion(logversion);
-    installer->setMountPoint(mountpoint);
-    if(!RbSettings::value(RbSettings::CacheDisabled).toBool())
-        installer->setCache(true);
-    connect(installer, SIGNAL(logItem(QString, int)), logger, SLOT(addItem(QString, int)));
-    connect(installer, SIGNAL(logProgress(int, int)), logger, SLOT(setProgress(int, int)));
-    connect(installer, SIGNAL(done(bool)), logger, SLOT(setFinished()));
-    connect(logger, SIGNAL(aborted()), installer, SLOT(abort()));
-    installer->install();
-
 }
 
 
@@ -560,14 +466,14 @@ void RbUtilQt::uninstallBootloader(void)
     // create installer
     BootloaderInstallBase *bl
         = BootloaderInstallHelper::createBootloaderInstaller(this,
-                SystemInfo::platformValue(SystemInfo::BootloaderMethod).toString());
+                PlayerBuildInfo::instance()->value(PlayerBuildInfo::BootloaderMethod).toString());
 
-    if(bl == NULL) {
+    if(bl == nullptr) {
         logger->addItem(tr("No uninstall method for this target known."), LOGERROR);
         logger->setFinished();
         return;
     }
-    QStringList blfile = SystemInfo::platformValue(SystemInfo::BootloaderFile).toStringList();
+    QStringList blfile = PlayerBuildInfo::instance()->value(PlayerBuildInfo::BootloaderFile).toStringList();
     QStringList blfilepath;
     for(int a = 0; a < blfile.size(); a++) {
         blfilepath.append(RbSettings::value(RbSettings::Mountpoint).toString()
@@ -692,8 +598,8 @@ bool RbUtilQt::chkConfig(QWidget *parent)
 
 void RbUtilQt::checkUpdate(void)
 {
-    QString url = SystemInfo::value(SystemInfo::RbutilUrl).toString();
-#if defined(Q_OS_WIN32)   
+    QString url = PlayerBuildInfo::instance()->value(PlayerBuildInfo::RbutilUrl).toString();
+#if defined(Q_OS_WIN32)
     url += "win32/";
 #elif defined(Q_OS_LINUX)
     url += "linux/";
@@ -760,8 +666,8 @@ void RbUtilQt::downloadUpdateDone(bool error)
         // if we found something newer, display info
         if(foundVersion != "")
         {
-            QString url = SystemInfo::value(SystemInfo::RbutilUrl).toString();
-#if defined(Q_OS_WIN32)   
+            QString url = PlayerBuildInfo::instance()->value(PlayerBuildInfo::RbutilUrl).toString();
+#if defined(Q_OS_WIN32)
             url += "win32/";
 #elif defined(Q_OS_LINUX)
             url += "linux/";
@@ -789,7 +695,7 @@ void RbUtilQt::changeEvent(QEvent *e)
     if(e->type() == QEvent::LanguageChange) {
         ui.retranslateUi(this);
         buildInfo.open();
-        ServerInfo::readBuildInfo(buildInfo.fileName());
+        PlayerBuildInfo::instance()->setBuildInfo(buildInfo.fileName());
         buildInfo.close();
         updateDevice();
     } else {

@@ -32,10 +32,10 @@ SysTrace::SysTrace(QWidget *parent) : QDialog(parent)
     ui.textTrace->setLayoutDirection(Qt::LeftToRight);
     refresh();
 
-    connect(ui.buttonClose, SIGNAL(clicked()), this, SLOT(close()));
-    connect(ui.buttonSave, SIGNAL(clicked()), this, SLOT(saveCurrentTrace()));
-    connect(ui.buttonSavePrevious, SIGNAL(clicked()), this, SLOT(savePreviousTrace()));
-    connect(ui.buttonRefresh, SIGNAL(clicked()), this, SLOT(refresh()));
+    connect(ui.buttonClose, &QAbstractButton::clicked,  this, &SysTrace::close);
+    connect(ui.buttonSave, &QAbstractButton::clicked,  this, &SysTrace::saveCurrentTrace);
+    connect(ui.buttonSavePrevious, &QAbstractButton::clicked,  this, &SysTrace::savePreviousTrace);
+    connect(ui.buttonRefresh, &QAbstractButton::clicked,  this, &SysTrace::refresh);
 }
 
 void SysTrace::refresh(void)
@@ -120,7 +120,7 @@ void SysTrace::savePreviousTrace(void)
 void SysTrace::rotateTrace(void)
 {
     QString f = QDir::tempPath() + "/rbutil-trace.log.1";
-    if(QFileInfo(f).exists()) {
+    if(QFileInfo::exists(f)) {
         QFile::remove(f);
     }
     QFile::rename(QDir::tempPath() + "/rbutil-trace.log", f);

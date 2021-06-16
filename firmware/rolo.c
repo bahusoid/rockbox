@@ -65,8 +65,9 @@ extern  int write_bootdata(unsigned char* buf, int len, unsigned int boot_volume
 #include "ascodec.h"
 #endif
 
-#if !defined(IRIVER_IFP7XX_SERIES)
-/* FIX: this doesn't work on iFP */
+#if defined(FIIO_M3K)
+#include "backlight-target.h"
+#endif
 
 #define IRQ0_EDGE_TRIGGER 0x80
 
@@ -204,6 +205,7 @@ void rolo_restart(const unsigned char* source, unsigned char* dest,
     commit_discard_idcache();
     asm volatile(
         "jr     %0               \n"
+        "nop\n"
         : : "r"(dest)
     );
 #endif
@@ -219,7 +221,6 @@ extern unsigned long loadaddress;
  * Filename must be a fully defined filename including the path and extension
  *
  ***************************************************************************/
-#if defined(CPU_COLDFIRE) || defined(CPU_ARM) || defined(CPU_MIPS)
 int rolo_load(const char* filename)
 {
     unsigned char* ramstart = (void*)&loadaddress;
@@ -238,11 +239,17 @@ int rolo_load(const char* filename)
     lcd_remote_update();
 #endif
 
-    audio_stop();
+    audio_hard_stop();
 
     /* get the system buffer. release only in case of error, otherwise
      * we don't return anyway */
     rolo_handle = core_alloc_maximum("rolo", &filebuf_size, NULL);
+    if (rolo_handle < 0)
+    {
+        rolo_error("OOM");
+        return -1;
+    }
+
     filebuf = core_get_data(rolo_handle);
 
     err = LOAD_FIRMWARE(filebuf, filename, filebuf_size);
@@ -286,9 +293,13 @@ int rolo_load(const char* filename)
     lcd_remote_puts(0, 1, "Executing");
     lcd_remote_update();
 #endif
-#if (CONFIG_KEYPAD != XDUOO_X3_PAD) /* X3 adc hangs on ROLO */
-    adc_close();
+
+#if defined(FIIO_M3K)
+    /* Avoids the LCD backlight ramping down & up weirdly */
+    backlight_hw_off();
 #endif
+
+    adc_close();
 #if CONFIG_CPU == AS3525v2
     /* Set CVDD1 power supply to default*/
     ascodec_write_pmu(0x17, 1, 0);
@@ -317,13 +328,3 @@ int rolo_load(const char* filename)
     /* never reached */
     return 0;
 }
-#endif /* CPU_COLDFIRE | CPU_ARM | CPU_MIPS  */
-#else  /* !defined(IRIVER_IFP7XX_SERIES) */
-int rolo_load(const char* filename)
-{
-    /* dummy */
-    (void)filename;
-    return 0;
-}
-
-#endif /* !defined(IRIVER_IFP7XX_SERIES) */

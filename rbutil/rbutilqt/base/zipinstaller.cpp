@@ -24,7 +24,7 @@
 
 ZipInstaller::ZipInstaller(QObject* parent) :
     QObject(parent),
-    m_unzip(true), m_usecache(false), m_getter(0)
+    m_unzip(true), m_usecache(false), m_getter(nullptr)
 {
 }
 
@@ -34,7 +34,7 @@ void ZipInstaller::install()
     LOG_INFO() << "initializing installation";
 
     m_runner = 0;
-    connect(this, SIGNAL(cont()), this, SLOT(installContinue()));
+    connect(this, &ZipInstaller::cont, this, &ZipInstaller::installContinue);
     m_url = m_urllist.at(m_runner);
     m_logsection = m_loglist.at(m_runner);
     m_logver = m_verlist.at(m_runner);
@@ -87,16 +87,16 @@ void ZipInstaller::installStart()
     m_file = m_downloadFile->fileName();
     m_downloadFile->close();
     // get the real file.
-    if(m_getter != 0) m_getter->deleteLater();
+    if(m_getter != nullptr) m_getter->deleteLater();
     m_getter = new HttpGet(this);
     if(m_usecache) {
         m_getter->setCache(true);
     }
     m_getter->setFile(m_downloadFile);
 
-    connect(m_getter, SIGNAL(done(bool)), this, SLOT(downloadDone(bool)));
-    connect(m_getter, SIGNAL(dataReadProgress(int, int)), this, SIGNAL(logProgress(int, int)));
-    connect(this, SIGNAL(internalAborted()), m_getter, SLOT(abort()));
+    connect(m_getter, &HttpGet::done, this, &ZipInstaller::downloadDone);
+    connect(m_getter, &HttpGet::dataReadProgress, this, &ZipInstaller::logProgress);
+    connect(this, &ZipInstaller::internalAborted, m_getter, &HttpGet::abort);
 
     m_getter->getFile(QUrl(m_url));
 }
@@ -133,8 +133,8 @@ void ZipInstaller::downloadDone(bool error)
         QCoreApplication::processEvents();
 
         ZipUtil zip(this);
-        connect(&zip, SIGNAL(logProgress(int, int)), this, SIGNAL(logProgress(int, int)));
-        connect(&zip, SIGNAL(logItem(QString, int)), this, SIGNAL(logItem(QString, int)));
+        connect(&zip, &ZipUtil::logProgress, this, &ZipInstaller::logProgress);
+        connect(&zip, &ZipUtil::logItem, this, &ZipInstaller::logItem);
         zip.open(m_file, QuaZip::mdUnzip);
         // check for free space. Make sure after installation will still be
         // some room for operating (also includes calculation mistakes due to
@@ -188,7 +188,7 @@ void ZipInstaller::downloadDone(bool error)
     }
 
     emit logItem(tr("Creating installation log"),LOGINFO);
-    QSettings installlog(m_mountpoint + "/.rockbox/rbutil.log", QSettings::IniFormat, 0);
+    QSettings installlog(m_mountpoint + "/.rockbox/rbutil.log", QSettings::IniFormat, nullptr);
 
     installlog.beginGroup(m_logsection);
     for(int i = 0; i < zipContents.size(); i++)

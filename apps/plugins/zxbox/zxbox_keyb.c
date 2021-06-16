@@ -32,17 +32,6 @@
 #define KBD_UP BUTTON_SCROLL_BACK
 #define KBD_DOWN BUTTON_SCROLL_FWD
 
-#elif CONFIG_KEYPAD == IRIVER_IFP7XX_PAD
-
-/* TODO: Check keyboard mappings */
-
-#define KBD_SELECT BUTTON_SELECT
-#define KBD_ABORT BUTTON_PLAY
-#define KBD_LEFT BUTTON_LEFT
-#define KBD_RIGHT BUTTON_RIGHT
-#define KBD_UP BUTTON_UP
-#define KBD_DOWN BUTTON_DOWN
-
 #elif CONFIG_KEYPAD == IAUDIO_X5M5_PAD
 
 /* TODO: Check keyboard mappings */
@@ -112,15 +101,6 @@
 #elif CONFIG_KEYPAD == COWON_D2_PAD
 
 #define KBD_ABORT BUTTON_POWER
-
-#elif CONFIG_KEYPAD == IAUDIO67_PAD
-
-#define KBD_SELECT BUTTON_MENU
-#define KBD_ABORT BUTTON_POWER
-#define KBD_LEFT BUTTON_LEFT
-#define KBD_RIGHT BUTTON_RIGHT
-#define KBD_UP BUTTON_STOP
-#define KBD_DOWN BUTTON_PLAY
 
 #elif CONFIG_KEYPAD == CREATIVEZVM_PAD
 
@@ -266,7 +246,7 @@
 #define KBD_UP     BUTTON_HOME
 #define KBD_DOWN   BUTTON_OPTION
 
-#elif CONFIG_KEYPAD == FIIO_M3K_PAD
+#elif CONFIG_KEYPAD == FIIO_M3K_LINUX_PAD
 
 #define KBD_SELECT BUTTON_PLAY
 #define KBD_ABORT  BUTTON_POWER
@@ -292,6 +272,15 @@
 #define KBD_RIGHT  BUTTON_SCROLL_FWD
 #define KBD_UP     BUTTON_PREV
 #define KBD_DOWN   BUTTON_NEXT
+
+#elif CONFIG_KEYPAD == FIIO_M3K_PAD
+
+#define KBD_SELECT BUTTON_SELECT
+#define KBD_ABORT  BUTTON_BACK
+#define KBD_LEFT   BUTTON_LEFT
+#define KBD_RIGHT  BUTTON_RIGHT
+#define KBD_UP     BUTTON_UP
+#define KBD_DOWN   BUTTON_DOWN
 
 #endif
 
@@ -503,27 +492,27 @@ int zx_kbd_input(char* text/*, int buflen*/)
         len_utf8 = rb->utf8length(text);
 #endif
         FOR_NB_SCREENS(l)
+        {
             rb->screens[l]->clear_display();
+        }
 
-
-            /* draw page */
-            FOR_NB_SCREENS(l)
-            {
-                rb->screens[l]->setfont(param[l].curfont);
-                k = param[l].page*param[l].max_chars*param[l].lines;
-                for (i=j=0; j < param[l].lines && k < param[l].nchars; k++) {
-                    utf8 = rb->utf8encode(param[l].kbd_buf[k], outline);
-                    *utf8 = 0;
-                    rb->screens[l]->getstringsize(outline, &w, NULL);
-                    rb->screens[l]->putsxy(i*param[l].font_w + (param[l].font_w-w)/2, j*param[l].font_h
-                          + statusbar_size, outline);
-                    if (++i == param[l].max_chars) {
-                        i = 0;
-                        j++;
-                    }
+        /* draw page */
+        FOR_NB_SCREENS(l)
+        {
+            rb->screens[l]->setfont(param[l].curfont);
+            k = param[l].page*param[l].max_chars*param[l].lines;
+            for (i=j=0; j < param[l].lines && k < param[l].nchars; k++) {
+                utf8 = rb->utf8encode(param[l].kbd_buf[k], outline);
+                *utf8 = 0;
+                rb->screens[l]->getstringsize(outline, &w, NULL);
+                rb->screens[l]->putsxy(i*param[l].font_w + (param[l].font_w-w)/2, j*param[l].font_h
+                      + statusbar_size, outline);
+                if (++i == param[l].max_chars) {
+                    i = 0;
+                    j++;
                 }
             }
-
+        }
 
         /* separator */
         FOR_NB_SCREENS(l)
@@ -572,19 +561,20 @@ int zx_kbd_input(char* text/*, int buflen*/)
         }
         cur_blink = !cur_blink;
 
-
-            /* highlight the key that has focus */
-            FOR_NB_SCREENS(l)
-            {
-                rb->screens[l]->set_drawmode(DRMODE_COMPLEMENT);
-                rb->screens[l]->fillrect(param[l].font_w * param[l].x,
-                                        statusbar_size + param[l].font_h * param[l].y,
-                                        param[l].font_w, param[l].font_h);
-                rb->screens[l]->set_drawmode(DRMODE_SOLID);
-            }
+        /* highlight the key that has focus */
+        FOR_NB_SCREENS(l)
+        {
+            rb->screens[l]->set_drawmode(DRMODE_COMPLEMENT);
+            rb->screens[l]->fillrect(param[l].font_w * param[l].x,
+                                    statusbar_size + param[l].font_h * param[l].y,
+                                    param[l].font_w, param[l].font_h);
+            rb->screens[l]->set_drawmode(DRMODE_SOLID);
+        }
 
         FOR_NB_SCREENS(l)
-        rb->screens[l]->update();
+        {
+            rb->screens[l]->update();
+        }
 
         button = rb->button_get_w_tmo(HZ/2);
 

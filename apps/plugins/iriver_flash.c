@@ -22,6 +22,8 @@
  *
  ****************************************************************************/
 #include "plugin.h"
+#include "lib/helper.h"
+#include "checksum.h"
 
 /*
  * Flash commands may rely on null pointer dereferences to work correctly.
@@ -102,13 +104,11 @@ static bool detect_valid_bootloader(const void* ptr, uint32_t size)
     bootloaders[] =
     {
 #ifdef IRIVER_H100
-        { 48760, 0x2efc3323 }, /* 7-pre4 */
-        { 56896, 0x0cd8dad4 }, /* 7-pre5 */
+        { 53556, 0x76541ebd }, /* 8 */
 #elif defined(IRIVER_H120)
-        { 63788, 0x08ff01a9 }, /* 7-pre3, improved failsafe functions */
-        { 48764, 0xc674323e }, /* 7-pre4. Fixed audio thump & remote bootup */
-        { 56896, 0x167f5d25 }, /* 7-pre5, various ATA fixes */
+        { 53556, 0xd262b12b }, /* 8 */
 #elif defined(IRIVER_H300)
+        { 57048, 0x59ba2459 }, /* 8 */
 #endif
         {0}
     };
@@ -140,8 +140,13 @@ static bool flash_get_info(const struct flash_info** out_info)
 {
     static const struct flash_info roms[] =
     {
+#if FLASH_SIZE == 2048 * 1024
         { 0x00BF, 0x2782, 2048 * 1024, "SST39VF160"  },
+#elif FLASH_SIZE == 4096 * 1024
         { 0x00BF, 0x235B, 4096 * 1024, "SST39VF3201" },
+#else
+#error "Unsupported rom chip."
+#endif
         {0}
     };
     static struct flash_info unknown_rom = {0};
@@ -391,7 +396,6 @@ static bool load_firmware(const char* filename, enum firmware firmware,
     {
         uint32_t checksum;
         uint8_t model[4];
-        uint32_t sum;
 
         /* subtract the header length */
         fd_len -= sizeof(checksum) + sizeof(model);
@@ -414,13 +418,8 @@ static bool load_firmware(const char* filename, enum firmware firmware,
             goto bail;
         }
 
-        /* calculate the checksum */
-        sum = MODEL_NUMBER;
-        for (off_t i = 0; i < fd_len; i++)
-            sum += buffer[i];
-
         /* verify the checksum */
-        if (sum != checksum)
+        if (!verify_checksum(checksum, buffer, fd_len))
         {
             msg = "Aborting: checksum mismatch";
             goto bail;
@@ -849,8 +848,14 @@ enum plugin_status plugin_start(const void* parameter)
     /* setup LCD font */
     rb->lcd_setfont(FONT_SYSFIXED);
 
+    /* don't let the backlight turn off or it might scare people */
+    backlight_ignore_timeout();
+
     /* run the main entry function */
     iriver_flash(parameter);
+
+    /* restore the original backlight settings */
+    backlight_use_settings();
 
     /* restore LCD font */
     rb->lcd_setfont(FONT_UI);

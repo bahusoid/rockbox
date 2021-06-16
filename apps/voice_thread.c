@@ -31,6 +31,7 @@
 #include "pcm.h"
 #include "pcm_mixer.h"
 #include "codecs/libspeex/speex/speex.h"
+#include "settings.h"
 
 /* Default number of PCM frames to queue - adjust as necessary per-target */
 #define VOICE_FRAMES 4
@@ -83,6 +84,9 @@ static unsigned int voice_thread_id = 0;
 #elif defined(CPU_COLDFIRE)
 /* ISR uses any available stack - need a bit more room */
 #define VOICE_STACK_EXTRA   0x400
+#elif (CONFIG_PLATFORM & PLATFORM_HOSTED)
+/* Needed at least on the Sony NWZ hosted targets, but probably a good idea on all of them */
+#define VOICE_STACK_EXTRA   0x500
 #else
 #define VOICE_STACK_EXTRA   0x3c0
 #endif
@@ -324,6 +328,13 @@ void voice_wait(void)
         sleep(1);
 }
 
+void voice_set_mixer_level(int percent)
+{
+    percent *= MIX_AMP_UNITY;
+    percent /= 100;
+    mixer_channel_set_amplitude(PCM_MIXER_CHAN_VOICE, percent);
+}
+
 /* Initialize voice thread data that must be valid upon starting and the
  * setup the DSP parameters */
 static void voice_data_init(struct voice_thread_data *td)
@@ -334,7 +345,8 @@ static void voice_data_init(struct voice_thread_data *td)
     dsp_configure(td->dsp, DSP_SET_SAMPLE_DEPTH, VOICE_SAMPLE_DEPTH);
     dsp_configure(td->dsp, DSP_SET_STEREO_MODE, STEREO_MONO);
 
-    mixer_channel_set_amplitude(PCM_MIXER_CHAN_VOICE, MIX_AMP_UNITY);
+    voice_set_mixer_level(global_settings.talk_mixer_amp);
+
     voice_buf->td = td;
     td->dst = NULL;
 }

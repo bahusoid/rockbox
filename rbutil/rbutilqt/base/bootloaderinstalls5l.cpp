@@ -23,7 +23,7 @@
 #include "utils.h"
 #include "system.h"
 #include "rbsettings.h"
-#include "systeminfo.h"
+#include "playerbuildinfo.h"
 
 #include "../mks5lboot/mks5lboot.h"
 
@@ -66,7 +66,8 @@ bool BootloaderInstallS5l::installStage1(void)
     if (doInstall) {
         // download firmware from server
         emit logItem(tr("Downloading bootloader file..."), LOGINFO);
-        connect(this, SIGNAL(downloadDone()), this, SLOT(installStageMkdfu()));
+        connect(this, &BootloaderInstallBase::downloadDone,
+                this, &BootloaderInstallS5l::installStageMkdfu);
         downloadBlStart(m_blurl);
     }
     else {
@@ -87,8 +88,10 @@ void BootloaderInstallS5l::installStageMkdfu(void)
 
     setProgress(0);
     aborted = false;
-    connect(this, SIGNAL(installAborted()), this, SLOT(abortInstall()));
-    connect(this, SIGNAL(done(bool)), this, SLOT(installDone(bool)));
+    connect(this, &BootloaderInstallBase::installAborted,
+            this, &BootloaderInstallS5l::abortInstall);
+    connect(this, &BootloaderInstallBase::done,
+            this, &BootloaderInstallS5l::installDone);
 
     if (doInstall) {
         dfu_type = DFU_INST;
@@ -135,14 +138,14 @@ void BootloaderInstallS5l::installStageWaitForEject(void)
     }
     if (!scanSuccess) {
         if (!actionShown) {
-            emit logItem(tr("Action required:\n"
-                            "  Please make sure no programs are accessing\n"
-                            "  files on the device. If ejecting still fails\n"
-                            "  please use your computers eject funtionality."),
+            emit logItem(tr("Action required:\n\n"
+                            "Please make sure no programs are accessing "
+                            "files on the device. If ejecting still fails "
+                            "please use your computers eject functionality."),
                             LOGWARNING);
             actionShown = true;
         }
-        QTimer::singleShot(250, this, SLOT(installStageWaitForEject()));
+        QTimer::singleShot(250, this, &BootloaderInstallS5l::installStageWaitForEject);
         return;
     }
     emit logItem(tr("Device successfully ejected."), LOGINFO);
@@ -165,11 +168,11 @@ void BootloaderInstallS5l::installStageWaitForProcs(void)
     }
     if (!scanSuccess) {
         if (!actionShown) {
-            emit logItem(tr("Action required:\n"
-                            "  Quit iTunes application."), LOGWARNING);
+            emit logItem(tr("Action required:\n\n"
+                            "Quit iTunes application."), LOGWARNING);
             actionShown = true;
         }
-        QTimer::singleShot(250, this, SLOT(installStageWaitForProcs()));
+        QTimer::singleShot(250, this, &BootloaderInstallS5l::installStageWaitForProcs);
         return;
     }
     if (actionShown) {
@@ -186,7 +189,7 @@ void BootloaderInstallS5l::installStageWaitForProcs(void)
 #endif
     suspendedPids = Utils::suspendProcess(helperPids, true);
     if (suspendedPids.size() != helperPids.size()) {
-        emit logItem(tr("Could not suspend iTunesHelper. Stop it\n"
+        emit logItem(tr("Could not suspend iTunesHelper. Stop it "
                         "using the Task Manager, and try again."), LOGERROR);
         emit done(true);
         return;
@@ -206,17 +209,17 @@ void BootloaderInstallS5l::installStageWaitForSpindown(void)
         return; /* aborted */
 
     if (progressTimer.elapsed() < progressTimeout) {
-        QTimer::singleShot(250, this, SLOT(installStageWaitForSpindown()));
+        QTimer::singleShot(250, this, &BootloaderInstallS5l::installStageWaitForSpindown);
         return;
     }
 
     LOG_INFO() << "preparing installStageWaitForDfu";
     emit logItem(tr("Waiting for DFU mode..."), LOGINFO);
-    emit logItem(tr("Action required:\n"
-                    "  Press and hold SELECT+MENU buttons, after\n"
-                    "  about 12 seconds a new action will require\n"
-                    "  you to release the buttons, DO IT QUICKLY,\n"
-                    "  otherwise the process could fail."), LOGWARNING);
+    emit logItem(tr("Action required:\n\n"
+                    "Press and hold SELECT+MENU buttons, after "
+                    "about 12 seconds a new action will require "
+                    "you to release the buttons, DO IT QUICKLY, "
+                    "otherwise the process could fail."), LOGWARNING);
     scanTimer.invalidate();
     installStageWaitForDfu();
 }
@@ -232,13 +235,13 @@ void BootloaderInstallS5l::installStageWaitForDfu(void)
         scanTimer.start();
     }
     if (!scanSuccess) {
-        QTimer::singleShot(250, this, SLOT(installStageWaitForDfu()));
+        QTimer::singleShot(250, this, &BootloaderInstallS5l::installStageWaitForDfu);
         return;
     }
     emit logItem(tr("DFU mode detected."), LOGINFO);
 
-    emit logItem(tr("Action required:\n"
-                    "  Release SELECT+MENU buttons and wait..."), LOGWARNING);
+    emit logItem(tr("Action required:\n\n"
+                    "Release SELECT+MENU buttons and wait..."), LOGWARNING);
 
     // Once the iPod enters DFU mode, the device will reset again if
     // SELECT+MENU remains pressed for another 8 seconds. To avoid a
@@ -256,14 +259,14 @@ void BootloaderInstallS5l::installStageSendDfu(void)
         return; /* aborted */
 
     if (progressTimer.elapsed() < progressTimeout) {
-        QTimer::singleShot(250, this, SLOT(installStageSendDfu()));
+        QTimer::singleShot(250, this, &BootloaderInstallS5l::installStageSendDfu);
         return;
     }
 
     if (!System::listUsbIds().contains(0x05ac1223)) {
         LOG_ERROR() << "device not in DFU mode";
-        emit logItem(tr("Device is not in DFU mode. It seems that\n"
-                        "the previous required action failed, please\n"
+        emit logItem(tr("Device is not in DFU mode. It seems that "
+                        "the previous required action failed, please "
                         "try again."), LOGERROR);
         emit done(true);
         return;
@@ -279,8 +282,8 @@ void BootloaderInstallS5l::installStageSendDfu(void)
 #if defined(Q_OS_WIN32)
         if (strstr(errstr, "DFU device not found"))
         {
-            emit logItem(tr("No valid DFU USB driver found.\n"
-                            "Install iTunes (or the Apple Device Driver)\n"
+            emit logItem(tr("No valid DFU USB driver found.\n\n"
+                            "Install iTunes (or the Apple Device Driver) "
                             "and try again."),
                             LOGERROR);
         }
@@ -315,22 +318,24 @@ void BootloaderInstallS5l::installStageWaitForRemount(void)
     }
     if (!scanSuccess) {
         if (!actionShown && (progressTimer.elapsed() > progressTimeout)) {
-            emit logItem(tr("Action required:\n"
-                            "  Could not remount the device, try to do it\n"
-                            "  manually. If the iPod didn't restart, force\n"
-                            "  a reset by pressing SELECT+MENU buttons\n"
-                            "  for about 5 seconds. If the problem could\n"
-                            "  not be solved then click 'Abort' to cancel."),
+            emit logItem(tr("Action required:\n\n"
+                            "Could not remount the device, try to do it "
+                            "manually. If the iPod didn't restart, force "
+                            "a reset by pressing SELECT+MENU buttons "
+                            "for about 5 seconds. If the problem could "
+                            "not be solved then click 'Abort' to cancel."),
                             LOGWARNING);
             actionShown = true;
         }
-        QTimer::singleShot(250, this, SLOT(installStageWaitForRemount()));
+        QTimer::singleShot(250, this, &BootloaderInstallS5l::installStageWaitForRemount);
         return;
     }
     emit logItem(tr("Device remounted."), LOGINFO);
 
-    emit logItem(tr("Bootloader successfully %1.").
-            arg(tr(doInstall ? "installed" : "uninstalled")), LOGOK);
+    if (doInstall)
+        emit logItem(tr("Bootloader successfully installed."), LOGOK);
+    else
+        emit logItem(tr("Bootloader successfully uninstalled."), LOGOK);
 
     logInstall(doInstall ? LogAdd : LogRemove);
     emit logProgress(1, 1);
@@ -350,7 +355,8 @@ void BootloaderInstallS5l::abortInstall(void)
 {
     LOG_INFO() << "abortInstall";
     aborted = true;
-    disconnect(this, SIGNAL(installAborted()), this, SLOT(abortInstall()));
+    disconnect(this, &BootloaderInstallBase::installAborted,
+               this, &BootloaderInstallS5l::abortInstall);
 }
 
 
@@ -358,8 +364,10 @@ bool BootloaderInstallS5l::abortDetected(void)
 {
     if (aborted) {
         LOG_ERROR() << "abortDetected";
-        emit logItem(tr("%1 aborted by user.").
-                arg(tr(doInstall ? "Install" : "Uninstall")), LOGERROR);
+        if (doInstall)
+            emit logItem(tr("Install aborted by user."), LOGERROR);
+        else
+            emit logItem(tr("Uninstall aborted by user."), LOGERROR);
         emit done(true);
         return true;
     }
@@ -408,8 +416,8 @@ BootloaderInstallBase::BootloaderType BootloaderInstallS5l::installed(void)
     QString logfile = RbSettings::value(RbSettings::Mountpoint).toString()
                 + "/.rockbox/rbutil.log";
     QSettings s(logfile, QSettings::IniFormat, this);
-    QString section = SystemInfo::platformValue(
-                SystemInfo::BootloaderName).toString().section('/', -1);
+    QString section = PlayerBuildInfo::instance()->value(
+                PlayerBuildInfo::BootloaderName).toString().section('/', -1);
     rbblInstalled = s.contains("Bootloader/" + section);
 
     if (rbblInstalled) {

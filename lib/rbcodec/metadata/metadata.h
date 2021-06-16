@@ -176,7 +176,10 @@ struct afmt_entry
 /* database of labels and codecs. add formats per above enum */
 extern const struct afmt_entry audio_formats[AFMT_NUM_CODECS];
 
-#if MEMORYSIZE > 2
+#if MEMORYSIZE > 8
+#define ID3V2_BUF_SIZE 1800
+#define ID3V2_MAX_ITEM_SIZE 500
+#elif MEMORYSIZE > 2
 #define ID3V2_BUF_SIZE 900
 #define ID3V2_MAX_ITEM_SIZE 240
 #else
@@ -316,6 +319,9 @@ struct mp3entry {
 
     /* Musicbrainz Track ID */
     char* mb_track_id;
+
+    /* For ASF files with MP3 audio stream */
+    bool is_asf_stream;
 };
 
 unsigned int probe_file_format(const char *filename);

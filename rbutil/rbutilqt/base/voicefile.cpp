@@ -21,7 +21,7 @@
 #include "utils.h"
 #include "rockboxinfo.h"
 #include "rbsettings.h"
-#include "systeminfo.h"
+#include "playerbuildinfo.h"
 #include "ziputil.h"
 #include "Logger.h"
 
@@ -148,7 +148,8 @@ bool VoiceFileCreator::createVoiceFile()
     // genlang output as previously from the webserver.
 
     // prepare download url
-    QString genlang = SystemInfo::value(SystemInfo::GenlangUrl).toString();
+    QString genlang = PlayerBuildInfo::instance()->value(
+                PlayerBuildInfo::GenlangUrl).toString();
     genlang.replace("%LANG%", m_lang);
     genlang.replace("%TARGET%", target);
     genlang.replace("%REVISION%", version);
@@ -165,9 +166,9 @@ bool VoiceFileCreator::createVoiceFile()
     getter = new HttpGet(this);
     getter->setFile(downloadFile);
 
-    connect(getter, SIGNAL(done(bool)), this, SLOT(downloadDone(bool)));
-    connect(getter, SIGNAL(dataReadProgress(int, int)), this, SIGNAL(logProgress(int, int)));
-    connect(this, SIGNAL(aborted()), getter, SLOT(abort()));
+    connect(getter, &HttpGet::done, this, &VoiceFileCreator::downloadDone);
+    connect(getter, &HttpGet::dataReadProgress, this, &VoiceFileCreator::logProgress);
+    connect(this, &VoiceFileCreator::aborted, getter, &HttpGet::abort);
     emit logItem(tr("Downloading voice info..."),LOGINFO);
     getter->getFile(genlangUrl);
     return true;
@@ -283,10 +284,10 @@ void VoiceFileCreator::create(void)
         // set language for string correction. If not set no correction will be made.
         if(useCorrection)
             generator.setLang(m_lang);
-        connect(&generator,SIGNAL(done(bool)),this,SIGNAL(done(bool)));
-        connect(&generator,SIGNAL(logItem(QString,int)),this,SIGNAL(logItem(QString,int)));
-        connect(&generator,SIGNAL(logProgress(int,int)),this,SIGNAL(logProgress(int,int)));
-        connect(this,SIGNAL(aborted()),&generator,SLOT(abort()));
+        connect(&generator, &TalkGenerator::done, this, &VoiceFileCreator::done);
+        connect(&generator, &TalkGenerator::logItem, this, &VoiceFileCreator::logItem);
+        connect(&generator, &TalkGenerator::logProgress, this, &VoiceFileCreator::logProgress);
+        connect(this, &VoiceFileCreator::aborted, &generator, &TalkGenerator::abort);
 
         if(generator.process(&m_talkList, m_wavtrimThreshold) == TalkGenerator::eERROR)
         {
@@ -300,7 +301,7 @@ void VoiceFileCreator::create(void)
     //make voicefile
     emit logItem(tr("Creating voicefiles..."),LOGINFO);
     FILE* ids2 = fopen(m_filename.toLocal8Bit(), "r");
-    if (ids2 == NULL)
+    if (ids2 == nullptr)
     {
         cleanup();
         emit logItem(tr("Error opening downloaded file"),LOGERROR);
@@ -310,7 +311,7 @@ void VoiceFileCreator::create(void)
 
     FILE* output = fopen(QString(m_mountpoint + "/.rockbox/langs/" + m_lang
                 + ".voice").toLocal8Bit(), "wb");
-    if (output == NULL)
+    if (output == nullptr)
     {
         cleanup();
         fclose(ids2);
@@ -327,7 +328,7 @@ void VoiceFileCreator::create(void)
     cleanup();
 
     // Add Voice file to the install log
-    QSettings installlog(m_mountpoint + "/.rockbox/rbutil.log", QSettings::IniFormat, 0);
+    QSettings installlog(m_mountpoint + "/.rockbox/rbutil.log", QSettings::IniFormat, nullptr);
     installlog.beginGroup(QString("Voice (self created, %1)").arg(m_lang));
     installlog.setValue("/.rockbox/langs/" + m_lang + ".voice", m_versionstring);
     installlog.endGroup();

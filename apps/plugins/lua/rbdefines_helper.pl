@@ -47,12 +47,13 @@ if ($def_type eq "rb_defines") {
         '^PLAYLIST_(INSERT|PREPEND|REPLACE)',
         '^TOUCHSCREEN_(POINT|BUTTON)$',
         '^SYS_CHARGER_(DIS|)CONNECTED$',
-        '^SYS_(TIMEOUT|POWEROFF)$',
+        '^SYS_(TIMEOUT|POWEROFF|BATTERY_UPDATE)$',
         '^SYS_USB_(DIS|)CONNECTED$',
         '^HOME_DIR$',
         '^PLUGIN_DIR$',
         '^PLUGIN(_APPS_|_GAMES_|_)DATA_DIR$',
         '^ROCKBOX_DIR$',
+        '^STYLE_(NONE|DEFAULT|INVERT|COLORBAR|GRADIENT|COLORED)',
         '^VIEWERS_DATA_DIR$');
 }
 elsif ($def_type eq "sound_defines") {

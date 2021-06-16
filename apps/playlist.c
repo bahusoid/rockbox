@@ -524,7 +524,7 @@ static void update_playlist_filename(struct playlist_info* playlist,
     
     /* If the dir does not end in trailing slash, we use a separator.
        Otherwise we don't. */
-    if('/' != dir[dirlen-1])
+    if(!dirlen || '/' != dir[dirlen-1])
     {
         sep="/";
         dirlen++;
@@ -855,14 +855,14 @@ static int directory_search_callback(char* filename, void* context)
 
     if (insert_pos < 0)
         return -1;
-    
+
     (c->count)++;
-    
-    /* Make sure tracks are inserted in correct order if user requests
-       INSERT_FIRST */
-    if (c->position == PLAYLIST_INSERT_FIRST || c->position >= 0)
-        c->position = insert_pos + 1;
-    
+
+    /* After first INSERT_FIRST switch to INSERT so that all the
+    rest of the tracks get inserted one after the other */
+    if (c->position == PLAYLIST_INSERT_FIRST)
+        c->position = PLAYLIST_INSERT;
+
     if (((c->count)%PLAYLIST_DISPLAY_COUNT) == 0)
     {
         unsigned char* count_str;
@@ -2122,6 +2122,8 @@ int playlist_resume(void)
      * default buflib buffers can be moved around which must be avoided */
     static struct buflib_callbacks dummy_ops;
     /* use mp3 buffer for maximum load speed */
+    if (core_allocatable() < (1 << 10))
+        talk_buffer_set_policy(TALK_BUFFER_LOOSE); /* back off voice buffer */
     handle = core_alloc_maximum("temp", &buflen, &dummy_ops);
     if (handle < 0)
         panicf("%s(): OOM", __func__);
@@ -2506,6 +2508,7 @@ int playlist_resume(void)
 #endif
 
 out:
+    talk_buffer_set_policy(TALK_BUFFER_DEFAULT);
     core_free(handle);
     return result;
 }
@@ -2608,6 +2611,7 @@ void playlist_start(int start_index, unsigned long elapsed,
     playlist->started = true;
     sync_control(playlist, false);
     audio_play(elapsed, offset);
+    audio_resume();
 }
 
 /* Returns false if 'steps' is out of bounds, else true */
@@ -3178,7 +3182,7 @@ int playlist_insert_playlist(struct playlist_info* playlist, const char *filenam
                 result = -1;
                 break;
             }
-            
+
             insert_pos = add_track_to_playlist(playlist, trackname, position,
                 queue, -1);
 
@@ -3188,13 +3192,13 @@ int playlist_insert_playlist(struct playlist_info* playlist, const char *filenam
                 break;
             }
 
-            /* Make sure tracks are inserted in correct order if user
-               requests INSERT_FIRST */
-            if (position == PLAYLIST_INSERT_FIRST || position >= 0)
-                position = insert_pos + 1;
+            /* After first INSERT_FIRST switch to INSERT so that all the
+            rest of the tracks get inserted one after the other */
+            if (position == PLAYLIST_INSERT_FIRST)
+                position = PLAYLIST_INSERT;
 
             count++;
-            
+
             if ((count%PLAYLIST_DISPLAY_COUNT) == 0)
             {
                 display_playlist_count(count, count_str, false);

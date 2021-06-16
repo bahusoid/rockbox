@@ -203,13 +203,6 @@
 #define UI_LCD_POSX                 42 /* x position of lcd */
 #define UI_LCD_POSY                 35  /* y position of lcd */
 
-#elif defined(IRIVER_IFP7XX)
-#define UI_TITLE                    "iriver iFP7xx"
-#define UI_WIDTH                    425 /* width of GUI window */
-#define UI_HEIGHT                   183 /* height of GUI window */
-#define UI_LCD_POSX                 115 /* x position of lcd */
-#define UI_LCD_POSY                 54 /* y position of lcd */
-
 #elif defined(MROBE_100)
 #define UI_TITLE                    "Olympus M:Robe 100"
 #define UI_WIDTH                    247 /* width of GUI window */
@@ -225,13 +218,6 @@
 #define UI_HEIGHT                   368 /* height of GUI window */
 #define UI_LCD_POSX                 58 /* x position of lcd */
 #define UI_LCD_POSY                 67 /* y position of lcd */
-
-#elif defined(IAUDIO_7)
-#define UI_TITLE                    "iAudio7"
-#define UI_WIDTH                    494 /* width of GUI window */
-#define UI_HEIGHT                   214 /* height of GUI window */
-#define UI_LCD_POSX                 131 /* x position of lcd */
-#define UI_LCD_POSY                 38 /* y position of lcd */
 
 #elif defined(CREATIVE_ZVM) || defined(CREATIVE_ZVM60GB)
 #ifdef CREATIVE_ZVM
@@ -534,6 +520,14 @@
 #define UI_HEIGHT                   653 /* height of GUI window */
 #define UI_LCD_POSX                 45
 #define UI_LCD_POSY                 50
+
+#elif defined(FIIO_M3K) || defined(FIIO_M3K_LINUX)
+#define UI_TITLE                    "FiiO M3K"
+#define UI_WIDTH                    287 /* width of GUI window */
+#define UI_HEIGHT                   589 /* height of GUI window */
+#define UI_LCD_POSX                 25
+#define UI_LCD_POSY                 15
+
 
 #elif defined(SIMULATOR)
 #error no UI defines

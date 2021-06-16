@@ -32,7 +32,6 @@
 #include "zipinstaller.h"
 #include "progressloggergui.h"
 #include "bootloaderinstallbase.h"
-#include "manualwidget.h"
 #include "infowidget.h"
 #include "selectiveinstallwidget.h"
 #include "backupdialog.h"
@@ -42,12 +41,11 @@ class RbUtilQt : public QMainWindow
     Q_OBJECT
 
     public:
-        RbUtilQt(QWidget *parent = 0);
+        RbUtilQt(QWidget *parent = nullptr);
         static QList<QTranslator*> translators;
-        static bool chkConfig(QWidget *parent = 0);
+        static bool chkConfig(QWidget *parent = nullptr);
 
     private:
-        ManualWidget *manual;
         InfoWidget *info;
         SelectiveInstallWidget* selectiveinstallwidget;
         BackupDialog *backupdialog;
@@ -93,7 +91,6 @@ class RbUtilQt : public QMainWindow
         void downloadInfo(void);
         void backup(void);
 
-        void installVoice(void);
         void uninstall(void);
         void uninstallBootloader(void);
         void installPortable(void);

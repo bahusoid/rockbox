@@ -103,10 +103,8 @@ const struct button_mapping pf_context_buttons[] =
     {PF_SELECT,       BUTTON_CENTER,              BUTTON_NONE},
     {PF_BACK,         BUTTON_BOTTOMRIGHT,         BUTTON_NONE},
 #endif
-#if CONFIG_KEYPAD == SANSA_C100_PAD
-    {PF_QUIT,         BUTTON_MENU|BUTTON_REPEAT,  BUTTON_MENU},
-#elif CONFIG_KEYPAD == CREATIVEZV_PAD || CONFIG_KEYPAD == CREATIVEZVM_PAD || \
-    CONFIG_KEYPAD == PHILIPS_HDD1630_PAD || CONFIG_KEYPAD == IAUDIO67_PAD || \
+#if CONFIG_KEYPAD == CREATIVEZV_PAD || CONFIG_KEYPAD == CREATIVEZVM_PAD || \
+    CONFIG_KEYPAD == PHILIPS_HDD1630_PAD || \
     CONFIG_KEYPAD == GIGABEAT_PAD || CONFIG_KEYPAD == GIGABEAT_S_PAD || \
     CONFIG_KEYPAD == MROBE100_PAD || CONFIG_KEYPAD == MROBE500_PAD || \
     CONFIG_KEYPAD == PHILIPS_SA9200_PAD || CONFIG_KEYPAD == SANSA_CLIP_PAD || \
@@ -130,15 +128,11 @@ const struct button_mapping pf_context_buttons[] =
 #endif
 #elif CONFIG_KEYPAD == SANSA_E200_PAD
     {PF_QUIT,         BUTTON_POWER,               BUTTON_NONE},
-#elif CONFIG_KEYPAD == IRIVER_IFP7XX_PAD
-    {PF_QUIT,         BUTTON_EQ,                  BUTTON_NONE},
 #elif (CONFIG_KEYPAD == IPOD_1G2G_PAD) \
     || (CONFIG_KEYPAD == IPOD_3G_PAD) \
     || (CONFIG_KEYPAD == IPOD_4G_PAD) \
     || (CONFIG_KEYPAD == MPIO_HD300_PAD)
     {PF_QUIT,         BUTTON_MENU|BUTTON_REPEAT,  BUTTON_MENU},
-#elif CONFIG_KEYPAD == LOGIK_DAX_PAD
-    {PF_QUIT,         BUTTON_POWERPLAY|BUTTON_REPEAT, BUTTON_POWERPLAY},
 #elif CONFIG_KEYPAD == IAUDIO_M3_PAD
     {PF_QUIT,         BUTTON_RC_REC,              BUTTON_NONE},
 #elif CONFIG_KEYPAD == MEIZU_M6SL_PAD
@@ -154,6 +148,15 @@ const struct button_mapping pf_context_buttons[] =
     {PF_CONTEXT,      BUTTON_FFWD|BUTTON_REPEAT,  BUTTON_FFWD},
     {PF_TRACKLIST,    BUTTON_FFWD|BUTTON_REL,     BUTTON_FFWD},
     {PF_WPS,          BUTTON_PLAY|BUTTON_REPEAT,  BUTTON_PLAY},
+#elif CONFIG_KEYPAD == FIIO_M3K_PAD
+    {PF_PREV,         BUTTON_LEFT,                BUTTON_NONE},
+    {PF_PREV_REPEAT,  BUTTON_LEFT|BUTTON_REPEAT,  BUTTON_NONE},
+    {PF_NEXT,         BUTTON_RIGHT,               BUTTON_NONE},
+    {PF_NEXT_REPEAT,  BUTTON_RIGHT|BUTTON_REPEAT, BUTTON_NONE},
+    {PF_MENU,         BUTTON_POWER|BUTTON_REL,    BUTTON_POWER},
+    {PF_QUIT,         BUTTON_POWER|BUTTON_REPEAT, BUTTON_POWER},
+    {PF_CONTEXT,      BUTTON_MENU|BUTTON_REL,     BUTTON_MENU},
+    {PF_TRACKLIST,    BUTTON_MENU|BUTTON_REPEAT,  BUTTON_MENU},
 #endif
 #if CONFIG_KEYPAD == IAUDIO_M3_PAD
     LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_STD|CONTEXT_REMOTE)
@@ -2311,7 +2314,7 @@ static int read_pfraw(char* filename, int prio)
 
     if (hid < 0) {
         rb->close( fh );
-        return 0;
+        return -1;
     }
 
     rb->yield(); /* allow audio to play when fast scrolling */
@@ -2347,7 +2350,7 @@ static inline bool load_and_prepare_surface(const int slide_index,
                  hash_album, hash_artist);
 
     int hid = read_pfraw(pfraw_file, prio);
-    if (!hid)
+    if (hid < 0)
         return false;
 
     pf_sldcache.cache[cache_index].hid = hid;
@@ -3589,9 +3592,10 @@ static int pictureflow_main(void)
 
     pf_idx.buf_sz -= aa_bufsz;
     ALIGN_BUFFER(pf_idx.buf, pf_idx.buf_sz, 4);
-    aa_cache.buf = (char*) pf_idx.buf + aa_bufsz;
+    aa_cache.buf = (char*) pf_idx.buf;
     aa_cache.buf_sz = aa_bufsz;
-    ALIGN_BUFFER(aa_cache.buf, aa_cache.buf_sz, 4);
+    pf_idx.buf += aa_bufsz;
+    ALIGN_BUFFER(pf_idx.buf, pf_idx.buf_sz, 4);
 
     if (!create_empty_slide(pf_cfg.cache_version != CACHE_VERSION)) {
         config_save(CACHE_REBUILD);
@@ -3613,7 +3617,7 @@ static int pictureflow_main(void)
 
     rb->buflib_init(&buf_ctx, (void *)pf_idx.buf, pf_idx.buf_sz);
 
-    if (!(empty_slide_hid = read_pfraw(EMPTY_SLIDE, 0)))
+    if ((empty_slide_hid = read_pfraw(EMPTY_SLIDE, 0)) < 0)
     {
         error_wait("Unable to load empty slide image");
         return PLUGIN_ERROR;

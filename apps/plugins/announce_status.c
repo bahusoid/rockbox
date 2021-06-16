@@ -75,7 +75,7 @@ void thread_quit(void);
 static int voice_general_info(bool testing);
 static unsigned char* voice_info_group(unsigned char* current_token, bool testing);
 
-int main(const void* parameter); /* main loop */
+int plugin_main(const void* parameter); /* main loop */
 enum plugin_status plugin_start(const void* parameter); /* entry */
 
 
@@ -106,6 +106,8 @@ static struct
     unsigned int index;
     int bin_added;
 
+    bool show_prompt;
+
     unsigned char wps_fmt[MAX_ANNOUNCE_WPS+1];
 } gAnnounce;
 
@@ -115,6 +117,7 @@ static struct configdata config[] =
    {TYPE_INT, 0, 2, { .int_p = &gAnnounce.announce_on }, "Announce", NULL},
    {TYPE_INT, 0, 10, { .int_p = &gAnnounce.grouping }, "Grouping", NULL},
    {TYPE_INT, 0, 10000, { .int_p = &gAnnounce.bin_added }, "Added", NULL},
+   {TYPE_BOOL, 0, 1, { .bool_p = &gAnnounce.show_prompt }, "Prompt", NULL},
    {TYPE_STRING, 0, MAX_ANNOUNCE_WPS+1,
                    { .string =  (char*)&gAnnounce.wps_fmt }, "Fmt", NULL},
 };
@@ -141,7 +144,8 @@ static void playback_event_callback(unsigned short id, void *data)
 {
     (void)id;
     (void)data;
-    rb->queue_post(&gThread.queue, EV_TRACKCHANGE, 0);
+    if (gThread.id > 0)
+        rb->queue_post(&gThread.queue, EV_TRACKCHANGE, 0);
 }
 
 /****************** config functions *****************/
@@ -152,6 +156,7 @@ static void config_set_defaults(void)
     gAnnounce.announce_on = 0;
     gAnnounce.grouping = 0;
     gAnnounce.wps_fmt[0] = '\0';
+    gAnnounce.show_prompt = true; 
 }
 
 static void config_reset_voice(void)
@@ -188,7 +193,7 @@ static void announce_test(void)
     rb->talk_force_shutup();
     rb->sleep(HZ / 2);
     voice_info_group(gAnnounce.wps_fmt, true);
-
+    rb->splash(HZ, "...");
     //rb->talk_force_enqueue_next();
 }
 
@@ -266,7 +271,7 @@ static int announce_menu_cb(int action,
                 announce_add("D2Dd ;");
                 break;
             case 2: /*Track*/
-                announce_add("TT T1TeT2Tr ;");
+                announce_add("TT TA T1TeT2Tr ;");
                 break;
             case 3: /*Playlist*/
                 announce_add("P1PC P2PN ;");
@@ -411,13 +416,15 @@ void thread(void)
         interval = gAnnounce.interval * HZ;
         switch (ev.id)
         {
+            case SYS_USB_CONNECTED:
+                rb->usb_acknowledge(SYS_USB_CONNECTED_ACK);
             case EV_EXIT:
                 return;
             case EV_OTHINSTANCE:
                 if (*rb->current_tick - last_tick >= interval)
                 {
                     last_tick += interval;
-                    rb->sleep(0);
+                    rb->sleep(HZ / 10);
                     announce();
                 }
                 break;
@@ -425,7 +432,7 @@ void thread(void)
                 rb->beep_play(1500, 100, 1000);
                 break;
             case EV_TRACKCHANGE:
-                rb->sleep(0);
+                rb->sleep(HZ / 10);
                 announce();
                 break;
         }
@@ -456,10 +463,10 @@ void thread_create(void)
     {
         rb->splash(HZ*2, "Out of memory");
         gThread.exiting = true;
+        rb->remove_event(PLAYBACK_EVENT_TRACK_CHANGE, playback_event_callback);
         gThread.id = UINT_MAX;
         return;
     }
-
 
     /* put the thread's queue in the bcast list */
     rb->queue_init(&gThread.queue, true);
@@ -478,6 +485,8 @@ void thread_quit(void)
     if (!gThread.exiting) {
         rb->queue_post(&gThread.queue, EV_EXIT, 0);
         rb->thread_wait(gThread.id);
+        /* we don't want any more events */
+        rb->remove_event(PLAYBACK_EVENT_TRACK_CHANGE, playback_event_callback);
         /* remove the thread's queue from the broadcast list */
         rb->queue_delete(&gThread.queue);
         gThread.exiting = true;
@@ -509,7 +518,6 @@ int plugin_main(const void* parameter)
     gAnnounce.index = 0;
     gAnnounce.timeout = 0;
 
-    rb->talk_id(LANG_HOLD_FOR_SETTINGS, false);
     rb->splash(HZ / 2, "Announce Status");
 
     if (configfile_load(CFG_FILE, config, gCfg_sz, CFG_VER) < 0)
@@ -521,7 +529,14 @@ int plugin_main(const void* parameter)
         rb->splash(HZ, ID2P(LANG_HOLD_FOR_SETTINGS));
     }
 
-    rb->splash(HZ, ID2P(LANG_HOLD_FOR_SETTINGS));
+    if (gAnnounce.show_prompt)
+    {
+        if (rb->mixer_channel_status(PCM_MIXER_CHAN_PLAYBACK) != CHANNEL_PLAYING)
+        {
+            rb->talk_id(LANG_HOLD_FOR_SETTINGS, false);
+        }
+        rb->splash(HZ, ID2P(LANG_HOLD_FOR_SETTINGS));
+    }
 
     rb->button_clear_queue();
     if (rb->button_get_w_tmo(HZ) > BUTTON_NONE)
@@ -557,6 +572,7 @@ int plugin_main(const void* parameter)
         rb->add_event(PLAYBACK_EVENT_TRACK_CHANGE, playback_event_callback);
 
     thread_create();
+
     return 0;
 }
 
@@ -568,8 +584,6 @@ enum plugin_status plugin_start(const void* parameter)
 {
     /* now go ahead and have fun! */
     int ret = plugin_main(parameter);
-
-    rb->remove_event(PLAYBACK_EVENT_START_PLAYBACK, playback_event_callback);
     return (ret==0) ? PLUGIN_OK : PLUGIN_ERROR;
 }
 
@@ -726,6 +740,10 @@ static unsigned char* voice_info_group(unsigned char* current_token, bool testin
             else if (current_char == 'T' && id3->title)
             {
                 rb->talk_spell(id3->title, true);
+            }
+            else if (current_char == 'A' && id3->artist)
+            {
+                rb->talk_spell(id3->artist, true);
             }
             else if (current_char == 'A' && id3->albumartist)
             {

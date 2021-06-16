@@ -1,23 +1,26 @@
+
 --RB LUA show all global variables; BILGUS
-require "actions"
-require "audio"
-require "buttons"
-require "color"
-require "draw"
-require "draw_floodfill"
-require "draw_poly"
-require "draw_text"
+if not ... then --if executed directly this is nil
+    require "actions"
+    require "audio"
+    require "buttons"
+    require "color"
+    require "draw"
+    require "draw_floodfill"
+    require "draw_poly"
+    require "draw_text"
 
-require "image"
-require "image_save"
+    require "image"
+    require "image_save"
 
-require "lcd"
-require "math_ex"
-require "pcm"
-require "playlist"
-require "print"
---require "settings" --uses a lot of memory
-require "sound"
+    require "lcd"
+    require "math_ex"
+    require "pcm"
+    require "playlist"
+    require "print"
+    --require "settings" --uses a lot of memory
+    require "sound"
+end
 collectgarbage("collect")
 
 local sDumpFile = "/rb-lua_functions.txt"
@@ -276,8 +279,9 @@ end
             for i=1, #tWriteBuf do tWriteBuf[i] = _NIL end -- reuse table
         end
     end
-
-    tcBase= nil tkSortCbase= nil
+    if ... then
+        tcBase= nil tkSortCbase= nil
+    end
     tWriteBuf[#tWriteBuf + 1] = "\r\n"
     tWriteBuf[#tWriteBuf + 1] = dtTag("?")
     tWriteBuf[#tWriteBuf + 1] = "\r\n\r\n"
@@ -306,5 +310,29 @@ end
     filehandle:write(table.concat(tWriteBuf))
     for i=1, #tWriteBuf do tWriteBuf[i] = _NIL end -- empty table
     filehandle:close()
-    rb.splash(rb.HZ * 5, n .. " Items dumped to : " .. sDumpFile)
+    --rb.splash((rb.HZ or 100) * 5, n .. " Items dumped to : " .. sDumpFile)
     --rb.splash(500, collectgarbage("count"))
+if not ... then
+    local lu = collectgarbage("collect")
+    local used, allocd, free = rb.mem_stats()
+    local lu = collectgarbage("count")
+    local fmt = function(t, v) return string.format("%s: %d Kb\n", t, v /1024) end
+    local s_t = {}
+    s_t[1] = n
+    s_t[2] = " Items dumped to:\n"
+    s_t[3] = sDumpFile
+    s_t[4] = "\n\nLoaded Modules:\n"
+    n = 0
+    for k, v in pairsByPairs(tcBase, tkSortCbase ) do
+        n = n + 1
+        if n ~= 1 then
+            s_t[#s_t + 1] = ", "
+        end
+        s_t[#s_t + 1] = tostring(k)
+        if n >= 3 then -- split loaded modules to multiple lines
+            n = 0
+            s_t[#s_t + 1] = "\n"
+        end
+    end
+    rb.splash_scroller(5 * (rb.HZ or 100), table.concat(s_t))
+end

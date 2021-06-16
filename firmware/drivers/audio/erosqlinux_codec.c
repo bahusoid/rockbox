@@ -20,20 +20,17 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
-
 //#define LOGF_ENABLE
 
 #include "config.h"
 #include "audio.h"
 #include "audiohw.h"
-#include "button.h"
 #include "system.h"
-#include "kernel.h"
 #include "panic.h"
 #include "sysfs.h"
 #include "alsa-controls.h"
 #include "pcm-alsa.h"
-#include "pcm_sw_volume.h"
+#include "settings.h"
 
 #include "logf.h"
 
@@ -63,24 +60,11 @@
       : values=4
 */
 
-static int fd_hw = -1;
+static int hw_init = 0;
 
 static long int vol_l_hw = 255;
 static long int vol_r_hw = 255;
 static long int last_ps = -1;
-
-static void hw_open(void)
-{
-    fd_hw = open("/dev/snd/controlC0", O_RDWR);
-    if(fd_hw < 0)
-        panicf("Cannot open '/dev/snd/controlC0'");
-}
-
-static void hw_close(void)
-{
-    close(fd_hw);
-    fd_hw = -1;
-}
 
 static int muted = -1;
 
@@ -88,7 +72,7 @@ void audiohw_mute(int mute)
 {
     logf("mute %d", mute);
 
-    if (fd_hw < 0 || muted == mute)
+    if (hw_init < 0 || muted == mute)
        return;
 
     muted = mute;
@@ -110,7 +94,7 @@ int erosq_get_outputs(void) {
 
     int status = 0;
 
-    if (fd_hw < 0) return ps;
+    if (!hw_init) return ps;
 
     const char * const sysfs_lo_switch = "/sys/class/switch/lineout/state";
     const char * const sysfs_hs_switch = "/sys/class/switch/headset/state";
@@ -128,7 +112,7 @@ int erosq_get_outputs(void) {
 
 void erosq_set_output(int ps)
 {
-    if (fd_hw < 0 || muted) return;
+    if (!hw_init || muted) return;
 
     if (last_ps != ps)
     {
@@ -144,7 +128,7 @@ void audiohw_preinit(void)
 {
     logf("hw preinit");
     alsa_controls_init("default");
-    hw_open();
+    hw_init = 1;
     audiohw_mute(false);  /* No need to stay muted */
 }
 
@@ -156,7 +140,8 @@ void audiohw_postinit(void)
 void audiohw_close(void)
 {
     logf("hw close");
-    hw_close();
+    hw_init = 0;
+    muted = -1;
     alsa_controls_close();
 }
 
@@ -164,6 +149,10 @@ void audiohw_set_frequency(int fsel)
 {
     (void)fsel;
 }
+
+/* min/max for pcm volume */
+const int min_pcm = -740;
+const int max_pcm = 0;
 
 void audiohw_set_volume(int vol_l, int vol_r)
 {
@@ -175,17 +164,20 @@ void audiohw_set_volume(int vol_l, int vol_r)
     vol_r_hw = vol_r;
 
     if (lineout_inserted()) {
-        l = 0;
-        r = 0;
+        /* On the EROS Q/K hardware, full scale line out is _very_ hot
+           at ~5.8Vpp. As the hardware provides no way to reduce
+           output gain, we have to back off on the PCM signal
+           to avoid blowing out the signal.
+        */
+        l = r = global_settings.volume_limit * 10;
     } else {
         l = vol_l_hw;
         r = vol_r_hw;
     }
 
-    /* SW volume for <= 1.0 gain, HW at unity, < -740 == MUTE */
-    int sw_volume_l = l <= -740 ? PCM_MUTE_LEVEL : MIN(l, 0);
-    int sw_volume_r = r <= -740 ? PCM_MUTE_LEVEL : MIN(r, 0);
-    pcm_set_master_volume(sw_volume_l, sw_volume_r);
+    int sw_volume_l = l <= min_pcm ? min_pcm : MIN(l, max_pcm);
+    int sw_volume_r = r <= min_pcm ? min_pcm : MIN(r, max_pcm);
+    pcm_set_mixer_volume(sw_volume_l / 20, sw_volume_r / 20);
 }
 
 void audiohw_set_lineout_volume(int vol_l, int vol_r)
@@ -198,14 +190,13 @@ void audiohw_set_lineout_volume(int vol_l, int vol_r)
     (void)vol_r;
 
     if (lineout_inserted()) {
-        l = 0;
-        r = 0;
+        l = r = global_settings.volume_limit * 10;
     } else {
         l = vol_l_hw;
         r = vol_r_hw;
     }
 
-    int sw_volume_l = l <= -740 ? PCM_MUTE_LEVEL : MIN(l, 0);
-    int sw_volume_r = r <= -740 ? PCM_MUTE_LEVEL : MIN(r, 0);
-    pcm_set_master_volume(sw_volume_l, sw_volume_r);
+    int sw_volume_l = l <= min_pcm ? min_pcm : MIN(l, max_pcm);
+    int sw_volume_r = r <= min_pcm ? min_pcm : MIN(r, max_pcm);
+    pcm_set_mixer_volume(sw_volume_l / 20, sw_volume_r / 20);
 }

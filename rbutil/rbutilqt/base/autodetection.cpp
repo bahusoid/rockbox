@@ -19,7 +19,7 @@
 #include <QtCore>
 #include "autodetection.h"
 #include "rbsettings.h"
-#include "systeminfo.h"
+#include "playerbuildinfo.h"
 
 #include "../ipodpatcher/ipodpatcher.h"
 #include "../sansapatcher/sansapatcher.h"
@@ -54,22 +54,28 @@ bool Autodetection::detect(void)
     // hasn't been merged later. This indicates a problem during detection
     // (ambiguous player but refining it failed). In this case create an entry
     // for eacho of those so the user can select.
+    QList<struct Detected> detected;
     for(int i = 0; i < m_detected.size(); ++i) {
         int j = m_detected.at(i).usbdevices.size();
         if(j > 0) {
-            struct Detected entry = m_detected.takeAt(i);
+            struct Detected entry = m_detected.at(i);
             while(j--) {
                 struct Detected d;
                 d.device = entry.usbdevices.at(j);
                 d.mountpoint = entry.mountpoint;
                 d.status = PlayerAmbiguous;
-                m_detected.append(d);
+                detected.append(d);
             }
         }
+        else {
+            detected.append(m_detected.at(i));
+        }
     }
+    m_detected = detected;
     for(int i = 0; i < m_detected.size(); ++i) {
         LOG_INFO() << "Detected player:" << m_detected.at(i).device
-                   << "at" << m_detected.at(i).mountpoint << states[m_detected.at(i).status];
+                   << "at" << m_detected.at(i).mountpoint
+                   << states[m_detected.at(i).status];
     }
 
     return m_detected.size() > 0;
@@ -80,35 +86,31 @@ bool Autodetection::detect(void)
  */
 void Autodetection::detectUsb()
 {
-    // usbids holds the mapping in the form
-    // ((VID<<16)|(PID)), targetname
-    // the ini file needs to hold the IDs as hex values.
-    QMap<int, QStringList> usbids = SystemInfo::usbIdMap(SystemInfo::MapDevice);
-    QMap<int, QStringList> usberror = SystemInfo::usbIdMap(SystemInfo::MapError);
-
     // usb pid detection
     QList<uint32_t> attached;
     attached = System::listUsbIds();
 
     int i = attached.size();
     while(i--) {
-        if(usbids.contains(attached.at(i))) {
-            // we found a USB device that might be ambiguous.
+        QStringList a = PlayerBuildInfo::instance()->value(PlayerBuildInfo::UsbIdTargetList, attached.at(i)).toStringList();
+        if(a.size() > 0) {
             struct Detected d;
             d.status = PlayerOk;
-            d.usbdevices = usbids.value(attached.at(i));
+            d.usbdevices = a;
             m_detected.append(d);
             LOG_INFO() << "[USB] detected supported player" << d.usbdevices;
         }
-        if(usberror.contains(attached.at(i))) {
+        QStringList b = PlayerBuildInfo::instance()->value(PlayerBuildInfo::UsbIdErrorList, attached.at(i)).toStringList();
+        if(b.size() > 0) {
             struct Detected d;
             d.status = PlayerMtpMode;
-            d.device = usberror.value(attached.at(i)).at(0);
+            d.usbdevices = b;
             m_detected.append(d);
             LOG_WARNING() << "[USB] detected problem with player" << d.device;
         }
         QString idstring = QString("%1").arg(attached.at(i), 8, 16, QChar('0'));
-        if(!SystemInfo::platformValue(SystemInfo::Name, idstring).toString().isEmpty()) {
+        if(!PlayerBuildInfo::instance()->value(
+                    PlayerBuildInfo::DisplayName, idstring).toString().isEmpty()) {
             struct Detected d;
             d.status = PlayerIncompatible;
             d.device = idstring;
@@ -250,7 +252,7 @@ void Autodetection::mergePatcher(void)
     // try ipodpatcher
     // initialize sector buffer. Needed.
     struct ipod_t ipod;
-    ipod.sectorbuf = NULL;
+    ipod.sectorbuf = nullptr;
     ipod_alloc_buffer(&ipod, BUFFER_SIZE);
     n = ipod_scan(&ipod);
     // FIXME: handle more than one Ipod connected in ipodpatcher.
@@ -332,20 +334,12 @@ QString Autodetection::detectAjbrec(QString root)
     switch(header[11]) {
         case 2:
             return "recorderv2";
-            break;
-
         case 4:
             return "fmrecorder";
-            break;
-
         case 8:
             return "ondiofm";
-            break;
-
         case 16:
             return "ondiosp";
-            break;
-
         default:
             break;
     }

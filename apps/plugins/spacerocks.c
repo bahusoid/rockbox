@@ -336,7 +336,7 @@
 #define AST_RIGHT       BUTTON_NEXT
 #define AST_FIRE        BUTTON_PLAY
 
-#elif (CONFIG_KEYPAD == FIIO_M3K_PAD)
+#elif (CONFIG_KEYPAD == FIIO_M3K_LINUX_PAD)
 #define AST_PAUSE       BUTTON_VOL_UP
 #define AST_QUIT        BUTTON_POWER
 #define AST_THRUST      BUTTON_HOME
@@ -362,6 +362,15 @@
 #define AST_LEFT        BUTTON_SCROLL_BACK
 #define AST_RIGHT       BUTTON_SCROLL_FWD
 #define AST_FIRE        BUTTON_BACK
+
+#elif CONFIG_KEYPAD == FIIO_M3K_PAD
+#define AST_PAUSE       BUTTON_MENU
+#define AST_QUIT        BUTTON_POWER
+#define AST_THRUST      BUTTON_SELECT
+#define AST_HYPERSPACE  BUTTON_BACK
+#define AST_LEFT        BUTTON_LEFT
+#define AST_RIGHT       BUTTON_RIGHT
+#define AST_FIRE        BUTTON_PLAY
 
 #else
 #error No keymap defined!

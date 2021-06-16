@@ -1258,6 +1258,9 @@ void tagtree_init(void)
     menu = NULL;
     rootmenu = -1;
     tagtree_handle = core_alloc_maximum("tagtree", &tagtree_bufsize, &ops);
+    if (tagtree_handle < 0)
+        panicf("tagtree OOM");
+
     if (!parse_menu(FILE_SEARCH_INSTRUCTIONS))
     {
         tagtree_unload(NULL);
@@ -2018,18 +2021,9 @@ static bool insert_all_playlist(struct tree_context *c, int position, bool queue
         }
     }
 
-    if (position == PLAYLIST_INSERT_FIRST)
-    {
-        from = c->filesindir - 1;
-        to = -1;
-        direction = -1;
-    }
-    else
-    {
-        from = 0;
-        to = c->filesindir;
-        direction = 1;
-    }
+    from = 0;
+    to = c->filesindir;
+    direction = 1;
 
     for (i = from; i != to; i += direction)
     {
@@ -2049,6 +2043,11 @@ static bool insert_all_playlist(struct tree_context *c, int position, bool queue
             break;
         }
         yield();
+
+        if (position == PLAYLIST_INSERT_FIRST)
+        {
+            position = PLAYLIST_INSERT;
+        }
     }
     playlist_sync(NULL);
     tagcache_search_finish(&tcs);

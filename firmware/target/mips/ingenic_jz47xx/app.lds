@@ -66,7 +66,7 @@ SECTIONS
         KEEP(*(.vectors.4));
         KEEP(*(.vectors));
 
-        *(.icode);
+        *(.icode*);
         *(.irodata);
         *(.idata);
         KEEP(*(.vectors))
@@ -111,6 +111,7 @@ SECTIONS
 
     /DISCARD/ :
     {
+        *(.MIPS.abiflags);
         *(.eh_frame);
         *(.rel.dyn);
     }

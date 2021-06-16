@@ -314,7 +314,7 @@ CONFIG_KEYPAD == SANSA_CONNECT_PAD
 #define UP        BUTTON_HOME
 #define DOWN      BUTTON_OPTION
 
-#elif CONFIG_KEYPAD == FIIO_M3K_PAD
+#elif CONFIG_KEYPAD == FIIO_M3K_LINUX_PAD
 #define QUIT      BUTTON_POWER
 #define LEFT      BUTTON_PREV
 #define RIGHT     BUTTON_NEXT
@@ -341,6 +341,14 @@ CONFIG_KEYPAD == SANSA_CONNECT_PAD
 #define SELECT    BUTTON_PLAY
 #define UP        BUTTON_PREV
 #define DOWN      BUTTON_NEXT
+
+#elif CONFIG_KEYPAD == FIIO_M3K_PAD
+#define QUIT        BUTTON_POWER
+#define LEFT        BUTTON_LEFT
+#define RIGHT       BUTTON_RIGHT
+#define SELECT      BUTTON_PLAY
+#define UP          BUTTON_UP
+#define DOWN        BUTTON_DOWN
 
 #else
 #error No keymap defined!

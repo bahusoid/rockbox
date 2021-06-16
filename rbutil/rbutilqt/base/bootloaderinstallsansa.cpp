@@ -46,7 +46,7 @@ BootloaderInstallSansa::~BootloaderInstallSansa()
  */
 bool BootloaderInstallSansa::install(void)
 {
-    if(sansa.sectorbuf == NULL) {
+    if(sansa.sectorbuf == nullptr) {
         emit logItem(tr("Error: can't allocate buffer memory!"), LOGERROR);
         return false;
         emit done(true);
@@ -79,7 +79,7 @@ bool BootloaderInstallSansa::install(void)
     emit logItem(tr("Downloading bootloader file"), LOGINFO);
 
     downloadBlStart(m_blurl);
-    connect(this, SIGNAL(downloadDone()), this, SLOT(installStage2()));
+    connect(this, &BootloaderInstallBase::downloadDone, this, &BootloaderInstallSansa::installStage2);
     return true;
 }
 
@@ -88,7 +88,7 @@ bool BootloaderInstallSansa::install(void)
  */
 void BootloaderInstallSansa::installStage2(void)
 {
-    unsigned char* buf = NULL;
+    unsigned char* buf = nullptr;
     unsigned int len;
 
     emit logItem(tr("Installing Rockbox bootloader"), LOGINFO);

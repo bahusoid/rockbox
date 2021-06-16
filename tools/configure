@@ -263,6 +263,14 @@ simcc () {
  GCCOPTS=`echo $CCOPTS | sed -e s/-ffreestanding// -e s/-nostdlib// -e s/-Wundef//`
 
  GCCOPTS="$GCCOPTS -fno-builtin -g"
+
+ if [ "$ARG_ADDR_SAN" = "1" ] ; then
+   # Use AddressSanitizer!
+   echo "Using AddressSanitizer"
+   GCCOPTS="$GCCOPTS -fsanitize=address -fPIC"
+   LDOPTS="$LDOPTS -fsanitize=address -lasan"
+ fi
+
  # Some linux setups like to warn about unused results. They are correct,
  # but cleaning this up is a lot of work.
  GCCOPTS="$GCCOPTS -Wno-unused-result"
@@ -468,6 +476,11 @@ EOF
  # on cygwin
  rm -f $tmpdir/conftest-$id*
 
+ # AddressSanitizer requires SDL threads
+ if [ "$ARG_ADDR_SAN" = "1" ] ; then
+     ARG_THREAD_SUPPORT=1
+ fi
+
  thread_support=
  if [ -z "$ARG_THREAD_SUPPORT" ] || [ "$ARG_THREAD_SUPPORT" = "0" ]; then
    if [ "$sigaltstack" = "0" ]; then
@@ -580,6 +593,16 @@ mipselcc () {
  prefixtools mipsel-elf-
  # mips is predefined, but we want it for paths. use __mips instead
  GCCOPTS="$CCOPTS -march=mips32 -mtune=r4600 -mno-mips16 -mno-long-calls -Umips"
+ GCCOPTS="$GCCOPTS -ffunction-sections -msoft-float -G 0 -Wno-parentheses"
+ GCCOPTIMIZE="-fomit-frame-pointer"
+ endian="little"
+ gccchoice="4.9.4"
+}
+
+mipsr2elcc () {
+ prefixtools mipsel-elf-
+ # mips is predefined, but we want it for paths. use __mips instead
+ GCCOPTS="$CCOPTS -march=mips32r2 -mno-mips16 -mno-long-calls -Umips"
  GCCOPTS="$GCCOPTS -ffunction-sections -msoft-float -G 0 -Wno-parentheses"
  GCCOPTIMIZE="-fomit-frame-pointer"
  endian="little"
@@ -919,7 +942,7 @@ whichadvanced () {
     interact=1
     echo ""
     printf "Enter your developer options (press only enter when done)\n\
-(D)EBUG, (L)ogf, Boot(c)hart, (S)imulator, (P)rofiling, (V)oice, (W)in32 crosscompile,\n\
+(D)EBUG, (L)ogf, Boot(c)hart, (S)imulator, (P)rofiling, (V)oice, (U)SB Serial, (W)in32 crosscompile,\n\
 Win(6)4 crosscompile, (T)est plugins, S(m)all C lib, Logf to Ser(i)al port:"
     if [ "$modelname" = "iaudiom5" ]; then
       printf ", (F)M radio MOD"
@@ -999,6 +1022,11 @@ Win(6)4 crosscompile, (T)est plugins, S(m)all C lib, Logf to Ser(i)al port:"
           echo "RTC functions enabled (DS1339/DS3231)"
         fi
         ;;
+      [Uu])
+        echo "USB Serial support enabled"
+        use_usb_serial="#define USB_ENABLE_SERIAL"
+        logf="yes"
+        ;;
       [Ww])
         echo "Enabling Windows cross-compiling (32-bit)"
         win32crosscompile="yes"
@@ -1073,7 +1101,6 @@ voiceconfig () {
         FLITE_OPTS=""
         DEFAULT_TTS="flite"
         DEFAULT_TTS_OPTS=$FLITE_OPTS
-        DEFAULT_NOISEFLOOR="500"
         DEFAULT_CHOICE="l"
     fi
     if [ -n "`findtool espeak`" ]; then
@@ -1081,7 +1108,6 @@ voiceconfig () {
         ESPEAK_OPTS=""
         DEFAULT_TTS="espeak"
         DEFAULT_TTS_OPTS=$ESPEAK_OPTS
-        DEFAULT_NOISEFLOOR="500"
         DEFAULT_CHOICE="e"
     fi
     if [ -n "`findtool espeak-ng`" ]; then
@@ -1089,7 +1115,6 @@ voiceconfig () {
         ESPEAK_OPTS=""
         DEFAULT_TTS="espeak-ng"
         DEFAULT_TTS_OPTS=$ESPEAK_OPTS
-        DEFAULT_NOISEFLOOR="500"
         DEFAULT_CHOICE="e"
     fi
     if [ -n "`findtool festival`" ]; then
@@ -1097,7 +1122,6 @@ voiceconfig () {
         FESTIVAL_OPTS=""
         DEFAULT_TTS="festival"
         DEFAULT_TTS_OPTS=$FESTIVAL_OPTS
-        DEFAULT_NOISEFLOOR="500"
         DEFAULT_CHOICE="f"
     fi
     if [ -n "`findtool mimic`" ]; then
@@ -1105,7 +1129,6 @@ voiceconfig () {
         MIMIC_OPTS=""
         DEFAULT_TTS="mimic"
         DEFAULT_TTS_OPTS=$MIMIC_OPTS
-        DEFAULT_NOISEFLOOR="500"
         DEFAULT_CHOICE="M"
     fi
     if [ -n "`findtool swift`" ]; then
@@ -1113,7 +1136,6 @@ voiceconfig () {
         SWIFT_OPTS=""
         DEFAULT_TTS="swift"
         DEFAULT_TTS_OPTS=$SWIFT_OPTS
-        DEFAULT_NOISEFLOOR="500"
         DEFAULT_CHOICE="w"
     fi
     # Allow SAPI if Windows is in use
@@ -1122,7 +1144,6 @@ voiceconfig () {
         SAPI_OPTS=""
         DEFAULT_TTS="sapi"
         DEFAULT_TTS_OPTS=$SAPI_OPTS
-        DEFAULT_NOISEFLOOR="500"
         DEFAULT_CHOICE="S"
     fi
     if [ -n "`findtool gtts-cli`" ]; then
@@ -1130,7 +1151,6 @@ voiceconfig () {
         GTTS_OPTS=""
         DEFAULT_TTS="gtts"
         DEFAULT_TTS_OPTS=$GTTS_OPTS
-        DEFAULT_NOISEFLOOR="500"
         DEFAULT_CHOICE="g"
     fi
     if [ -n "`findtool rbspeak`" ]; then
@@ -1138,7 +1158,6 @@ voiceconfig () {
         RBSPEAK_OPTS=""
         DEFAULT_TTS="rbspeak"
         DEFAULT_TTS_OPTS=$RBSPEAK_OPTS
-        DEFAULT_NOISEFLOOR="500"
         DEFAULT_CHOICE="O"
     fi
 
@@ -1158,48 +1177,39 @@ voiceconfig () {
     case "$option" in
         [Ll]|flite)
         TTS_ENGINE="flite"
-        NOISEFLOOR="500" # TODO: check this value
         TTS_OPTS=$FLITE_OPTS
         ;;
         [Ee]|espeak)
         TTS_ENGINE="espeak"
-        NOISEFLOOR="500"
         TTS_OPTS=$ESPEAK_OPTS
         ;;
         [Ff]|festival)
         TTS_ENGINE="festival"
-        NOISEFLOOR="500"
         TTS_OPTS=$FESTIVAL_OPTS
         ;;
         [Mm]|mimic)
         TTS_ENGINE="mimic"
-        NOISEFLOOR="500"
         TTS_OPTS=$MIMIC_OPTS
         ;;
         [Ss]|sapi)
         TTS_ENGINE="sapi"
-        NOISEFLOOR="500"
         TTS_OPTS=$SAPI_OPTS
         ;;
 	[Ww]|swift)
         TTS_ENGINE="swift"
-        NOISEFLOOR="500"
         TTS_OPTS=$SWIFT_OPTS
 	;;
 	[Gg]|gtts)
         TTS_ENGINE="gtts"
-        NOISEFLOOR="500"
         TTS_OPTS=$GTTS_OPTS
 	;;
 	[Oo]|rbspeak)
         TTS_ENGINE="rbspeak"
-        NOISEFLOOR="500"
         TTS_OPTS=$RBSPEAK_OPTS
 	;;
         *)
         TTS_ENGINE=$DEFAULT_TTS
         TTS_OPTS=$DEFAULT_TTS_OPTS
-        NOISEFLOOR=$DEFAULT_NOISEFLOOR
     esac
     echo "Using $TTS_ENGINE for TTS"
 
@@ -1392,10 +1402,12 @@ help() {
     --no-thumb        The opposite of --thumb (don't use thumb even for targets
                       where this is the default
     --sdl-threads     Force use of SDL threads. They have inferior performance,
-                      but are better debuggable with GDB
+                      but are better debuggable with GDB and valgrind
     --no-sdl-threads  Disallow use of SDL threads. This prevents the default
                       behavior of falling back to them if no native thread
                       support was found.
+    --with-address-sanitizer
+                      Enasbles the AddressSanitizer feature. Forces SDL threads.
     --32-bit          Force a 32-bit simulator (use with --sdl-threads for duke3d)
     --prefix          Target installation directory
     --compiler-prefix Override compiler prefix (inherently dangerous)
@@ -1420,6 +1432,7 @@ ARG_ARM_THUMB=
 ARG_PREFIX="$PREFIX"
 ARG_THREAD_SUPPORT=
 ARG_32BIT=
+ARG_ADDR_SAN=
 err=
 for arg in "$@"; do
 	case "$arg" in
@@ -1442,6 +1455,7 @@ for arg in "$@"; do
         --sdl-threads)ARG_THREAD_SUPPORT=1;;
         --no-sdl-threads)
                       ARG_THREAD_SUPPORT=0;;
+        --with-address-sanitizer) ARG_ADDR_SAN=1;;
         --prefix=*)   ARG_PREFIX=`echo "$arg" | cut -d = -f 2`;;
         --compiler-prefix=*)   ARG_COMPILER_PREFIX=`echo "$arg" | cut -d = -f 2`;;
 		--help)       help;;
@@ -1539,8 +1553,8 @@ cat <<EOF
  ==Cowon/iAudio==         ==iriver==             ==Apple iPod==
  30) X5/X5V/X5L           10) H120/H140          20) Color/Photo
  31) M5/M5L               11) H320/H340          21) Nano 1G
- 32) 7                    12) iHP-100/110/115    22) Video
- 33) D2                   13) iFP-790            23) 3G
+                          12) iHP-100/110/115    22) Video
+ 33) D2                                          23) 3G
  34) M3/M3L               14) H10 20Gb           24) 4G Grayscale
                           15) H10 5/6Gb          25) Mini 1G
  ==Creative==                                    26) Mini 2G
@@ -1552,8 +1566,8 @@ cat <<EOF
  94) Zen X-Fi3            70) M:Robe 500         50) Sansa e200
  96) Zen X-Fi             71) M:Robe 100         51) Sansa e200R
  97) Zen Mozaic                                  52) Sansa c200
- 98) Zen                  ==Philips==            53) Sansa m200
-                          100) GoGear SA9200     54) Sansa c100
+ 98) Zen                  ==Philips==
+                          100) GoGear SA9200
  ==Onda==                 101) GoGear HDD1630/   55) Sansa Clip
  120) VX747                    HDD1830           56) Sansa e200v2
  121) VX767               102) GoGear HDD6330    57) Sansa m200v4
@@ -1567,8 +1581,8 @@ cat <<EOF
  143) YP-S3               150) Elio TPJ-1022     65) Sansa Clip Zip
  144) YP-Z5                                      66) Sansa Connect
                           ==Packard Bell==
- ==Application==          160) Vibe 500          ==Logik==
- 200) SDL                                        80) DAX 1GB MP3/DAB
+ ==Application==          160) Vibe 500
+ 200) SDL
  201) Android             ==MPIO==
  202) Nokia N8xx          170) HD200             ==Lyre project==
  203) Nokia N900          171) HD300             130) Lyre proto 1
@@ -1590,9 +1604,8 @@ cat <<EOF
  ==AgpTek==               252) 800               227) NW-A20 series
  240) Rocker                                     228) NWZ-A860 series
                           ==FiiO==               229) NWZ-S750 series
- ==AIGO==                 244) M3K
- 245) Eros Q / K
-
+ ==AIGO==                 244) M3K Linux
+ 245) Eros Q / K          246) M3K baremetal
 EOF
 
   buildfor=`input`;
@@ -1611,7 +1624,8 @@ fi
   genericbitmaptools="$toolset bmp2rb"
   # scramble is used by all other targets
   scramblebitmaptools="$genericbitmaptools scramble"
-
+  # used by X1000 targets
+  x1000tools="$genericbitmaptools scramble mkspl-x1000 uclpack"
 
   #  ---- For each target ----
   #
@@ -1718,27 +1732,6 @@ fi
     t_cpu="coldfire"
     t_manufacturer="iriver"
     t_model="h100"
-    ;;
-
-   13|iriverifp7xx)
-    target_id=19
-    modelname="iriverifp7xx"
-    target="IRIVER_IFP7XX"
-    memory=1
-    arm7tdmicc short
-    tool="cp"
-    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
-    bmp2rb_native="$rootdir/tools/bmp2rb -f 0"
-    output="rockbox.wma"
-    appextra="recorder:gui:radio"
-    plugins="yes"
-    # toolset is the tools within the tools directory that we build for
-    # this particular target.
-    toolset=$genericbitmaptools
-    t_cpu="arm"
-    t_manufacturer="pnx0101"
-    t_model="iriver-ifp7xx"
-    sysfont="08-Rockfont"
     ;;
 
    14|iriverh10)
@@ -2067,29 +2060,6 @@ fi
     t_model="m5"
     ;;
 
-   32|iaudio7)
-    target_id=32
-    modelname="iaudio7"
-    target="IAUDIO_7"
-    memory=16 # always
-    arm946cc
-    tool="$rootdir/tools/scramble -add=i7"
-    boottool="$rootdir/tools/scramble -tcc=crc"
-    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
-    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
-    output="rockbox.iaudio"
-    appextra="recorder:gui:radio"
-    plugins="yes"
-    bootoutput="I7_FW.BIN"
-    # toolset is the tools within the tools directory that we build for
-    # this particular target.
-    toolset="$tccbitmaptools"
-    # architecture, manufacturer and model for the target-tree build
-    t_cpu="arm"
-    t_manufacturer="tcc77x"
-    t_model="iaudio7"
-    ;;
-
     33|cowond2)
     target_id=34
     modelname="cowond2"
@@ -2223,30 +2193,6 @@ fi
     t_soc="pp"
     t_manufacturer="olympus"
     t_model="mrobe-100"
-    ;;
-
-   80|logikdax)
-    target_id=31
-    modelname="logikdax"
-    target="LOGIK_DAX"
-    memory=2 # always
-    arm946cc
-    tool="$rootdir/tools/scramble -add=ldax"
-    boottool="$rootdir/tools/scramble -tcc=crc"
-    bootoutput="player.rom"
-    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
-    bmp2rb_native="$rootdir/tools/bmp2rb -f 0"
-    output="rockbox.logik"
-    appextra="recorder:gui:radio"
-    plugins=""
-    # toolset is the tools within the tools directory that we build for
-    # this particular target.
-    toolset=$tccbitmaptools
-    # architecture, manufacturer and model for the target-tree build
-    t_cpu="arm"
-    t_manufacturer="tcc77x"
-    t_model="logikdax"
-    sysfont="08-Rockfont"
     ;;
 
     89|creativezenxfistyle)
@@ -2524,54 +2470,6 @@ fi
     t_model="sansa-c200"
     ;;
 
-   53|sansam200)
-    target_id=48
-    modelname="sansam200"
-    target="SANSA_M200"
-    memory=1 # always
-    arm946cc
-    tool="$rootdir/tools/scramble -add=m200"
-    boottool="$rootdir/tools/scramble -tcc=crc"
-    bootoutput="player.rom"
-    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
-    bmp2rb_native="$rootdir/tools/bmp2rb -f 0"
-    output="rockbox.m200"
-    appextra="recorder:gui:radio"
-    plugins=""
-    # toolset is the tools within the tools directory that we build for
-    # this particular target.
-    toolset=$tccbitmaptools
-    # architecture, manufacturer and model for the target-tree build
-    t_cpu="arm"
-    t_manufacturer="tcc77x"
-    t_model="m200"
-    sysfont="08-Rockfont"
-    ;;
-
-   54|sansac100)
-    target_id=42
-    modelname="sansac100"
-    target="SANSA_C100"
-    memory=2
-    arm946cc
-    tool="$rootdir/tools/scramble -add=c100"
-    boottool="$rootdir/tools/scramble -tcc=crc"
-    bootoutput="player.rom"
-    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
-    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
-    output="rockbox.c100"
-    appextra="recorder:gui:radio"
-    plugins=""
-    # toolset is the tools within the tools directory that we build for
-    # this particular target.
-    toolset=$tccbitmaptools
-    # architecture, manufacturer and model for the target-tree build
-    t_cpu="arm"
-    t_manufacturer="tcc77x"
-    t_model="c100"
-    sysfont="08-Rockfont"
-    ;;
-
    55|sansaclip)
     target_id=50
     modelname="sansaclip"
@@ -2592,7 +2490,6 @@ fi
     if [ "$ARG_ARM_THUMB" != 0 ]; then ARG_ARM_THUMB=1; fi
     arm9tdmicc
     ;;
-
 
    56|sansae200v2)
     target_id=51
@@ -4083,12 +3980,12 @@ fi
     sysfontbl="16-Terminus"
     ;;
 
-    244|fiiom3k)
+    244|fiiom3klinux)
     application="yes"
     app_type="fiio"
     target_id=112
-    modelname="fiiom3k"
-    target="FIIO_M3K"
+    modelname="fiiom3klinux"
+    target="FIIO_M3K_LINUX"
     memory=16 # XXX Can probably go over 32?
     tool="cp "
     boottool="cp "
@@ -4195,6 +4092,30 @@ fi
     t_model="ihifi2"
     ;;
 
+  246|fiiom3k)
+    target_id=114
+    modelname="fiiom3k"
+    target="FIIO_M3K"
+    memory=64
+    mipsr2elcc
+    appextra="recorder:gui"
+    plugins="yes"
+    tool="$rootdir/tools/scramble -add=fiiom3k "
+    boottool="" # not used
+    output="rockbox.m3k"
+    bootoutput="bootloader.m3k"
+    sysfontbl="16-Terminus"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$x1000tools"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="mips"
+    t_manufacturer="ingenic_x1000"
+    t_model="fiiom3k"
+    ;;
+
    *)
     echo "Please select a supported target platform!"
     exit 7
@@ -4255,12 +4176,7 @@ fi
 # Figure out build "type"
 #
 
-  # the ifp7x0 is the only platform that supports building a gdb stub like
-  # this
 case $modelname in
-  iriverifp7xx)
-     gdbstub=", (G)DB stub"
-     ;;
   sansae200r|sansae200)
      gdbstub=", (I)nstaller"
      ;;
@@ -4324,19 +4240,6 @@ fi
     [Aa]*)
       echo "Advanced build selected"
       whichadvanced $btype
-      ;;
-    [Gg])
-      extradefines="$extradefines -DSTUB" # for target makefile symbol EXTRA_DEFINES
-      appsdir='$(ROOTDIR)/gdb'
-      apps="stub"
-      case $modelname in
-          iriverifp7xx)
-              output="stub.wma"
-              ;;
-          *)
-              ;;
-      esac
-      echo "GDB stub build selected"
       ;;
     [Cc])
       uname=`uname`
@@ -4611,7 +4514,7 @@ if [ "$ARG_RBDIR" != "" ]; then
   echo "Using alternate rockbox dir: ${rbdir}"
 fi
 
-cat > autoconf.h <<EOF
+cat > autoconf.h.new <<EOF
 /* This header was made by configure */
 #ifndef __BUILD_AUTOCONF_H
 #define __BUILD_AUTOCONF_H
@@ -4660,14 +4563,11 @@ ${use_logf_serial}
 /* Define this to record a chart with timings for the stages of boot */
 ${use_bootchart}
 
-/* optional define for a backlight modded Ondio */
-${have_backlight}
-
 /* optional define for FM radio mod for iAudio M5 */
 ${have_fmradio_in}
 
-/* optional define for ATA poweroff on Player */
-${have_ata_poweroff}
+/* optional define for USB Serial */
+${use_usb_serial}
 
 /* optional defines for RTC mod for h1x0 */
 ${config_rtc}
@@ -4688,6 +4588,14 @@ ${app_lcd_height}
 
 #endif /* __BUILD_AUTOCONF_H */
 EOF
+
+# Make sure the file is different.
+if ! diff -q autoconf.h.new autoconf.h > /dev/null 2>&1 ; then
+    mv autoconf.h.new autoconf.h
+    echo "Created autoconf.h"
+else
+    rm -f autoconf.h.new
+fi
 
 if test -n "$t_cpu"; then
   TARGET_INC="-I\$(FIRMDIR)/target/$t_cpu/$t_manufacturer/$t_model"
@@ -4814,6 +4722,7 @@ export ANDROID_ARCH=${ANDROID_ARCH}
 export ANDROID_NDK_PATH=${ANDROID_NDK_PATH}
 export ANDROID_SDK_PATH=${ANDROID_SDK_PATH}
 export ANDROID_PLATFORM_VERSION=${ANDROID_PLATFORM_VERSION}
+export TOOLSET=${toolset}
 
 CONFIGURE_OPTIONS=${cmdline}
 

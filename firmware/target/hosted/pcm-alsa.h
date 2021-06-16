@@ -1,10 +1,10 @@
 /***************************************************************************
- *             __________               __   ___.                  
- *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___  
- *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /  
- *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <   
- *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \  
- *                     \/            \/     \/    \/            \/ 
+ *             __________               __   ___.
+ *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+ *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+ *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+ *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+ *                     \/            \/     \/    \/            \/
  *
  * Copyright (C) 2016 Amaury Pouly
  *
@@ -22,7 +22,7 @@
 
 #include <config.h>
 
-#if defined(SONY_NWZ_LINUX) || defined(HAVE_FIIO_LINUX_CODEC)
+#if defined(HAVE_ALSA_32BIT)
 /* Set the PCM volume in dB: each sample with have this volume applied digitally
  * before being sent to ALSA. Volume must satisfy -43 <= dB <= 0 */
 void pcm_set_mixer_volume(int vol_db_l, int vol_db_r);
@@ -34,6 +34,7 @@ void pcm_alsa_set_playback_device(const char *device);
 void pcm_alsa_set_capture_device(const char *device);
 #endif
 
-int pcm_alsa_get_rate(void);
+unsigned int pcm_alsa_get_rate(void);
+unsigned int pcm_alsa_get_xruns(void);
 
 #endif /* __PCM_ALSA_RB_H__ */

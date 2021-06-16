@@ -27,6 +27,7 @@
 #include "lang.h"
 #include "action.h"
 #include "settings.h"
+#include "rbpaths.h"
 #include "menu.h"
 #include "open_plugin.h"
 #include "keyboard.h"
@@ -72,6 +73,7 @@ static int selectivesoftlock_callback(int action,
             set_selective_softlock_actions(
                             global_settings.bt_selective_softlock_actions,
                             global_settings.bt_selective_softlock_actions_mask);
+            action_autosoftlock_init();
             break;
     }
 
@@ -83,17 +85,19 @@ static int selectivesoftlock_set_mask(void* param)
     (void)param;
 int mask = global_settings.bt_selective_softlock_actions_mask;
             struct s_mask_items maskitems[]={
-                                       {ID2P(LANG_VOLUME)     , SEL_ACTION_VOL},
-                                       {ID2P(LANG_ACTION_PLAY), SEL_ACTION_PLAY},
-                                       {ID2P(LANG_ACTION_SEEK), SEL_ACTION_SEEK},
-                                       {ID2P(LANG_ACTION_SKIP), SEL_ACTION_SKIP},
+                                       {ID2P(LANG_ACTION_VOLUME), SEL_ACTION_VOL},
+                                       {ID2P(LANG_ACTION_PLAY),   SEL_ACTION_PLAY},
+                                       {ID2P(LANG_ACTION_SEEK),   SEL_ACTION_SEEK},
+                                       {ID2P(LANG_ACTION_SKIP),   SEL_ACTION_SKIP},
  #ifdef HAVE_BACKLIGHT
-                            {ID2P(LANG_ACTION_AUTOLOCK_ON), SEL_ACTION_AUTOLOCK},
+                                       {ID2P(LANG_ACTION_AUTOLOCK_ON),    SEL_ACTION_AUTOLOCK},
+                                       {ID2P(LANG_ACTION_ALWAYSAUTOLOCK), SEL_ACTION_ALWAYSAUTOLOCK},
  #endif
  #if defined(HAVE_TOUCHPAD) || defined(HAVE_TOUCHSCREEN)
-                        {ID2P(LANG_ACTION_DISABLE_TOUCH) , SEL_ACTION_NOTOUCH},
+                                       {ID2P(LANG_ACTION_DISABLE_TOUCH),  SEL_ACTION_NOTOUCH},
  #endif
-                         {ID2P(LANG_ACTION_DISABLE_NOTIFY), SEL_ACTION_NONOTIFY}
+                                       {ID2P(LANG_ACTION_DISABLE_NOTIFY), SEL_ACTION_NONOTIFY},
+                                       {ID2P(LANG_SOFTLOCK_DISABLE_ALL_NOTIFY), SEL_ACTION_ALLNONOTIFY}
                                             };
 
             mask = mask_select(mask, ID2P(LANG_SOFTLOCK_SELECTIVE)
@@ -266,7 +270,7 @@ MAKE_MENU(battery_menu, ID2P(LANG_BATTERY_MENU), 0, Icon_NOICON,
             &usb_charging,
 #endif
          );
-#ifdef HAVE_USB_POWER
+#if defined(DX50) || defined(DX90) || (defined(HAVE_USB_POWER) && !defined(USB_NONE) && !defined(SIMULATOR))
 MENUITEM_SETTING(usb_mode, &global_settings.usb_mode, NULL);
 #endif
 /* Disk */
@@ -397,7 +401,7 @@ MENUITEM_SETTING(governor, &global_settings.governor, NULL);
 
 MAKE_MENU(system_menu, ID2P(LANG_SYSTEM),
           0, Icon_System_menu,
-#if (BATTERY_CAPACITY_INC > 0) || (BATTERY_TYPES_COUNT > 1)
+#if (BATTERY_CAPACITY_INC > 0) || (BATTERY_TYPES_COUNT > 1) || defined(HAVE_USB_CHARGING_ENABLE)
             &battery_menu,
 #endif
 #if defined(HAVE_DIRCACHE) || defined(HAVE_DISK_STORAGE)
@@ -449,7 +453,7 @@ MAKE_MENU(system_menu, ID2P(LANG_SYSTEM),
 #if defined(DX50) || defined(DX90)
             &governor,
 #endif
-#ifdef HAVE_USB_POWER
+#if defined(DX50) || defined(DX90) || (defined(HAVE_USB_POWER) && !defined(USB_NONE) && !defined(SIMULATOR))
             &usb_mode,
 #endif
          );
@@ -709,10 +713,11 @@ static int talk_callback(int action,
 MENUITEM_SETTING(talk_filetype_item, &global_settings.talk_filetype, NULL);
 MENUITEM_SETTING(talk_battery_level_item,
                  &global_settings.talk_battery_level, NULL);
+MENUITEM_SETTING(talk_mixer_amp_item, &global_settings.talk_mixer_amp, NULL);
 MAKE_MENU(voice_settings_menu, ID2P(LANG_VOICE), 0, Icon_Voice,
           &talk_menu_item, &talk_dir_item, &talk_dir_clip_item,
           &talk_file_item, &talk_file_clip_item, &talk_filetype_item,
-          &talk_battery_level_item);
+          &talk_battery_level_item, &talk_mixer_amp_item);
 /*    VOICE MENU                   */
 /***********************************/
 

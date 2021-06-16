@@ -71,6 +71,7 @@
 #define BLOCKS_PER_BANK    0x7A7800
 
 /* command flags for send_cmd */
+#define SDHC_RESP_FMT_MASK 0x0600
 #define SDHC_RESP_FMT_NONE 0x0000
 #define SDHC_RESP_FMT_1    0x0200
 #define SDHC_RESP_FMT_2    0x0400
@@ -119,6 +120,7 @@ static struct sd_card_status sd_status[NUM_CARDS] =
 
 /* Shoot for around 75% usage */
 static struct mutex             sd_mtx SHAREDBSS_ATTR;
+static struct semaphore         data_done SHAREDBSS_ATTR;
 static volatile unsigned int    transfer_error[NUM_DRIVES];
 /* align on cache line size */
 static unsigned char    aligned_buffer[UNALIGNED_NUM_SECTORS * SD_BLOCK_SIZE] 
@@ -233,25 +235,20 @@ static int sd_poll_status(int st_reg_num, volatile unsigned int flag)
 
 static int dma_wait_for_completion(void)
 {
-    unsigned short dma_status;
+    uint16_t dma_status;
 
-    do
+    semaphore_wait(&data_done, TIMEOUT_BLOCK);
+
+    dma_status = IO_MMC_SD_DMA_STATUS1;
+    if (dma_status & MMC_DMASTAT1_TOUTDT)
     {
-        long time = current_tick;
+        return -EC_DATA_TIMEOUT;
+    }
 
-        if (TIME_AFTER(time, next_yield))
-        {
-            long ty = current_tick;
-            yield();
-            next_yield = ty + MIN_YIELD_PERIOD;
-        }
-
-        dma_status = IO_MMC_SD_DMA_STATUS1;
-        if (dma_status & (1 << 13))
-        {
-            return -EC_DATA_TIMEOUT;
-        }
-    } while (dma_status & (1 << 12));
+    if (dma_status & MMC_DMASTAT1_RUNST)
+    {
+        panicf("Semaphore released while DMA still running");
+    }
 
     return EC_OK;
 }
@@ -306,16 +303,23 @@ static int sd_command(int cmd, unsigned long arg,
     {
         /* discard response */
     }
-    else if ((cmdat & SDHC_RESP_FMT_1) || (cmdat & SDHC_RESP_FMT_3))
+    else
     {
-        response[0] = (IO_MMC_RESPONSE7 << 16) | IO_MMC_RESPONSE6;
-    }
-    else if (cmdat & SDHC_RESP_FMT_2)
-    {
-        response[0] = (IO_MMC_RESPONSE7 << 16) | IO_MMC_RESPONSE6;
-        response[1] = (IO_MMC_RESPONSE5 << 16) | IO_MMC_RESPONSE4;
-        response[2] = (IO_MMC_RESPONSE3 << 16) | IO_MMC_RESPONSE2;
-        response[3] = (IO_MMC_RESPONSE1 << 16) | IO_MMC_RESPONSE0;
+        switch (cmdat & SDHC_RESP_FMT_MASK)
+        {
+            case SDHC_RESP_FMT_1:
+            case SDHC_RESP_FMT_3:
+                response[0] = (IO_MMC_RESPONSE7 << 16) | IO_MMC_RESPONSE6;
+                break;
+            case SDHC_RESP_FMT_2:
+                response[0] = (IO_MMC_RESPONSE7 << 16) | IO_MMC_RESPONSE6;
+                response[1] = (IO_MMC_RESPONSE5 << 16) | IO_MMC_RESPONSE4;
+                response[2] = (IO_MMC_RESPONSE3 << 16) | IO_MMC_RESPONSE2;
+                response[3] = (IO_MMC_RESPONSE1 << 16) | IO_MMC_RESPONSE0;
+                break;
+            default:
+                break;
+        }
     }
 
     return 0;
@@ -713,8 +717,6 @@ sd_transfer_retry:
             goto sd_transfer_error;
         }
 
-        count -= count_per_dma;
-
         if (write == false)
         {
             discard_dcache_range(use_direct_dma ? buffer : aligned_buffer,
@@ -725,9 +727,6 @@ sd_transfer_retry:
                 memcpy(buffer, aligned_buffer, count_per_dma*SD_BLOCK_SIZE);
             }
         }
-
-        buffer += count_per_dma*SD_BLOCK_SIZE;
-        start_addr += count_per_dma;
 
         last_disk_activity = current_tick;
 
@@ -742,6 +741,10 @@ sd_transfer_retry:
         {
             goto sd_transfer_error;
         }
+
+        count -= count_per_dma;
+        buffer += count_per_dma*SD_BLOCK_SIZE;
+        start_addr += count_per_dma;
     } while (count > 0);
 
     while (1)
@@ -774,20 +777,10 @@ int sd_read_sectors(IF_MD(int card_no,) unsigned long start, int incount,
 int sd_write_sectors(IF_MD(int card_no,) unsigned long start, int count,
                       const void* outbuf)
 {
-#ifndef BOOTLOADER
 #ifndef HAVE_MULTIDRIVE
     const int card_no = 0;
 #endif
     return sd_transfer_sectors(card_no, start, count, (void*)outbuf, true);
-#else /* we don't need write support in bootloader */
-#ifdef HAVE_MULTIDRIVE
-    (void)card_no;
-#endif
-    (void)start;
-    (void)count;
-    (void)outbuf;
-    return 0;
-#endif
 }
 
 int sd_init(void)
@@ -797,14 +790,13 @@ int sd_init(void)
     if (!initialized)
     {
         mutex_init(&sd_mtx);
+        semaphore_init(&data_done, 1, 0);
         initialized = true;
     }
 
     mutex_lock(&sd_mtx);
 
-#ifndef BOOTLOADER
     enable_controller(false);
-#endif
 
     /* based on linux/drivers/mmc/dm320mmc.c
        Copyright (C) 2006 ZSI, All Rights Reserved.
@@ -815,7 +807,7 @@ int sd_init(void)
 
     /* mmc module clock: 75 Mhz (AHB) / 2 = ~37.5 Mhz
      * (Frequencies above are taken from Sansa Connect's OF source code) */
-    IO_CLK_DIV3 = (IO_CLK_DIV3 & 0xFF00) | 0x02; /* OF uses 1 */
+    IO_CLK_DIV3 = (IO_CLK_DIV3 & 0xFF00) | 0x01;
 
     bitset16(&IO_CLK_MOD2, CLK_MOD2_MMC);
 
@@ -852,7 +844,9 @@ int sd_init(void)
 #endif
 #endif
 
-    sd_select_device(1);
+    /* Enable data done interrupt */
+    IO_MMC_INT_ENABLE |= MMC_IE_EDATDNE;
+    IO_INTC_EINT1 |= INTR_EINT1_MMCSDMS0;
 
     /* Disable Memory Card CLK - it is enabled on demand by TMS320DM320 */
     bitclr16(&IO_MMC_MEM_CLK_CONTROL, (1 << 8));
@@ -894,4 +888,18 @@ int sd_event(long id, intptr_t data)
     }
 
     return rc;
+}
+
+void SD_MMC(void) __attribute__ ((section(".icode")));
+void SD_MMC(void)
+{
+    uint16_t status = IO_MMC_STATUS0;
+
+    /* Clear interrupt */
+    IO_INTC_IRQ1 = INTR_IRQ1_MMCSDMS0;
+
+    if (status & MMC_ST0_DATDNE)
+    {
+        semaphore_release(&data_done);
+    }
 }

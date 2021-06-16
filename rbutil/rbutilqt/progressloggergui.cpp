@@ -33,11 +33,6 @@ ProgressLoggerGui::ProgressLoggerGui(QWidget* parent): ProgressloggerInterface(p
     setRunning();
 }
 
-void ProgressLoggerGui::addItem(const QString &text)
-{
-    addItem(text, LOGNOICON);
-}
-
 void ProgressLoggerGui::addItem(const QString &text, int flag)
 {
     QListWidgetItem* item = new QListWidgetItem(text);
@@ -161,7 +156,7 @@ void ProgressLoggerGui::saveErrorLog()
 
     int i=0;
     loggerTexts = "";
-    while(dp.listProgress->item(i) != NULL)
+    while(dp.listProgress->item(i) != nullptr)
     {
         loggerTexts.append(dp.listProgress->item(i)->text());
         loggerTexts.append("\n");

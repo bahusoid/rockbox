@@ -746,6 +746,9 @@ void sound_settings_apply(void)
 #ifdef AUDIOHW_HAVE_FILTER_ROLL_OFF
     sound_set(SOUND_FILTER_ROLL_OFF, global_settings.roll_off);
 #endif
+#ifdef AUDIOHW_HAVE_POWER_MODE
+    sound_set(SOUND_POWER_MODE, global_settings.power_mode);
+#endif
 #ifdef AUDIOHW_HAVE_EQ
     int b;
 
@@ -931,13 +934,9 @@ void settings_apply(bool read_disk)
         CHART("<icons_init");
 
 #ifdef HAVE_LCD_COLOR
-        if (global_settings.colors_file[0]
-            && global_settings.colors_file[0] != '-')
-        {
-            CHART(">read_color_theme_file");
-            read_color_theme_file();
-            CHART("<read_color_theme_file");
-        }
+        CHART(">read_color_theme_file");
+        read_color_theme_file();
+        CHART("<read_color_theme_file");
 #endif
     }
 #ifdef HAVE_LCD_COLOR
@@ -1011,6 +1010,7 @@ void settings_apply(bool read_disk)
     set_selective_softlock_actions(
                             global_settings.bt_selective_softlock_actions,
                             global_settings.bt_selective_softlock_actions_mask);
+    action_autosoftlock_init();
 #endif
 
 #ifdef HAVE_TOUCHPAD_SENSITIVITY_SETTING
@@ -1031,8 +1031,13 @@ void settings_apply(bool read_disk)
 #endif
 
 #if defined(DX50) || defined(DX90)
-    ibasso_set_governor(global_settings.governor);
     ibasso_set_usb_mode(global_settings.usb_mode);
+#elif defined(HAVE_USB_POWER) && !defined(USB_NONE) && !defined(SIMULATOR)
+    usb_set_mode(global_settings.usb_mode);
+#endif
+
+#if defined(DX50) || defined(DX90)
+    ibasso_set_governor(global_settings.governor);
 #endif
 
     /* This should stay last */

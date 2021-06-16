@@ -57,7 +57,7 @@ bool BootloaderInstallAms::install(void)
     // download firmware from server
     emit logItem(tr("Downloading bootloader file"), LOGINFO);
 
-    connect(this, SIGNAL(downloadDone()), this, SLOT(installStage2()));
+    connect(this, &BootloaderInstallBase::downloadDone, this, &BootloaderInstallAms::installStage2);
     downloadBlStart(m_blurl);
 
     return true;
@@ -93,7 +93,7 @@ void BootloaderInstallAms::installStage2(void)
     rb_packed = load_rockbox_file(bootfile.toLocal8Bit().data(), &model,
                                   &bootloader_size,&rb_packedsize,
                                     errstr,sizeof(errstr));
-    if (rb_packed == NULL)
+    if (rb_packed == nullptr)
     {
         LOG_ERROR() << "could not load bootloader: " << bootfile;
         emit logItem(errstr, LOGERROR);
@@ -106,7 +106,7 @@ void BootloaderInstallAms::installStage2(void)
     buf = load_of_file(m_offile.toLocal8Bit().data(), model, &len, &sum,
                         &firmware_size, &of_packed ,&of_packedsize,
                         errstr, sizeof(errstr));
-    if (buf == NULL)
+    if (buf == nullptr)
     {
         LOG_ERROR() << "could not load OF: " << m_offile;
         emit logItem(errstr, LOGERROR);

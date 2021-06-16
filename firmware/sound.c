@@ -54,7 +54,7 @@ static const struct sound_setting_entry * get_setting_entry(int setting)
         { "", 0, 0, 0, 0, 0 };
 
     static const struct sound_setting_entry default_entry =
-        { &default_info, NULL }; 
+        { &default_info, NULL };
 
     if ((unsigned)setting >= ARRAYLEN(sound_setting_entries))
         return &default_entry;
@@ -115,7 +115,7 @@ int sound_current(int setting)
 {
     switch(setting)
     {
-#ifndef BOOTLOADER 
+#ifndef BOOTLOADER
 #ifndef PLATFORM_HAS_VOLUME_CHANGE
         SOUND_CUR_SET(VOLUME,             global_settings.volume)
 #endif
@@ -139,6 +139,9 @@ int sound_current(int setting)
 #endif
 #if defined(AUDIOHW_HAVE_FILTER_ROLL_OFF)
         SOUND_CUR_SET(FILTER_ROLL_OFF,    global_settings.roll_off)
+#endif
+#if defined(AUDIOHW_HAVE_POWER_MODE)
+        SOUND_CUR_SET(POWER_MODE,         global_settings.power_mode)
 #endif
 
 #if 0 /*WRONG -- these need to index the hw_eq_bands[AUDIOHW_EQ_BAND_NUM] struct*/
@@ -417,6 +420,16 @@ void sound_set_filter_roll_off(int value)
         return;
 
     audiohw_set_filter_roll_off(value);
+}
+#endif
+
+#if defined(AUDIOHW_HAVE_POWER_MODE)
+void sound_set_power_mode(int value)
+{
+    if (!audio_is_initialized)
+        return;
+
+    audiohw_set_power_mode(value);
 }
 #endif
 

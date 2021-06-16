@@ -23,6 +23,7 @@ TOOLS = $(TOOLSDIR)/rdf2binary $(TOOLSDIR)/convbdf \
 	$(TOOLSDIR)/codepages $(TOOLSDIR)/scramble $(TOOLSDIR)/bmp2rb \
 	$(TOOLSDIR)/uclpack $(TOOLSDIR)/mkboot $(TOOLSDIR)/iaudio_bl_flash.c \
 	$(TOOLSDIR)/iaudio_bl_flash.h
+TOOLS += $(foreach tool,$(TOOLSET),$(TOOLSDIR)/$(tool))
 
 
 ifeq (,$(PREFIX))
@@ -108,6 +109,8 @@ ifneq (,$(findstring bootloader,$(APPSDIR)))
     include $(ROOTDIR)/firmware/target/hosted/aigo/erosq.make
   else ifneq (,$(findstring fiio,$(APP_TYPE)))
     include $(ROOTDIR)/firmware/target/hosted/fiio/fiio.make
+  else ifneq (,$(findstring ingenic_x1000,$(MANUFACTURER)))
+    include $(ROOTDIR)/firmware/target/mips/ingenic_x1000/x1000boot.make
   else
     include $(APPSDIR)/bootloader.make
   endif
@@ -125,7 +128,7 @@ else # core
   include $(APPSDIR)/apps.make
   include $(ROOTDIR)/lib/rbcodec/rbcodec.make
 
-  ifdef ENABLEDPLUGINS
+  ifeq ($(ENABLEDPLUGINS),yes)
     include $(APPSDIR)/plugins/bitmaps/pluginbitmaps.make
     include $(APPSDIR)/plugins/plugins.make
   endif
@@ -259,7 +262,7 @@ $(LINKROM): $(ROMLDS)
 # Note: make sure -Wl,--gc-sections comes before -T in the linker options.
 # Having the latter first caused crashes on (at least) mini2g.
 $(BUILDDIR)/rockbox.elf : $$(OBJ) $(FIRMLIB) $(VOICESPEEXLIB) $(CORE_LIBS) $$(LINKRAM)
-	$(call PRINTS,LD $(@F))$(CC) $(GCCOPTS) -Os -nostdlib -o $@ $(OBJ) \
+	$(call PRINTS,LD $(@F))$(CC) $(GCCOPTS) -nostdlib -o $@ $(OBJ) \
 		-L$(BUILDDIR)/firmware \
 		-L$(RBCODEC_BLD)/codecs $(call a2lnk, $(VOICESPEEXLIB)) \
 		-L$(BUILDDIR)/lib $(call a2lnk, $(CORE_LIBS)) \
@@ -267,7 +270,7 @@ $(BUILDDIR)/rockbox.elf : $$(OBJ) $(FIRMLIB) $(VOICESPEEXLIB) $(CORE_LIBS) $$(LI
 		-Wl,-Map,$(BUILDDIR)/rockbox.map
 
 $(BUILDDIR)/rombox.elf : $$(OBJ) $(FIRMLIB) $(VOICESPEEXLIB) $(CORE_LIBS) $$(LINKROM)
-	$(call PRINTS,LD $(@F))$(CC) $(GCCOPTS) -Os -nostdlib -o $@ $(OBJ) \
+	$(call PRINTS,LD $(@F))$(CC) $(GCCOPTS) -nostdlib -o $@ $(OBJ) \
 		-L$(BUILDDIR)/firmware \
 		-L$(RBCODEC_BLD)/codecs $(call a2lnk, $(VOICESPEEXLIB)) \
 		-L$(BUILDDIR)/lib $(call a2lnk, $(CORE_LIBS)) \

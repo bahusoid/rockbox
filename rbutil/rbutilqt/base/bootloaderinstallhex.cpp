@@ -32,11 +32,11 @@ struct md5s {
 
 struct md5s md5sums[] = {
 #include "irivertools/h100sums.h"
-    { 0, 0 },
+    { nullptr, nullptr },
 #include "irivertools/h120sums.h"
-    { 0, 0 },
+    { nullptr, nullptr },
 #include "irivertools/h300sums.h"
-    { 0, 0 }
+    { nullptr, nullptr }
 };
 
 
@@ -86,7 +86,7 @@ bool BootloaderInstallHex::install(void)
     m_model = 4;
     // 3: h300, 2: h120, 1: h100, 0:invalid
     while(i--) {
-        if(md5sums[i].orig == 0)
+        if(md5sums[i].orig == nullptr)
             m_model--;
         if(!qstrcmp(md5sums[i].orig, hash.toLatin1()))
             break;
@@ -122,7 +122,7 @@ bool BootloaderInstallHex::install(void)
 
     // download firmware from server
     emit logItem(tr("Downloading bootloader file"), LOGINFO);
-    connect(this, SIGNAL(downloadDone()), this, SLOT(installStage2()));
+    connect(this, &BootloaderInstallBase::downloadDone, this, &BootloaderInstallHex::installStage2);
 
     downloadBlStart(m_blurl);
     return true;

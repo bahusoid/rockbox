@@ -91,7 +91,6 @@ const struct button_mapping pla_main_ctx[] =
     || (CONFIG_KEYPAD == IRIVER_H300_PAD)   \
     || (CONFIG_KEYPAD == IAUDIO_X5M5_PAD)     \
     || (CONFIG_KEYPAD == GIGABEAT_PAD)      \
-    || (CONFIG_KEYPAD == IRIVER_IFP7XX_PAD) \
     || (CONFIG_KEYPAD == SANSA_C200_PAD) \
     || (CONFIG_KEYPAD == GIGABEAT_S_PAD) \
     || (CONFIG_KEYPAD == MROBE100_PAD) \
@@ -161,15 +160,6 @@ const struct button_mapping pla_main_ctx[] =
     { PLA_DOWN_REPEAT,      BUTTON_DOWN|BUTTON_REPEAT,          BUTTON_NONE },
     { PLA_LEFT_REPEAT,      BUTTON_PREV|BUTTON_REPEAT,          BUTTON_NONE },
     { PLA_RIGHT_REPEAT,     BUTTON_NEXT|BUTTON_REPEAT,          BUTTON_NONE },
-#elif (CONFIG_KEYPAD == IAUDIO67_PAD)
-    { PLA_UP,               BUTTON_STOP,                        BUTTON_NONE },
-    { PLA_DOWN,             BUTTON_PLAY,                        BUTTON_NONE },
-    { PLA_LEFT,             BUTTON_LEFT,                        BUTTON_NONE },
-    { PLA_RIGHT,            BUTTON_RIGHT,                       BUTTON_NONE },
-    { PLA_UP_REPEAT,        BUTTON_STOP|BUTTON_REPEAT,          BUTTON_NONE },
-    { PLA_DOWN_REPEAT,      BUTTON_PLAY|BUTTON_REPEAT,          BUTTON_NONE },
-    { PLA_LEFT_REPEAT,      BUTTON_LEFT|BUTTON_REPEAT,          BUTTON_NONE },
-    { PLA_RIGHT_REPEAT,     BUTTON_RIGHT|BUTTON_REPEAT,         BUTTON_NONE },
 #elif (CONFIG_KEYPAD == PBELL_VIBE500_PAD)
     { PLA_UP,                BUTTON_UP,                         BUTTON_NONE},
     { PLA_DOWN,              BUTTON_DOWN,                       BUTTON_NONE},
@@ -233,7 +223,7 @@ const struct button_mapping pla_main_ctx[] =
     { PLA_DOWN_REPEAT,      BUTTON_OPTION|BUTTON_REPEAT,        BUTTON_NONE },
     { PLA_LEFT_REPEAT,      BUTTON_PREV|BUTTON_REPEAT,          BUTTON_NONE },
     { PLA_RIGHT_REPEAT,     BUTTON_NEXT|BUTTON_REPEAT,          BUTTON_NONE },
-#elif (CONFIG_KEYPAD == FIIO_M3K_PAD)
+#elif (CONFIG_KEYPAD == FIIO_M3K_LINUX_PAD)
     { PLA_UP,               BUTTON_HOME,                        BUTTON_NONE },
     { PLA_DOWN,             BUTTON_OPTION,                      BUTTON_NONE },
     { PLA_LEFT,             BUTTON_PREV,                        BUTTON_NONE },
@@ -269,6 +259,15 @@ const struct button_mapping pla_main_ctx[] =
     { PLA_DOWN_REPEAT,      BUTTON_NEXT|BUTTON_REPEAT,          BUTTON_NONE },
     { PLA_LEFT_REPEAT,      BUTTON_HOME|BUTTON_REPEAT,          BUTTON_NONE },
     { PLA_RIGHT_REPEAT,     BUTTON_VOL_DOWN|BUTTON_REPEAT,      BUTTON_NONE },
+#elif (CONFIG_KEYPAD == FIIO_M3K_PAD)
+    { PLA_UP,               BUTTON_UP,                          BUTTON_NONE },
+    { PLA_DOWN,             BUTTON_DOWN,                        BUTTON_NONE },
+    { PLA_LEFT,             BUTTON_LEFT,                        BUTTON_NONE },
+    { PLA_RIGHT,            BUTTON_RIGHT,                       BUTTON_NONE },
+    { PLA_UP_REPEAT,        BUTTON_UP|BUTTON_REPEAT,            BUTTON_NONE },
+    { PLA_DOWN_REPEAT,      BUTTON_DOWN|BUTTON_REPEAT,          BUTTON_NONE },
+    { PLA_LEFT_REPEAT,      BUTTON_LEFT|BUTTON_REPEAT,          BUTTON_NONE },
+    { PLA_RIGHT_REPEAT,     BUTTON_RIGHT|BUTTON_REPEAT,         BUTTON_NONE },
 #else
 #   ifndef HAVE_TOUCHSCREEN
 #       error pluginlib_actions: No directions defined
@@ -348,12 +347,6 @@ const struct button_mapping pla_main_ctx[] =
     {PLA_SELECT,            BUTTON_PLAY,                        BUTTON_NONE},
     {PLA_SELECT_REL,        BUTTON_PLAY|BUTTON_REL,             BUTTON_PLAY},
     {PLA_SELECT_REPEAT,     BUTTON_PLAY|BUTTON_REPEAT,          BUTTON_NONE},
-#elif (CONFIG_KEYPAD == IRIVER_IFP7XX_PAD)
-    {PLA_CANCEL,            BUTTON_EQ|BUTTON_REL,               BUTTON_EQ},
-    {PLA_EXIT,              BUTTON_EQ|BUTTON_REPEAT,            BUTTON_NONE},
-    {PLA_SELECT,            BUTTON_SELECT,                      BUTTON_NONE},
-    {PLA_SELECT_REL,        BUTTON_SELECT|BUTTON_REL,           BUTTON_SELECT},
-    {PLA_SELECT_REPEAT,     BUTTON_SELECT|BUTTON_REPEAT,        BUTTON_NONE},
 #elif (CONFIG_KEYPAD == MROBE500_PAD)
     {PLA_CANCEL,            BUTTON_POWER|BUTTON_REL,            BUTTON_POWER},
     {PLA_EXIT,              BUTTON_POWER|BUTTON_REPEAT,         BUTTON_NONE},
@@ -385,12 +378,6 @@ const struct button_mapping pla_main_ctx[] =
     {PLA_SELECT,            BUTTON_PLAY,                        BUTTON_NONE},
     {PLA_SELECT_REL,        BUTTON_PLAY|BUTTON_REL,             BUTTON_PLAY},
     {PLA_SELECT_REPEAT,     BUTTON_PLAY|BUTTON_REPEAT,          BUTTON_NONE},
-#elif (CONFIG_KEYPAD == IAUDIO67_PAD)
-    {PLA_CANCEL,            BUTTON_POWER|BUTTON_REL,            BUTTON_POWER},
-    {PLA_EXIT,              BUTTON_POWER|BUTTON_REPEAT,         BUTTON_NONE},
-    {PLA_SELECT,            BUTTON_PLAY,                        BUTTON_NONE},
-    {PLA_SELECT_REL,        BUTTON_PLAY|BUTTON_REL,             BUTTON_PLAY},
-    {PLA_SELECT_REPEAT,     BUTTON_PLAY|BUTTON_REPEAT           BUTTON_NONE},
 #elif (CONFIG_KEYPAD == CREATIVEZVM_PAD)
     {PLA_CANCEL,            BUTTON_BACK|BUTTON_REL,             BUTTON_BACK},
     {PLA_EXIT,              BUTTON_BACK|BUTTON_REPEAT,          BUTTON_NONE},
@@ -482,7 +469,7 @@ const struct button_mapping pla_main_ctx[] =
     {PLA_SELECT,            BUTTON_PLAY,                        BUTTON_NONE},
     {PLA_SELECT_REL,        BUTTON_PLAY|BUTTON_REL,             BUTTON_PLAY},
     {PLA_SELECT_REPEAT,     BUTTON_PLAY|BUTTON_REPEAT,          BUTTON_NONE},
-#elif (CONFIG_KEYPAD == FIIO_M3K_PAD)
+#elif (CONFIG_KEYPAD == FIIO_M3K_LINUX_PAD)
     {PLA_CANCEL,            BUTTON_POWER|BUTTON_REL,            BUTTON_POWER},
     {PLA_EXIT,              BUTTON_POWER|BUTTON_REPEAT,         BUTTON_NONE},
     {PLA_SELECT,            BUTTON_PLAY,                        BUTTON_NONE},
@@ -506,6 +493,12 @@ const struct button_mapping pla_main_ctx[] =
     {PLA_SELECT,            BUTTON_PLAY,                        BUTTON_NONE},
     {PLA_SELECT_REL,        BUTTON_PLAY|BUTTON_REL,             BUTTON_PLAY},
     {PLA_SELECT_REPEAT,     BUTTON_PLAY|BUTTON_REPEAT,          BUTTON_NONE},
+#elif (CONFIG_KEYPAD == FIIO_M3K_PAD)
+    {PLA_CANCEL,            BUTTON_BACK,                        BUTTON_NONE},
+    {PLA_EXIT,              BUTTON_POWER,                       BUTTON_NONE},
+    {PLA_SELECT,            BUTTON_SELECT,                      BUTTON_NONE},
+    {PLA_SELECT_REL,        BUTTON_SELECT|BUTTON_REL,           BUTTON_SELECT},
+    {PLA_SELECT_REPEAT,     BUTTON_SELECT|BUTTON_REPEAT,        BUTTON_NONE},
 #else
 #   ifndef HAVE_TOUCHSCREEN
 #       error pluginlib_actions: No actions defined

@@ -266,6 +266,13 @@ static struct bpb
 
 } fat_bpbs[NUM_VOLUMES]; /* mounted partition info */
 
+#ifdef STORAGE_NEEDS_BOUNCE_BUFFER
+#define FAT_BOUNCE_SECTORS 10
+static uint8_t fat_bounce_buffers[NUM_VOLUMES][SECTOR_SIZE*FAT_BOUNCE_SECTORS] STORAGE_ALIGN_ATTR;
+#define FAT_BOUNCE_BUFFER(bpb) \
+    (fat_bounce_buffers[IF_MV_VOL((bpb)->volume)])
+#endif
+
 #define IS_FAT_SECTOR(bpb, sector) \
     (!((sector) >= (bpb)->fatrgnend || (sector) < (bpb)->fatrgnstart))
 
@@ -2377,17 +2384,43 @@ static long transfer(struct bpb *fat_bpb, unsigned long start, long count,
             panicf("Write %ld after data\n",
                    start + count - fat_bpb->totalsectors);
         }
-        else
-        {
+    }
+
+#ifdef STORAGE_NEEDS_BOUNCE_BUFFER
+    if(UNLIKELY(STORAGE_OVERLAP((uintptr_t)buf))) {
+        void* xfer_buf = FAT_BOUNCE_BUFFER(fat_bpb);
+        while(count > 0) {
+            int xfer_count = MIN(count, FAT_BOUNCE_SECTORS);
+
+            if(write) {
+                memcpy(xfer_buf, buf, xfer_count * SECTOR_SIZE);
+                rc = storage_write_sectors(IF_MD(fat_bpb->drive,)
+                                           start + fat_bpb->startsector, xfer_count, xfer_buf);
+            } else {
+                rc = storage_read_sectors(IF_MD(fat_bpb->drive,)
+                                          start + fat_bpb->startsector, xfer_count, xfer_buf);
+                memcpy(buf, xfer_buf, xfer_count * SECTOR_SIZE);
+            }
+
+            if(rc < 0)
+                break;
+
+            buf += xfer_count * SECTOR_SIZE;
+            start += xfer_count;
+            count -= xfer_count;
+        }
+    } else {
+#endif
+        if(write) {
             rc = storage_write_sectors(IF_MD(fat_bpb->drive,)
                                        start + fat_bpb->startsector, count, buf);
+        } else {
+            rc = storage_read_sectors(IF_MD(fat_bpb->drive,)
+                                      start + fat_bpb->startsector, count, buf);
         }
+#ifdef STORAGE_NEEDS_BOUNCE_BUFFER
     }
-    else
-    {
-        rc = storage_read_sectors(IF_MD(fat_bpb->drive,)
-                                  start + fat_bpb->startsector, count, buf);
-    }
+#endif
 
     if (rc < 0)
     {

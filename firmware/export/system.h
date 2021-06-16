@@ -253,6 +253,10 @@ static inline void cpu_boost_unlock(void)
     #define MIN_STACK_ALIGN 8
 #endif
 
+#ifdef CPU_MIPS
+    #define HAVE_CPU_CACHE_ALIGN
+#endif
+
 /* Define this if target has support for generating backtraces */
 #ifdef CPU_ARM
     #define HAVE_RB_BACKTRACE
@@ -347,7 +351,7 @@ static inline void cpu_boost_unlock(void)
 #ifndef SIMULATOR
 bool dbg_ports(void);
 #endif
-#if (CONFIG_PLATFORM & PLATFORM_NATIVE) || defined(SONY_NWZ_LINUX) || defined(HIBY_LINUX) || defined(FIIO_M3K)
+#if (CONFIG_PLATFORM & PLATFORM_NATIVE) || defined(SONY_NWZ_LINUX) || defined(HIBY_LINUX) || defined(FIIO_M3K_LINUX)
 bool dbg_hw_info(void);
 #endif
 

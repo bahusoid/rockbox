@@ -408,7 +408,7 @@
 #define LABEL_MENU      "PLAY"
 #define LABEL_VOLUME    "VOL UP/DN"
 
-#elif (CONFIG_KEYPAD == FIIO_M3K_PAD)
+#elif (CONFIG_KEYPAD == FIIO_M3K_LINUX_PAD)
 #define VUMETER_QUIT    BUTTON_POWER
 #define VUMETER_HELP    BUTTON_HOME
 #define VUMETER_MENU    BUTTON_PLAY
@@ -440,6 +440,17 @@
 #define LABEL_QUIT      "POWER"
 #define LABEL_MENU      "MENU"
 #define LABEL_VOLUME    "VOL UP/DN"
+
+#elif CONFIG_KEYPAD == FIIO_M3K_PAD
+#define VUMETER_QUIT    BUTTON_POWER
+#define VUMETER_HELP    BUTTON_BACK
+#define VUMETER_MENU    BUTTON_MENU
+#define VUMETER_UP      BUTTON_VOL_UP
+#define VUMETER_DOWN    BUTTON_VOL_DOWN
+#define LABEL_HELP      "BACK"
+#define LABEL_QUIT      "POWER"
+#define LABEL_MENU      "MENU"
+#define LABEL_VOLUME    "VOL+/VOL-"
 
 #else
 #error No keymap defined!

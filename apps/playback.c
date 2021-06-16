@@ -993,6 +993,8 @@ static void audio_reset_buffer(void)
         core_free(audiobuf_handle);
         audiobuf_handle = 0;
     }
+    if (core_allocatable() < (1 << 10))
+        talk_buffer_set_policy(TALK_BUFFER_LOOSE); /* back off voice buffer */
     audiobuf_handle = core_alloc_maximum("audiobuf", &filebuflen, &ops);
 
     if (audiobuf_handle > 0)
@@ -1689,7 +1691,7 @@ static bool audio_load_cuesheet(struct track_info *infop,
 
 #ifdef HAVE_ALBUMART
 /* Load any album art for the file - returns false if the buffer is full */
-static bool audio_load_albumart(struct track_info *infop,
+static int audio_load_albumart(struct track_info *infop,
                                 struct mp3entry *track_id3)
 {
     FOREACH_ALBUMART(i)
@@ -1730,7 +1732,11 @@ static bool audio_load_albumart(struct track_info *infop,
         if (hid == ERR_BUFFER_FULL)
         {
             logf("buffer is full for now (%s)", __func__);
-            return false;
+            return ERR_BUFFER_FULL;
+        }
+        else if (hid == ERR_BITMAP_TOO_LARGE){
+            logf("image is too large to fit in buffer (%s)", __func__);
+            return ERR_BITMAP_TOO_LARGE;
         }
         else
         {
@@ -1981,7 +1987,12 @@ static int audio_finish_load_track(struct track_info *infop)
 
 #ifdef HAVE_ALBUMART
     /* Try to load album art for the track */
-    if (!audio_load_albumart(infop, track_id3))
+    int retval = audio_load_albumart(infop, track_id3);
+    if (retval == ERR_BITMAP_TOO_LARGE)
+    {
+        /* No space for album art on buffer because the file is larger than the buffer.
+        Ignore the file and keep buffering */
+    } else if (retval == ERR_BUFFER_FULL)
     {
         /* No space for album art on buffer, not an error */
         filling = STATE_FULL;

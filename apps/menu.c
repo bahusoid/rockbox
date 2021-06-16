@@ -180,7 +180,8 @@ static void init_menu_lists(const struct menu_item_ex *menu,
                      struct gui_synclist *lists, int selected, bool callback,
                      struct viewport parent[NB_SCREENS])
 {
-    int i, count = MENU_GET_COUNT(menu->flags);
+    int i;
+    int count = MIN(MENU_GET_COUNT(menu->flags), MAX_MENU_SUBITEMS);
     int type = (menu->flags&MENU_TYPE_MASK);
     menu_callback_type menu_callback = NULL;
     int icon;
@@ -210,6 +211,7 @@ static void init_menu_lists(const struct menu_item_ex *menu,
             current_subitems_count++;
         }
     }
+
     current_submenus_menu = (struct menu_item_ex *)menu;
 
     gui_synclist_init(lists,get_menu_item_name,(void*)menu,false,1, parent);
@@ -392,7 +394,7 @@ int do_menu(const struct menu_item_ex *start_menu, int *start_selected,
         int new_audio_status;
         redraw_lists = false;
         keyclick_set_callback(gui_synclist_keyclick_callback, &lists);
-        action = get_action(CONTEXT_MAINMENU,
+        action = get_action(CONTEXT_MAINMENU|ALLOW_SOFTLOCK,
                             list_do_action_timeout(&lists, HZ));
 
         /* query audio status to see if it changed */
@@ -427,7 +429,14 @@ int do_menu(const struct menu_item_ex *start_menu, int *start_selected,
 #ifdef HAVE_QUICKSCREEN
         else if (action == ACTION_STD_QUICKSCREEN)
         {
-            quick_screen_quick(action);
+            if (global_settings.shortcuts_replaces_qs)
+            {
+                global_status.last_screen = GO_TO_SHORTCUTMENU;
+                ret = quick_screen_quick(action);
+                done = true;
+            }
+            else
+                quick_screen_quick(action);
             redraw_lists = true;
         }
 #endif

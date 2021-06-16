@@ -34,6 +34,7 @@
 #include "system.h"
 #include "kernel.h"
 #include "lcd.h"
+#include "string-extra.h"
 #include "font.h"
 #include "file.h"
 #include "core_alloc.h"
@@ -85,7 +86,7 @@
 /* compiled-in font */
 extern struct font sysfont;
 
-#if !defined(BOOTLOADER) || defined(SONY_NWZ_LINUX) || defined(HIBY_LINUX) || defined(FIIO_M3K)
+#if !defined(BOOTLOADER) || defined(SONY_NWZ_LINUX) || defined(HIBY_LINUX) || defined(FIIO_M3K_LINUX)
 
 struct buflib_alloc_data {
     struct font font;    /* must be the first member! */

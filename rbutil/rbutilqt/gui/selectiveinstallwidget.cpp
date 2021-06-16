@@ -21,10 +21,9 @@
 #include <QFileDialog>
 #include "selectiveinstallwidget.h"
 #include "ui_selectiveinstallwidgetfrm.h"
-#include "serverinfo.h"
+#include "playerbuildinfo.h"
 #include "rbsettings.h"
 #include "rockboxinfo.h"
-#include "systeminfo.h"
 #include "progressloggergui.h"
 #include "bootloaderinstallbase.h"
 #include "bootloaderinstallhelper.h"
@@ -38,22 +37,31 @@ SelectiveInstallWidget::SelectiveInstallWidget(QWidget* parent) : QWidget(parent
     ui.rockboxCheckbox->setChecked(RbSettings::value(RbSettings::InstallRockbox).toBool());
     ui.fontsCheckbox->setChecked(RbSettings::value(RbSettings::InstallFonts).toBool());
     ui.themesCheckbox->setChecked(RbSettings::value(RbSettings::InstallThemes).toBool());
-    ui.gamefileCheckbox->setChecked(RbSettings::value(RbSettings::InstallGamefiles).toBool());
+    ui.pluginDataCheckbox->setChecked(RbSettings::value(RbSettings::InstallPluginData).toBool());
+    ui.voiceCheckbox->setChecked(RbSettings::value(RbSettings::InstallVoice).toBool());
+    ui.manualCheckbox->setChecked(RbSettings::value(RbSettings::InstallManual).toBool());
+
+    ui.manualCombobox->addItem("PDF", "pdf");
+    ui.manualCombobox->addItem("HTML (zip)", "zip");
+    ui.manualCombobox->addItem("HTML", "html");
 
     // check if Rockbox is installed by looking after rockbox-info.txt.
     // If installed uncheck bootloader installation.
     RockboxInfo info(m_mountpoint);
     ui.bootloaderCheckbox->setChecked(!info.success());
 
-    m_logger = NULL;
-    m_zipinstaller = NULL;
-    m_themesinstaller = NULL;
+    m_logger = nullptr;
+    m_zipinstaller = nullptr;
+    m_themesinstaller = nullptr;
 
-    connect(ui.installButton, SIGNAL(clicked()), this, SLOT(startInstall()));
-    connect(this, SIGNAL(installSkipped(bool)), this, SLOT(continueInstall(bool)));
-    connect(ui.themesCustomize, SIGNAL(clicked()), this, SLOT(customizeThemes()));
-    connect(ui.selectedVersion, SIGNAL(currentIndexChanged(int)),
-            this, SLOT(selectedVersionChanged(int)));
+    connect(ui.installButton, &QAbstractButton::clicked,
+            this, &SelectiveInstallWidget::startInstall);
+    connect(this, &SelectiveInstallWidget::installSkipped,
+            this, &SelectiveInstallWidget::continueInstall);
+    connect(ui.themesCustomize, &QAbstractButton::clicked,
+            this, &SelectiveInstallWidget::customizeThemes);
+    connect(ui.selectedVersion, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+            this, &SelectiveInstallWidget::selectedVersionChanged);
     // update version information. This also handles setting the previously
     // selected build type and bootloader disabling.
     updateVersion();
@@ -62,17 +70,35 @@ SelectiveInstallWidget::SelectiveInstallWidget(QWidget* parent) : QWidget(parent
 
 void SelectiveInstallWidget::selectedVersionChanged(int index)
 {
-    QString current = ui.selectedVersion->itemData(index).toString();
-    if(current == "release")
+    m_buildtype = static_cast<PlayerBuildInfo::BuildType>(ui.selectedVersion->itemData(index).toInt());
+    bool voice = true;
+    switch(m_buildtype) {
+    case PlayerBuildInfo::TypeRelease:
         ui.selectedDescription->setText(tr("This is the latest stable "
                     "release available."));
-    if(current == "development")
+        voice = true;
+        break;
+    case PlayerBuildInfo::TypeDevel:
         ui.selectedDescription->setText(tr("The development version is "
-                    "updated on every code change. Last update was on %1").arg(
-                        ServerInfo::platformValue(ServerInfo::BleedingDate).toString()));
-    if(current == "rc")
+                "updated on every code change."));
+        voice = false;
+        break;
+    case PlayerBuildInfo::TypeCandidate:
         ui.selectedDescription->setText(tr("This will eventually become the "
                     "next Rockbox version. Install it to help testing."));
+        voice = false;
+        break;
+    case PlayerBuildInfo::TypeDaily:
+        ui.selectedDescription->setText(tr("Daily updated development version."));
+        voice = true;
+        break;
+    }
+    ui.voiceCheckbox->setEnabled(voice);
+    ui.voiceCombobox->setEnabled(voice);
+    ui.voiceLabel->setEnabled(voice);
+    ui.voiceCheckbox->setToolTip(voice ? "" : tr("Not available for the selected version"));
+
+    updateVoiceLangs();
 }
 
 
@@ -81,50 +107,41 @@ void SelectiveInstallWidget::updateVersion(void)
     // get some configuration values globally
     m_mountpoint = RbSettings::value(RbSettings::Mountpoint).toString();
     m_target = RbSettings::value(RbSettings::CurrentPlatform).toString();
-    m_blmethod = SystemInfo::platformValue(
-            SystemInfo::BootloaderMethod, m_target).toString();
+    m_blmethod = PlayerBuildInfo::instance()->value(
+            PlayerBuildInfo::BootloaderMethod, m_target).toString();
 
-    if(m_logger != NULL) {
+    if(m_logger != nullptr) {
         delete m_logger;
-        m_logger = NULL;
+        m_logger = nullptr;
     }
 
     // re-populate all version items
-    m_versions.clear();
-    m_versions.insert("release", ServerInfo::platformValue(ServerInfo::CurReleaseVersion).toString());
-    // Don't populate RC or development selections if target has been retired.
-    if (ServerInfo::platformValue(ServerInfo::CurStatus) != tr("Stable (Retired)")) {
-        m_versions.insert("development", ServerInfo::platformValue(ServerInfo::BleedingRevision).toString());
-        m_versions.insert("rc", ServerInfo::platformValue(ServerInfo::RelCandidateVersion).toString());
+    QMap<PlayerBuildInfo::BuildType, QString> types;
+    types[PlayerBuildInfo::TypeRelease] = tr("Stable Release (Version %1)");
+    if (PlayerBuildInfo::instance()->value(PlayerBuildInfo::BuildStatus).toInt() != STATUS_RETIRED) {
+        types[PlayerBuildInfo::TypeCandidate] = tr("Release Candidate (Revison %1)");
+        types[PlayerBuildInfo::TypeDaily] = tr("Daily Build (%1)");
+        types[PlayerBuildInfo::TypeDevel] = tr("Development Version (Revison %1)");
     }
 
     ui.selectedVersion->clear();
-    if(!m_versions["release"].isEmpty()) {
-        ui.selectedVersion->addItem(tr("Stable Release (Version %1)").arg(
-                    m_versions["release"]), "release");
-    }
-    if(!m_versions["development"].isEmpty()) {
-        ui.selectedVersion->addItem(tr("Development Version (Revison %1)").arg(
-                    m_versions["development"]), "development");
-    }
-    if(!m_versions["rc"].isEmpty()) {
-        ui.selectedVersion->addItem(tr("Release Candidate (Revison %1)").arg(
-                    m_versions["rc"]), "rc");
+    for(auto i = types.begin(); i != types.end(); i++) {
+        QString version = PlayerBuildInfo::instance()->value(
+                    PlayerBuildInfo::BuildVersion, i.key()).toString();
+        if(!version.isEmpty())
+            ui.selectedVersion->addItem(i.value().arg(version), i.key());
     }
 
     // select previously selected version
-    int index = ui.selectedVersion->findData(RbSettings::value(RbSettings::Build).toString());
-    if(index != -1) {
-        ui.selectedVersion->setCurrentIndex(index);
+    int index = ui.selectedVersion->findData(
+            static_cast<PlayerBuildInfo::BuildType>(RbSettings::value(RbSettings::Build).toInt()));
+    if(index < 0) {
+        index = ui.selectedVersion->findData(PlayerBuildInfo::TypeRelease);
+        if(index < 0) {
+            index = ui.selectedVersion->findData(PlayerBuildInfo::TypeDevel);
+        }
     }
-    else if(!m_versions["release"].isEmpty()) {
-        index = ui.selectedVersion->findData("release");
-        ui.selectedVersion->setCurrentIndex(index);
-    }
-    else {
-        index = ui.selectedVersion->findData("development");
-        ui.selectedVersion->setCurrentIndex(index);
-    }
+    ui.selectedVersion->setCurrentIndex(index);
     // check if Rockbox is installed. If it is untick the bootloader option, as
     // well as if the selected player doesn't need a bootloader.
     if(m_blmethod == "none") {
@@ -145,6 +162,30 @@ void SelectiveInstallWidget::updateVersion(void)
         ui.bootloaderCheckbox->setChecked(!info.success());
     }
 
+    updateVoiceLangs();
+}
+
+void SelectiveInstallWidget::updateVoiceLangs()
+{
+    // populate languages for voice file.
+    QVariant current = ui.voiceCombobox->currentData();
+    QMap<QString, QVariant> langs = PlayerBuildInfo::instance()->value(
+                PlayerBuildInfo::LanguageList).toMap();
+    QStringList voicelangs = PlayerBuildInfo::instance()->value(
+                PlayerBuildInfo::BuildVoiceLangs, m_buildtype).toStringList();
+    ui.voiceCombobox->clear();
+    for(auto it = langs.begin(); it != langs.end(); it++) {
+        if(voicelangs.contains(it.key())) {
+            ui.voiceCombobox->addItem(it.value().toString(), it.key());
+            LOG_INFO() << "available voices: adding" << it.key();
+        }
+
+    }
+    // try to select the previously selected one again (if still present)
+    // TODO: Fall back to system language if not found, or english.
+    int sel = ui.voiceCombobox->findData(current);
+    if(sel >= 0)
+        ui.voiceCombobox->setCurrentIndex(sel);
 
 }
 
@@ -156,7 +197,10 @@ void SelectiveInstallWidget::saveSettings(void)
     RbSettings::setValue(RbSettings::InstallRockbox, ui.rockboxCheckbox->isChecked());
     RbSettings::setValue(RbSettings::InstallFonts, ui.fontsCheckbox->isChecked());
     RbSettings::setValue(RbSettings::InstallThemes, ui.themesCheckbox->isChecked());
-    RbSettings::setValue(RbSettings::InstallGamefiles, ui.gamefileCheckbox->isChecked());
+    RbSettings::setValue(RbSettings::InstallPluginData, ui.pluginDataCheckbox->isChecked());
+    RbSettings::setValue(RbSettings::InstallVoice, ui.voiceCheckbox->isChecked());
+    RbSettings::setValue(RbSettings::InstallManual, ui.manualCheckbox->isChecked());
+    RbSettings::setValue(RbSettings::VoiceLanguage, ui.voiceCombobox->currentData().toString());
 }
 
 
@@ -166,7 +210,7 @@ void SelectiveInstallWidget::startInstall(void)
     saveSettings();
 
     m_installStage = 0;
-    if(m_logger != NULL) delete m_logger;
+    if(m_logger != nullptr) delete m_logger;
     m_logger = new ProgressLoggerGui(this);
     QString warning = Utils::checkEnvironment(false);
     if(!warning.isEmpty())
@@ -199,7 +243,7 @@ void SelectiveInstallWidget::continueInstall(bool error)
     if(error) {
         LOG_ERROR() << "Last part returned error.";
         m_logger->setFinished();
-        m_installStage = 7;
+        m_installStage = 9;
     }
     m_installStage++;
     switch(m_installStage) {
@@ -208,12 +252,14 @@ void SelectiveInstallWidget::continueInstall(bool error)
         case 2: installRockbox(); break;
         case 3: installFonts(); break;
         case 4: installThemes(); break;
-        case 5: installGamefiles(); break;
-        case 6: installBootloaderPost(); break;
+        case 5: installPluginData(); break;
+        case 6: installVoicefile(); break;
+        case 7: installManual(); break;
+        case 8: installBootloaderPost(); break;
         default: break;
     }
 
-    if(m_installStage > 6) {
+    if(m_installStage > 8) {
         LOG_INFO() << "All install stages done.";
         m_logger->setFinished();
         if(m_blmethod != "none") {
@@ -237,8 +283,9 @@ void SelectiveInstallWidget::installBootloader(void)
         // create installer
         BootloaderInstallBase *bl =
             BootloaderInstallHelper::createBootloaderInstaller(this,
-                    SystemInfo::platformValue(SystemInfo::BootloaderMethod).toString());
-        if(bl == NULL) {
+                    PlayerBuildInfo::instance()->value(
+                        PlayerBuildInfo::BootloaderMethod).toString());
+        if(bl == nullptr) {
             m_logger->addItem(tr("No install method known."), LOGERROR);
             m_logger->setFinished();
             return;
@@ -254,15 +301,16 @@ void SelectiveInstallWidget::installBootloader(void)
         connect(m_logger, SIGNAL(aborted()), bl, SLOT(progressAborted()));
 
         // set bootloader filename. Do this now as installed() needs it.
-        QStringList blfile = SystemInfo::platformValue(SystemInfo::BootloaderFile).toStringList();
+        QStringList blfile = PlayerBuildInfo::instance()->value(
+                    PlayerBuildInfo::BootloaderFile).toStringList();
         QStringList blfilepath;
         for(int a = 0; a < blfile.size(); a++) {
             blfilepath.append(RbSettings::value(RbSettings::Mountpoint).toString()
                     + blfile.at(a));
         }
         bl->setBlFile(blfilepath);
-        QUrl url(SystemInfo::value(SystemInfo::BootloaderUrl).toString()
-                + SystemInfo::platformValue(SystemInfo::BootloaderName).toString());
+        QUrl url(PlayerBuildInfo::instance()->value(PlayerBuildInfo::BootloaderUrl).toString()
+                + PlayerBuildInfo::instance()->value(PlayerBuildInfo::BootloaderName).toString());
         bl->setBlUrl(url);
         bl->setLogfile(RbSettings::value(RbSettings::Mountpoint).toString()
                 + "/.rockbox/rbutil.log");
@@ -282,7 +330,8 @@ void SelectiveInstallWidget::installBootloader(void)
         else if(bl->installed() == BootloaderInstallBase::BootloaderOther
                 && bl->capabilities() & BootloaderInstallBase::Backup)
         {
-            QString targetFolder = SystemInfo::platformValue(SystemInfo::PlatformName).toString()
+            QString targetFolder = PlayerBuildInfo::instance()->value(
+                        PlayerBuildInfo::DisplayName).toString()
                 + " Firmware Backup";
             // remove invalid character(s)
             targetFolder.remove(QRegExp("[:/]"));
@@ -319,7 +368,7 @@ void SelectiveInstallWidget::installBootloader(void)
             // open dialog to browse to of file
             QString offile;
             QString filter
-                = SystemInfo::platformValue(SystemInfo::BootloaderFilter).toString();
+                = PlayerBuildInfo::instance()->value(PlayerBuildInfo::BootloaderFilter).toString();
             if(!filter.isEmpty()) {
                 filter = tr("Bootloader files (%1)").arg(filter) + ";;";
             }
@@ -381,25 +430,20 @@ void SelectiveInstallWidget::installRockbox(void)
         LOG_INFO() << "installing Rockbox";
         QString url;
 
-        QString selected = ui.selectedVersion->itemData(ui.selectedVersion->currentIndex()).toString();
-        RbSettings::setValue(RbSettings::Build, selected);
+        RbSettings::setValue(RbSettings::Build, m_buildtype);
         RbSettings::sync();
 
-        if(selected == "release") url = ServerInfo::platformValue(
-                ServerInfo::CurReleaseUrl, m_target).toString();
-        else if(selected == "development") url = ServerInfo::platformValue(
-                ServerInfo::CurDevelUrl, m_target).toString();
-        else if(selected == "rc") url = ServerInfo::platformValue(
-                ServerInfo::RelCandidateUrl, m_target).toString();
-
+        url = PlayerBuildInfo::instance()->value(
+                    PlayerBuildInfo::BuildUrl, m_buildtype).toString();
         //! install build
-        if(m_zipinstaller != NULL) m_zipinstaller->deleteLater();
+        if(m_zipinstaller != nullptr) m_zipinstaller->deleteLater();
         m_zipinstaller = new ZipInstaller(this);
         m_zipinstaller->setUrl(url);
         m_zipinstaller->setLogSection("Rockbox (Base)");
         if(!RbSettings::value(RbSettings::CacheDisabled).toBool())
             m_zipinstaller->setCache(true);
-        m_zipinstaller->setLogVersion(m_versions[selected]);
+        m_zipinstaller->setLogVersion(PlayerBuildInfo::instance()->value(
+                PlayerBuildInfo::BuildVersion, m_buildtype).toString());
         m_zipinstaller->setMountPoint(m_mountpoint);
 
         connect(m_zipinstaller, SIGNAL(done(bool)), this, SLOT(continueInstall(bool)));
@@ -422,35 +466,33 @@ void SelectiveInstallWidget::installFonts(void)
     if(ui.fontsCheckbox->isChecked()) {
         LOG_INFO() << "installing Fonts";
 
-    RockboxInfo installInfo(m_mountpoint);
-    QString fontsurl;
-    QString logversion;
-    QString relversion = installInfo.release();
-    if(relversion.isEmpty()) {
-        // release is empty for non-release versions (i.e. daily / current)
-        fontsurl = SystemInfo::value(SystemInfo::DailyFontUrl).toString();
-    }
-    else {
-        fontsurl = SystemInfo::value(SystemInfo::ReleaseFontUrl).toString();
-        logversion = installInfo.release();
-    }
-    fontsurl.replace("%RELEASEVER%", relversion);
+        RockboxInfo installInfo(m_mountpoint);
+        QString fontsurl;
+        QString logversion;
+        QString relversion = installInfo.release();
+        if(!relversion.isEmpty()) {
+            // release is empty for non-release versions (i.e. daily / current)
+            logversion = installInfo.release();
+        }
+        fontsurl = PlayerBuildInfo::instance()->value(
+                        PlayerBuildInfo::BuildFontUrl, m_buildtype).toString();
+        fontsurl.replace("%RELVERSION%", relversion);
 
-    // create new zip installer
-    if(m_zipinstaller != NULL) m_zipinstaller->deleteLater();
-    m_zipinstaller = new ZipInstaller(this);
-    m_zipinstaller->setUrl(fontsurl);
-    m_zipinstaller->setLogSection("Fonts");
-    m_zipinstaller->setLogVersion(logversion);
-    m_zipinstaller->setMountPoint(m_mountpoint);
-    if(!RbSettings::value(RbSettings::CacheDisabled).toBool())
-        m_zipinstaller->setCache(true);
+        // create new zip installer
+        if(m_zipinstaller != nullptr) m_zipinstaller->deleteLater();
+        m_zipinstaller = new ZipInstaller(this);
+        m_zipinstaller->setUrl(fontsurl);
+        m_zipinstaller->setLogSection("Fonts");
+        m_zipinstaller->setLogVersion(logversion);
+        m_zipinstaller->setMountPoint(m_mountpoint);
+        if(!RbSettings::value(RbSettings::CacheDisabled).toBool())
+            m_zipinstaller->setCache(true);
 
-    connect(m_zipinstaller, SIGNAL(done(bool)), this, SLOT(continueInstall(bool)));
-    connect(m_zipinstaller, SIGNAL(logItem(QString, int)), m_logger, SLOT(addItem(QString, int)));
-    connect(m_zipinstaller, SIGNAL(logProgress(int, int)), m_logger, SLOT(setProgress(int, int)));
-    connect(m_logger, SIGNAL(aborted()), m_zipinstaller, SLOT(abort()));
-    m_zipinstaller->install();
+        connect(m_zipinstaller, SIGNAL(done(bool)), this, SLOT(continueInstall(bool)));
+        connect(m_zipinstaller, SIGNAL(logItem(QString, int)), m_logger, SLOT(addItem(QString, int)));
+        connect(m_zipinstaller, SIGNAL(logProgress(int, int)), m_logger, SLOT(setProgress(int, int)));
+        connect(m_logger, SIGNAL(aborted()), m_zipinstaller, SLOT(abort()));
+        m_zipinstaller->install();
     }
     else {
         LOG_INFO() << "Fonts install disabled.";
@@ -458,9 +500,95 @@ void SelectiveInstallWidget::installFonts(void)
     }
 }
 
+void SelectiveInstallWidget::installVoicefile(void)
+{
+    if(ui.voiceCheckbox->isChecked() && ui.voiceCheckbox->isEnabled()) {
+        LOG_INFO() << "installing Voice file";
+        QString lang = ui.voiceCombobox->currentData().toString();
+
+        RockboxInfo installInfo(m_mountpoint);
+        QString voiceurl;
+        QString logversion;
+        QString relversion = installInfo.release();
+        if(m_buildtype != PlayerBuildInfo::TypeRelease) {
+            // release is empty for non-release versions (i.e. daily / current)
+            logversion = installInfo.release();
+        }
+        voiceurl = PlayerBuildInfo::instance()->value(
+                        PlayerBuildInfo::BuildVoiceUrl, m_buildtype).toString();
+        voiceurl.replace("%LANGUAGE%", lang);
+
+        // create new zip installer
+        if(m_zipinstaller != nullptr) m_zipinstaller->deleteLater();
+        m_zipinstaller = new ZipInstaller(this);
+        m_zipinstaller->setUrl(voiceurl);
+        m_zipinstaller->setLogSection("Prerendered Voice (" + lang + ")");
+        m_zipinstaller->setLogVersion(logversion);
+        m_zipinstaller->setMountPoint(m_mountpoint);
+        if(!RbSettings::value(RbSettings::CacheDisabled).toBool())
+            m_zipinstaller->setCache(true);
+
+        connect(m_zipinstaller, SIGNAL(done(bool)), this, SLOT(continueInstall(bool)));
+        connect(m_zipinstaller, SIGNAL(logItem(QString, int)), m_logger, SLOT(addItem(QString, int)));
+        connect(m_zipinstaller, SIGNAL(logProgress(int, int)), m_logger, SLOT(setProgress(int, int)));
+        connect(m_logger, SIGNAL(aborted()), m_zipinstaller, SLOT(abort()));
+        m_zipinstaller->install();
+    }
+    else {
+        LOG_INFO() << "Voice install disabled.";
+        emit installSkipped(false);
+    }
+}
+
+void SelectiveInstallWidget::installManual(void)
+{
+    if(ui.manualCheckbox->isChecked() && ui.manualCheckbox->isEnabled()) {
+        LOG_INFO() << "installing Manual";
+        QString mantype = ui.manualCombobox->currentData().toString();
+
+        RockboxInfo installInfo(m_mountpoint);
+        QString manualurl;
+        QString logversion;
+        QString relversion = installInfo.release();
+        if(m_buildtype != PlayerBuildInfo::TypeRelease) {
+            // release is empty for non-release versions (i.e. daily / current)
+            logversion = installInfo.release();
+        }
+
+        manualurl = PlayerBuildInfo::instance()->value(
+                        PlayerBuildInfo::BuildManualUrl, m_buildtype).toString();
+        if(mantype == "pdf")
+            manualurl.replace("%FORMAT%", ".pdf");
+        else
+            manualurl.replace("%FORMAT%", "-html.zip");
+
+        // create new zip installer
+        if(m_zipinstaller != nullptr) m_zipinstaller->deleteLater();
+        m_zipinstaller = new ZipInstaller(this);
+        m_zipinstaller->setUrl(manualurl);
+        m_zipinstaller->setLogSection("Manual (" + mantype + ")");
+        m_zipinstaller->setLogVersion(logversion);
+        m_zipinstaller->setMountPoint(m_mountpoint);
+        if(!RbSettings::value(RbSettings::CacheDisabled).toBool())
+            m_zipinstaller->setCache(true);
+        // if type is html extract it.
+        m_zipinstaller->setUnzip(mantype == "html");
+
+        connect(m_zipinstaller, SIGNAL(done(bool)), this, SLOT(continueInstall(bool)));
+        connect(m_zipinstaller, SIGNAL(logItem(QString, int)), m_logger, SLOT(addItem(QString, int)));
+        connect(m_zipinstaller, SIGNAL(logProgress(int, int)), m_logger, SLOT(setProgress(int, int)));
+        connect(m_logger, SIGNAL(aborted()), m_zipinstaller, SLOT(abort()));
+        m_zipinstaller->install();
+    }
+    else {
+        LOG_INFO() << "Manual install disabled.";
+        emit installSkipped(false);
+    }
+}
+
 void SelectiveInstallWidget::customizeThemes(void)
 {
-    if(m_themesinstaller == NULL)
+    if(m_themesinstaller == nullptr)
         m_themesinstaller = new ThemesInstallWindow(this);
 
     m_themesinstaller->setSelectOnly(true);
@@ -472,7 +600,7 @@ void SelectiveInstallWidget::installThemes(void)
 {
     if(ui.themesCheckbox->isChecked()) {
         LOG_INFO() << "installing themes";
-        if(m_themesinstaller == NULL)
+        if(m_themesinstaller == nullptr)
             m_themesinstaller = new ThemesInstallWindow(this);
 
         connect(m_themesinstaller, SIGNAL(done(bool)), this, SLOT(continueInstall(bool)));
@@ -487,50 +615,56 @@ void SelectiveInstallWidget::installThemes(void)
 }
 
 static const struct {
-    const char *name;
-    const char *pluginpath;
-    SystemInfo::SystemInfos zipurl; // add new games to SystemInfo
-} GamesList[] = {
-    { "Doom",          "/.rockbox/rocks/games/doom.rock",         SystemInfo::DoomUrl      },
-    { "Duke3D",        "/.rockbox/rocks/games/duke3d.rock",       SystemInfo::Duke3DUrl    },
-    { "Quake",         "/.rockbox/rocks/games/quake.rock",        SystemInfo::QuakeUrl     },
-    { "Puzzles fonts", "/.rockbox/rocks/games/sgt-blackbox.rock", SystemInfo::PuzzFontsUrl },
-    { "Wolf3D",        "/.rockbox/rocks/games/wolf3d.rock",       SystemInfo::Wolf3DUrl    },
-    { "XWorld",        "/.rockbox/rocks/games/xworld.rock",       SystemInfo::XWorldUrl    },
+    const char *name;                   // display name
+    const char *rockfile;               // rock file to look for
+    PlayerBuildInfo::BuildInfo zipurl;  // download url
+} PluginDataFiles[] = {
+    { "Doom",          "games/doom.rock",         PlayerBuildInfo::DoomUrl      },
+    { "Duke3D",        "games/duke3d.rock",       PlayerBuildInfo::Duke3DUrl    },
+    { "Quake",         "games/quake.rock",        PlayerBuildInfo::QuakeUrl     },
+    { "Puzzles fonts", "games/sgt-blackbox.rock", PlayerBuildInfo::PuzzFontsUrl },
+    { "Wolf3D",        "games/wolf3d.rock",       PlayerBuildInfo::Wolf3DUrl    },
+    { "XWorld",        "games/xworld.rock",       PlayerBuildInfo::XWorldUrl    },
+    { "MIDI Patchset", "viewers/midi.rock",       PlayerBuildInfo::MidiPatchsetUrl },
 };
 
-void SelectiveInstallWidget::installGamefiles(void)
+void SelectiveInstallWidget::installPluginData(void)
 {
-    if(ui.gamefileCheckbox->isChecked()) {
+    if(ui.pluginDataCheckbox->isChecked()) {
         // build a list of zip urls that we need, then install
-        QStringList gameUrls;
-        QStringList gameNames;
+        QStringList dataUrls;
+        QStringList dataName;
 
-        for(unsigned int i = 0; i < sizeof(GamesList) / sizeof(GamesList[0]); i++)
+        for(size_t i = 0; i < sizeof(PluginDataFiles) / sizeof(PluginDataFiles[0]); i++)
         {
             // check if installed Rockbox has this plugin.
-            if(QFileInfo(m_mountpoint + GamesList[i].pluginpath).exists()) {
-                gameNames.append(GamesList[i].name);
-                gameUrls.append(SystemInfo::value(GamesList[i].zipurl).toString());
-                LOG_INFO() << gameUrls.at(gameUrls.size() - 1);
+            if(QFileInfo(m_mountpoint + "/.rockbox/rocks/" + PluginDataFiles[i].rockfile).exists()) {
+                dataName.append(PluginDataFiles[i].name);
+                // game URLs do not depend on the actual build type, but we need
+                // to pass it (simplifies the API, and will allow to make them
+                // type specific later if needed)
+                dataUrls.append(PlayerBuildInfo::instance()->value(
+                                    PluginDataFiles[i].zipurl, m_buildtype).toString());
             }
         }
 
-        if(gameUrls.size() == 0)
+        if(dataUrls.size() == 0)
         {
-            m_logger->addItem(tr("Your installation doesn't require any game files, skipping."), LOGINFO);
+            m_logger->addItem(
+                    tr("Your installation doesn't require any plugin data files, skipping."),
+                    LOGINFO);
             emit installSkipped(false);
             return;
         }
 
-        LOG_INFO() << "installing gamefiles";
+        LOG_INFO() << "installing plugin data files";
 
         // create new zip installer
-        if(m_zipinstaller != NULL) m_zipinstaller->deleteLater();
+        if(m_zipinstaller != nullptr) m_zipinstaller->deleteLater();
         m_zipinstaller = new ZipInstaller(this);
 
-        m_zipinstaller->setUrl(gameUrls);
-        m_zipinstaller->setLogSection(gameNames);
+        m_zipinstaller->setUrl(dataUrls);
+        m_zipinstaller->setLogSection(dataName);
         m_zipinstaller->setLogVersion();
         m_zipinstaller->setMountPoint(m_mountpoint);
         if(!RbSettings::value(RbSettings::CacheDisabled).toBool())

@@ -41,7 +41,7 @@ iriver_h1x0.c
 iriver_h300.c
 #elif defined(MROBE_500)
 mrobe500.c
-#elif defined(CPU_TCC77X) || defined(CPU_TCC780X)
+#elif defined(CPU_TCC780X)
 telechips.c
 show_logo.c
 #elif defined(MEIZU_M6SL)
@@ -78,7 +78,7 @@ show_logo.c
 mpio_hd200_hd300.c
 #elif defined(SONY_NWZ_LINUX)
 nwz_linux.c
-#elif defined(HIBY_LINUX) || defined(FIIO_M3K)
+#elif defined(HIBY_LINUX) || defined(FIIO_M3K_LINUX)
 rocker_linux.c
 #elif defined(RK27_GENERIC) || defined(HM60X) || defined(HM801) \
       || defined(MA9) || defined(MA9C) || defined(MA8) || defined(MA8C) \
@@ -89,4 +89,6 @@ show_logo.c
 #elif defined(SANSA_CONNECT)
 sansaconnect.c
 show_logo.c
+#elif defined(FIIO_M3K)
+fiiom3k.c
 #endif

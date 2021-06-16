@@ -62,16 +62,6 @@
 #define CUBE_HIGHSPEED_PRE BUTTON_SELECT
 #define CUBE_HIGHSPEED     (BUTTON_SELECT | BUTTON_REL)
 
-#elif CONFIG_KEYPAD == IRIVER_IFP7XX_PAD
-#define CUBE_QUIT          BUTTON_PLAY
-#define CUBE_NEXT          BUTTON_RIGHT
-#define CUBE_PREV          BUTTON_LEFT
-#define CUBE_INC           BUTTON_UP
-#define CUBE_DEC           BUTTON_DOWN
-#define CUBE_MODE          BUTTON_MODE
-#define CUBE_PAUSE         BUTTON_SELECT
-#define CUBE_HIGHSPEED     BUTTON_EQ
-
 #elif (CONFIG_KEYPAD == IAUDIO_X5M5_PAD)
 #define CUBE_QUIT          BUTTON_POWER
 #define CUBE_NEXT          BUTTON_RIGHT
@@ -170,16 +160,6 @@
 
 #elif CONFIG_KEYPAD == COWON_D2_PAD
 #define CUBE_QUIT          BUTTON_POWER
-
-#elif (CONFIG_KEYPAD == IAUDIO67_PAD)
-#define CUBE_QUIT          BUTTON_POWER
-#define CUBE_NEXT          BUTTON_RIGHT
-#define CUBE_PREV          BUTTON_LEFT
-#define CUBE_INC           BUTTON_VOLUP
-#define CUBE_DEC           BUTTON_VOLDOWN
-#define CUBE_MODE          BUTTON_MENU
-#define CUBE_PAUSE         BUTTON_PLAY
-#define CUBE_HIGHSPEED     BUTTON_STOP
 
 #elif CONFIG_KEYPAD == CREATIVEZVM_PAD
 #define CUBE_QUIT          BUTTON_BACK
@@ -380,7 +360,7 @@
 #define CUBE_PAUSE         BUTTON_HOME
 #define CUBE_HIGHSPEED     BUTTON_PLAY
 
-#elif (CONFIG_KEYPAD == FIIO_M3K_PAD)
+#elif (CONFIG_KEYPAD == FIIO_M3K_LINUX_PAD)
 #define CUBE_QUIT          BUTTON_POWER
 #define CUBE_NEXT          BUTTON_NEXT
 #define CUBE_PREV          BUTTON_PREV
@@ -409,6 +389,16 @@
 #define CUBE_MODE          BUTTON_MENU
 #define CUBE_PAUSE         BUTTON_BACK
 #define CUBE_HIGHSPEED     BUTTON_PLAY
+
+#elif CONFIG_KEYPAD == FIIO_M3K_PAD
+#define CUBE_QUIT           BUTTON_POWER
+#define CUBE_NEXT           BUTTON_RIGHT
+#define CUBE_PREV           BUTTON_LEFT
+#define CUBE_INC            BUTTON_SCROLL_FWD
+#define CUBE_DEC            BUTTON_SCROLL_BACK
+#define CUBE_MODE           BUTTON_MENU
+#define CUBE_PAUSE          BUTTON_PLAY
+#define CUBE_HIGHSPEED      BUTTON_BACK
 
 #else
 #error No keymap defined!
