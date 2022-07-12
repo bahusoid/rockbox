@@ -171,6 +171,25 @@ static int skintouch_to_wps(void)
 {
     int offset = 0;
     struct gui_wps *gwps = skin_get_gwps(WPS, SCREEN_MAIN);
+
+    struct gesture_event gevent;
+    if (action_gesture_get_event(&gevent))
+    {
+        switch (gesture_flick_get(&gevent))
+        {
+        case GESTURE_FLICK_TOP:
+            return ACTION_WPS_QUICKSCREEN;
+        case GESTURE_FLICK_LEFT:
+            return ACTION_WPS_BROWSE;
+        case GESTURE_FLICK_RIGHT:
+            return ACTION_WPS_VIEW_PLAYLIST;
+        case GESTURE_FLICK_BOTTOM:
+            return ACTION_WPS_CONTEXT;
+        default:
+            break;
+        }
+    }
+
     int button = skin_get_touchaction(gwps, &offset);
     switch (button)
     {
