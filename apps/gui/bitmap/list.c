@@ -713,6 +713,22 @@ static int get_click_location(struct gui_synclist *list, int x, int y)
     return retval;
 }
 
+
+static int list_do_flick(const struct gesture_event *gevent)
+{
+    switch (gesture_flick_get(gevent))
+    {
+    case GESTURE_FLICK_TOP:
+        return ACTION_STD_QUICKSCREEN;
+    case GESTURE_FLICK_LEFT:
+        return ACTION_STD_CANCEL;
+    case GESTURE_FLICK_RIGHT:
+        return ACTION_TREE_WPS;
+    default:
+        return ACTION_NONE;
+    }
+}
+
 unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
 {
     struct touchevent tevent;
@@ -813,6 +829,13 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
 
     case GESTURE_DRAG:
         gesture_vel_process(&list_gvel, &tevent);
+
+        action = list_do_flick(&gevent);
+        if (action != ACTION_NONE)
+        {
+            action_gesture_reset();
+            break;
+        }
 
         if (list->scroll_mode == SCROLL_NONE)
         {
