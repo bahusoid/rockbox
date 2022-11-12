@@ -490,27 +490,6 @@ build() {
     # kludge to avoid having to install GMP, MPFR, MPC and ISL
     if test -n "$needs_libs"; then
         cd "$toolname-$version"
-        if (echo $needs_libs | grep -q gmp && test ! -d gmp); then
-            echo "ROCKBOXDEV: Getting GMP"
-            getfile "gmp-6.1.2.tar.bz2" "$GNU_MIRROR/gmp"
-            tar xjf $dlwhere/gmp-6.1.2.tar.bz2
-            ln -s gmp-6.1.2 gmp
-        fi
-
-        if (echo $needs_libs | grep -q mpfr && test ! -d mpfr); then
-            echo "ROCKBOXDEV: Getting MPFR"
-            getfile "mpfr-4.1.1.tar.xz" "$GNU_MIRROR/mpfr"
-            tar xJf $dlwhere/mpfr-4.1.1.tar.xz
-            ln -s mpfr-4.1.1 mpfr
-        fi
-
-        if (echo $needs_libs | grep -q mpc && test ! -d mpc); then
-            echo "ROCKBOXDEV: Getting MPC"
-            getfile "mpc-1.2.1.tar.gz" "$GNU_MIRROR/mpc"
-            tar xzf $dlwhere/mpc-1.2.1.tar.gz
-            ln -s mpc-1.2.1 mpc
-        fi
-
         if (echo $needs_libs | grep -q isl && test ! -d isl); then
             echo "ROCKBOXDEV: Getting ISL"
             getfile "isl-0.18.tar.bz2" "https://gcc.gnu.org/pub/gcc/infrastructure"
