@@ -1,0 +1,50 @@
+name: Rockbox build
+on: [workflow_dispatch, push, pull_request]
+ 
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Rocker
+            # Other arch targets https://github.com/bahusoid/rockbox/blob/992dfe0118f367533fe23170b1459c2818a629a1/tools/rockboxdev.sh#L697-L701
+            arch: y
+            # Other platform targets https://github.com/Rockbox/rockbox/blob/dd1fbd51fc7bb3fa7237b3bc34335e99bef29e35/tools/configure#L1560-L1615
+            platform: 240
+
+          - name: clipZip
+            arch: a
+            platform: 65
+
+    runs-on: ubuntu-latest
+    name: ${{matrix.name}}
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: make it all
+      run: |
+        sudo apt-get install automake bison build-essential ccache flex libc6-dev libgmp3-dev libmpfr-dev libsdl1.2-dev libtool-bin texinfo zip gawk wget libmpc-dev gettext
+        cd tools
+        chmod +x rockboxdev.sh
+        sudo ./rockboxdev.sh --target=${{matrix.arch}}
+        cd ..
+        mkdir build
+        cd build
+        ../tools/configure --target=${{matrix.platform}} --type=N
+        make -j
+        make zip
+      
+    - name: Upload build
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{matrix.name}}.zip
+        path: build/rockbox.zip
+    
+    - name: Upload log
+      uses: actions/upload-artifact@v3
+      if: failure()
+      with:
+        name: ${{matrix.name}}Logs
+        path: /tmp/rbdev-build/*.log
