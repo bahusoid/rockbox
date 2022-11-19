@@ -282,59 +282,125 @@ static unsigned long toc_get_time_interpolated(unsigned long pos)
     return toc_interpolate(pos, pos_a, pos_b, time_a, time_b);
 }
 
-static int get_file_pos(int newtime)
+static bool get_file_pos(unsigned long newtime, unsigned long *pos)
 {
-    int pos = -1;
     struct mp3entry *id3 = ci->id3;
 
     if (id3->vbr) {
         if (id3->has_toc) {
-            pos = toc_get_pos_interpolated(newtime);
+            *pos = toc_get_pos_interpolated(newtime);
         } else {
             /* No TOC exists, estimate the new position */
-            pos = (uint64_t)newtime * id3->filesize / id3->length;
+            *pos = (uint64_t)newtime * id3->filesize / id3->length;
         }
     } else if (id3->bitrate) {
-        pos = newtime * (id3->bitrate / 8);
+        *pos = newtime * (id3->bitrate / 8);
     } else {
-        return -1;
+        /* Seek not possible... is this really a thing? */
+        return false;
     }
 
     /* Don't seek right to the end of the file so that we can
        transition properly to the next song */
-    if (pos >= (int)(id3->filesize - id3->id3v1len))
-        pos = id3->filesize - id3->id3v1len - 1;
+    if (*pos >= id3->filesize - id3->id3v1len)
+        *pos = id3->filesize - id3->id3v1len - 1;
 
     /* id3->filesize excludes id3->first_frame_offset, so add it now */
-    pos += id3->first_frame_offset;
-
-    return pos;
+    *pos += id3->first_frame_offset;
+    return true;
 }
 
-static void set_elapsed(struct mp3entry* id3)
+static bool get_elapsed(unsigned long offset, unsigned long *elapsed)
 {
-    unsigned long offset = id3->offset > id3->first_frame_offset ?
-        id3->offset - id3->first_frame_offset : 0;
-    unsigned long elapsed = id3->elapsed;
+    struct mp3entry *id3 = ci->id3;
+
+    if (offset > id3->first_frame_offset)
+        offset -= id3->first_frame_offset;
+    else
+        offset = 0;
 
     if ( id3->vbr ) {
         if ( id3->has_toc ) {
-            elapsed = toc_get_time_interpolated(offset);
-        } else {
-            /* No TOC, use an approximation (this'll be wildly inaccurate) */
-            uint64_t data_size = id3->filesize -
-                                 id3->first_frame_offset - id3->id3v1len;
-            elapsed = (uint64_t)id3->length * offset / data_size;
+            *elapsed = toc_get_time_interpolated(offset);
+            return true;
         }
-    }
-    else
-    {
-        /* constant bitrate, use exact calculation */
-        if (id3->bitrate != 0)
-            elapsed = offset / (id3->bitrate / 8);
+
+        /* No TOC, use an approximation (this'll be wildly inaccurate) */
+        uint64_t data_size = id3->filesize -
+                             id3->first_frame_offset - id3->id3v1len;
+        *elapsed = id3->length * offset / data_size;
+        return true;
     }
 
-    ci->set_elapsed(elapsed);
+    if (id3->bitrate != 0) {
+        *elapsed = offset / (id3->bitrate / 8);
+        return true;
+    }
+
+    return false;
+}
+
+static bool mpa_seek_asf(unsigned long time, unsigned long offset)
+{
+    struct mp3entry *id3 = ci->id3;
+    asf_waveformatex_t *wfx = (asf_waveformatex_t *)id3->toc;
+    int result = -1;
+
+    if (offset) {
+        /* Align offset down to a packet boundary */
+        unsigned long offset = id3->offset > id3->first_frame_offset ?
+                               id3->offset - id3->first_frame_offset : 0;
+        offset -= offset % wfx->packet_size;
+        if (!ci->seek_buffer(offset))
+            return false;
+
+        /* Read the timestamp of the packet at this offset */
+        int duration;
+        result = asf_get_timestamp(&duration);
+    }
+
+    /* Seek to desired time */
+    if (time)
+        result = asf_seek(time, wfx);
+
+    /* No timestamp available? */
+    if (result <= 0)
+        return false;
+
+    /* Update elapsed time to the current packet timestamp. */
+    ci->set_elapsed(result);
+    reset_stream_buffer();
+    return true;
+}
+
+static bool mpa_seek(unsigned long time, unsigned long offset)
+{
+    struct mp3entry *id3 = ci->id3;
+
+    if (id3->is_asf_stream)
+        return mpa_seek_asf(time, offset);
+
+    /* MP3 doesn't natively support accurate time-based seeks.
+     * If the offset isn't provided, we need to compute it. */
+    if (!offset) {
+        if (!time)
+            return false;
+        if (!get_file_pos(time, &offset))
+            return false;
+    }
+
+    if (!ci->seek_buffer(offset))
+        return false;
+
+    /* Update the elapsed time based on the offset we seeked to.
+     * While not terribly accurate, this ensures the elapsed time
+     * cannot accumulate errors indefinitely. */
+    unsigned long newtime;
+    if (!get_elapsed(offset, &newtime))
+        newtime = time;
+
+    ci->set_elapsed(newtime);
+    return true;
 }
 
 #ifdef MPA_SYNTH_ON_COP
@@ -462,35 +528,6 @@ enum codec_status codec_main(enum codec_entry_call_reason reason)
     return CODEC_OK;
 }
 
-bool seek_by_time(int64_t* samplesdone, unsigned long current_frequency, unsigned long elapsed_ms)
-{
-    if (ci->id3->is_asf_stream) {
-        asf_waveformatex_t *wfx = (asf_waveformatex_t *)(ci->id3->toc);
-        int elapsedtime = asf_seek(elapsed_ms, wfx);
-
-        *samplesdone = (elapsedtime > 0) ?
-                       (((int64_t)elapsedtime)*current_frequency/1000) : 0;
-
-        if (elapsedtime < 1) {
-            ci->set_elapsed(0);
-            return false;
-        } else {
-            ci->set_elapsed(elapsedtime);
-            reset_stream_buffer();
-        }
-    } else {
-        int newpos = elapsed_ms ? get_file_pos(elapsed_ms) : (int)(ci->id3->first_frame_offset);
-
-        *samplesdone = ((int64_t)elapsed_ms) * current_frequency / 1000;
-
-        if (!ci->seek_buffer(newpos))
-            return false;
-
-        ci->set_elapsed((*samplesdone * 1000LL) / current_frequency);
-    }
-    return true;
-}
-
 /* this is called for each file to process */
 enum codec_status codec_run(void)
 {
@@ -498,10 +535,11 @@ enum codec_status codec_run(void)
     int file_end;
     int samples_to_skip; /* samples to skip in total for this file (at start) */
     char *inputbuffer;
-    int64_t samplesdone;
     int stop_skip, start_skip;
     int current_stereo_mode = -1;
     unsigned long current_frequency = 0;
+    unsigned long elapsed_base;
+    unsigned long samples_done;
     int framelength;
     int padding = MAD_BUFFER_GUARD; /* to help mad decode the last frame */
     intptr_t param;
@@ -515,26 +553,9 @@ enum codec_status codec_run(void)
     current_frequency = ci->id3->frequency;
     codec_set_replaygain(ci->id3);
 
-     if (ci->id3->offset) {
-
-        if (ci->id3->is_asf_stream) {
-            asf_waveformatex_t *wfx = (asf_waveformatex_t *)(ci->id3->toc);
-            int packet_offset = ((ci->id3->offset > ci->id3->first_frame_offset) ?
-                                 (ci->id3->offset - ci->id3->first_frame_offset) : 0)
-              % wfx->packet_size;
-            ci->seek_buffer(ci->id3->offset - packet_offset);
-            ci->id3->elapsed = asf_get_timestamp(&packet_offset);
-            ci->set_elapsed(ci->id3->elapsed);
-        }
-        else {
-            ci->seek_buffer(ci->id3->offset);
-            set_elapsed(ci->id3);
-        }
-    }
-    else if (ci->id3->elapsed)
-         /* Have elapsed time but not offset */
-        seek_by_time(&samplesdone, current_frequency, ci->id3->elapsed);
-    else
+    /* Perform a seek to the resume point; if this fails,
+     * start from the first frame. */
+    if(!mpa_seek(ci->id3->elapsed, ci->id3->offset))
         ci->seek_buffer(ci->id3->first_frame_offset);
 
     if (ci->id3->lead_trim >= 0 && ci->id3->tail_trim >= 0) {
@@ -559,10 +580,8 @@ enum codec_status codec_run(void)
         padding = MAD_BUFFER_GUARD;
     }
 
-    samplesdone = ((int64_t)ci->id3->elapsed) * current_frequency / 1000;
-
     /* Don't skip any samples unless we start at the beginning. */
-    if (samplesdone > 0)
+    if (ci->id3->elapsed > 0)
         samples_to_skip = 0;
     else
         samples_to_skip = start_skip;
@@ -570,6 +589,9 @@ enum codec_status codec_run(void)
     if (ci->id3->is_asf_stream)
         reset_stream_buffer();
     framelength = 0;
+
+    elapsed_base = ci->id3->elapsed;
+    samples_done = 0;
 
     /* This is the decoding loop. */
     while (1) {
@@ -583,14 +605,16 @@ enum codec_status codec_run(void)
             mad_synth_thread_wait_pcm();
             mad_synth_thread_unwait_pcm();
 
-            if (param == 0) {
+            if (param == 0)
                 samples_to_skip = start_skip;
-            } else {
+            else
                 samples_to_skip = 0;
-            }
 
-            bool success = seek_by_time(&samplesdone, current_frequency, param);
+            bool success = mpa_seek(param, 0);
+            elapsed_base = ci->id3->elapsed;
+            samples_done = 0;
             ci->seek_complete();
+
             if (!success)
                 break;
 
@@ -654,6 +678,8 @@ enum codec_status codec_run(void)
 
         /* Check if sample rate and stereo settings changed in this frame. */
         if (frame.header.samplerate != current_frequency) {
+            elapsed_base = ci->id3->elapsed;
+            samples_done = 0;
             current_frequency = frame.header.samplerate;
             ci->configure(DSP_SET_FREQUENCY, current_frequency);
         }
@@ -682,8 +708,8 @@ enum codec_status codec_run(void)
             samples_to_skip -= synth.pcm.length;
         }
 
-        samplesdone += framelength;
-        ci->set_elapsed((samplesdone * 1000LL) / current_frequency);
+        samples_done += framelength;
+        ci->set_elapsed(elapsed_base + (uint64_t)samples_done * 1000ull / current_frequency);
     }
 
     /* wait for synth idle - MT only*/
