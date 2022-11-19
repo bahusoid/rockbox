@@ -26,6 +26,11 @@
 
 CODEC_HEADER
 
+/* WIP flag to enable accurate seeking
+ * This should probably be disabled automatically if seeking
+ * takes an inordinately long time. */
+static const bool accurate_seek = true;
+
 #if NUM_CORES > 1 && !defined(MPEGPLAYER)
 #define MPA_SYNTH_ON_COP
 #endif
@@ -262,6 +267,9 @@ static unsigned long toc_get_pos_interpolated(unsigned long time)
     unsigned long time_a, time_b;
     toc_get_interpolation_points(percent, &pos_a, &pos_b, &time_a, &time_b);
 
+    if (accurate_seek)
+        return pos_a;
+
     return toc_interpolate(time, time_a, time_b, pos_a, pos_b);
 }
 
@@ -279,6 +287,9 @@ static unsigned long toc_get_time_interpolated(unsigned long pos)
     unsigned long time_a, time_b;
     toc_get_interpolation_points(percent, &pos_a, &pos_b, &time_a, &time_b);
 
+    if (accurate_seek)
+        return time_a;
+
     return toc_interpolate(pos, pos_a, pos_b, time_a, time_b);
 }
 
@@ -290,6 +301,9 @@ static unsigned long get_file_pos(unsigned long newtime)
     if (id3->vbr) {
         if (id3->has_toc) {
             pos = toc_get_pos_interpolated(newtime);
+        } else if (accurate_seek) {
+            /* Need to decode from the start of the file(!) */
+            pos = 0;
         } else {
             /* No TOC exists, estimate the new position */
             pos = (uint64_t)newtime * id3->filesize / id3->length;
@@ -304,7 +318,12 @@ static unsigned long get_file_pos(unsigned long newtime)
             pos = curpos - delta * id3->filesize / id3->length;
         }
     } else if (id3->bitrate) {
-        pos = newtime * (id3->bitrate / 8);
+        /* The calculation isn't always accurate for CBR because
+         * frames can still be variable length due to padding. */
+        if (accurate_seek)
+            pos = 0;
+        else
+            pos = newtime * (id3->bitrate / 8);
     } else {
         /* Seek not possible... is this really a thing? */
         pos = 0;
@@ -397,6 +416,12 @@ static bool mpa_seek(unsigned long time, unsigned long offset)
             return false;
 
         offset = get_file_pos(time);
+
+        /* If seeking forward and the offset is below our current
+         * offset, it's cheaper to start from the current position. */
+        if (accurate_seek &&
+            time >= ci->id3->elapsed && offset < ci->id3->offset)
+            return true;
     }
 
     if (!ci->seek_buffer(offset))
@@ -546,27 +571,38 @@ enum codec_status codec_run(void)
     int samples_to_skip; /* samples to skip in total for this file (at start) */
     char *inputbuffer;
     int stop_skip, start_skip;
-    int current_stereo_mode = -1;
-    unsigned long current_frequency = 0;
+    int current_stereo_mode = -1, applied_stereo_mode = -1;
+    unsigned long current_frequency = 0, applied_frequency = 0;
     unsigned long elapsed_base;
     unsigned long samples_done;
+    unsigned long cur_time, seek_time;
     int framelength;
     int padding = MAD_BUFFER_GUARD; /* to help mad decode the last frame */
     intptr_t param;
+    bool resuming = true;
 
     /* Reinitializing seems to be necessary to avoid playback quircks when seeking. */
     init_mad();
 
     file_end = 0;
 
-    ci->configure(DSP_SET_FREQUENCY, ci->id3->frequency);
     current_frequency = ci->id3->frequency;
     codec_set_replaygain(ci->id3);
 
     /* Perform a seek to the resume point; if this fails,
      * start from the first frame. */
-    if(!mpa_seek(ci->id3->elapsed, ci->id3->offset))
+    if (accurate_seek && !ci->id3->is_asf_stream)
+        seek_time = ci->id3->elapsed;
+    else
+        seek_time = 0;
+
+    if(!mpa_seek(ci->id3->elapsed, ci->id3->offset)) {
         ci->seek_buffer(ci->id3->first_frame_offset);
+        seek_time = 0;
+    }
+
+    if (!seek_time)
+        resuming = false;
 
     if (ci->id3->lead_trim >= 0 && ci->id3->tail_trim >= 0) {
         stop_skip = ci->id3->tail_trim - mpeg_latency[ci->id3->layer];
@@ -623,7 +659,24 @@ enum codec_status codec_run(void)
             bool success = mpa_seek(param, 0);
             elapsed_base = ci->id3->elapsed;
             samples_done = 0;
-            ci->seek_complete();
+
+            /*
+             * To get decent seek accuracy, the rest of the seek is
+             * performed by decoding the file until the elapsed time
+             * is at seek_time. Needed for high accuracy in VBR files
+             * and even CBR files (due to padding, CBR frames do not
+             * necessarily have an equal length throughout the file).
+             *
+             * Not necessary for ASF because it has timestamps.
+             */
+            if (accurate_seek && !ci->id3->is_asf_stream)
+                seek_time = param;
+            else
+                seek_time = 0;
+            resuming = false;
+
+            if (!seek_time)
+                ci->seek_complete();
 
             if (!success)
                 break;
@@ -667,48 +720,62 @@ enum codec_status codec_run(void)
             }
         }
 
-        /* Do the pcmbuf insert here. Note, this is the PREVIOUS frame's pcm
-           data (not the one just decoded above). When we exit the decoding
-           loop we will need to process the final frame that was decoded. */
-        mad_synth_thread_wait_pcm();
+        if (!seek_time) {
+            /* Apply any pending frequency or stereo mode changes. */
+            if (current_frequency != applied_frequency) {
+                ci->configure(DSP_SET_FREQUENCY, current_frequency);
+                applied_frequency = current_frequency;
+            }
 
-        if (framelength > 0) {
-            
-            /* In case of a mono file, the second array will be ignored. */
-            ci->pcmbuf_insert(&synth.pcm.samples[0][samples_to_skip],
-                              &synth.pcm.samples[1][samples_to_skip],
-                              framelength);
+            if (current_stereo_mode != applied_stereo_mode) {
+                ci->configure(DSP_SET_STEREO_MODE, current_stereo_mode);
+                applied_stereo_mode = current_stereo_mode;
+            }
 
-            /* Only skip samples for the first frame added. */
-            samples_to_skip = 0;
+            /* Do the pcmbuf insert here. Note, this is the PREVIOUS frame's pcm
+               data (not the one just decoded above). When we exit the decoding
+               loop we will need to process the final frame that was decoded. */
+            mad_synth_thread_wait_pcm();
+
+            if (framelength > 0) {
+                /* In case of a mono file, the second array will be ignored. */
+                ci->pcmbuf_insert(&synth.pcm.samples[0][samples_to_skip],
+                                  &synth.pcm.samples[1][samples_to_skip],
+                                  framelength);
+
+                /* Only skip samples for the first frame added. */
+                samples_to_skip = 0;
+            }
+
+            /* Initiate PCM synthesis on the COP (MT) or perform it here (ST) */
+            mad_synth_thread_ready();
+        } else {
+            /* Synthesis is not run when seeking, but synth.pcm.length is
+             * needed below. Copy the calculation from mad_synth_frame(). */
+            synth.pcm.length = 32 * MAD_NSBSAMPLES(&frame.header);
+
+            /* mimic normal playback */
+            if (framelength > 0)
+                samples_to_skip = 0;
         }
-
-        /* Initiate PCM synthesis on the COP (MT) or perform it here (ST) */
-        mad_synth_thread_ready();
 
         /* Check if sample rate and stereo settings changed in this frame. */
         if (frame.header.samplerate != current_frequency) {
             elapsed_base = ci->id3->elapsed;
             samples_done = 0;
             current_frequency = frame.header.samplerate;
-            ci->configure(DSP_SET_FREQUENCY, current_frequency);
         }
-        if (MAD_NCHANNELS(&frame.header) == 2) {
-            if (current_stereo_mode != STEREO_NONINTERLEAVED) {
-                ci->configure(DSP_SET_STEREO_MODE, STEREO_NONINTERLEAVED);
-                current_stereo_mode = STEREO_NONINTERLEAVED;
-            }
-        } else {
-            if (current_stereo_mode != STEREO_MONO) {
-                ci->configure(DSP_SET_STEREO_MODE, STEREO_MONO);
-                current_stereo_mode = STEREO_MONO;
-            }
-        }
+
+        if (MAD_NCHANNELS(&frame.header) == 2)
+            current_stereo_mode = STEREO_NONINTERLEAVED;
+        else
+            current_stereo_mode = STEREO_MONO;
 
         if (stream.next_frame)
             advance_stream_buffer(stream.next_frame - stream.buffer);
         else
             advance_stream_buffer(size);
+
         stream.error = 0; /* Must get new inputbuffer next time */
         file_end = 0;
 
@@ -719,8 +786,24 @@ enum codec_status codec_run(void)
         }
 
         samples_done += framelength;
-        ci->set_elapsed(elapsed_base + (uint64_t)samples_done * 1000ull / current_frequency);
+        cur_time = elapsed_base + (uint64_t)samples_done * 1000ull / current_frequency;
+
+        if (seek_time && cur_time < seek_time)
+            continue;
+
+        ci->set_elapsed(cur_time);
+
+        if (seek_time) {
+            if (!resuming)
+                ci->seek_complete();
+            resuming = false;
+            seek_time = 0;
+        }
     }
+
+    /* Ensure any ongoing seek is properly completed */
+    if (seek_time && !resuming)
+        ci->seek_complete();
 
     /* wait for synth idle - MT only*/
     mad_synth_thread_wait_pcm();
