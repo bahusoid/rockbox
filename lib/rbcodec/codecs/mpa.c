@@ -170,6 +170,118 @@ static void init_mad(void)
     mad_synth_init(&synth);
 }
 
+/*
+ * Compute the elapsed percentage of the file based on elapsed time.
+ */
+static unsigned int toc_time_to_percent(unsigned long time)
+{
+    unsigned int percent = (uint64_t)time * 100 / ci->id3->length;
+
+    return MIN(percent, 100);
+}
+
+/*
+ * Locate the percent interval that contains the file position "pos".
+ */
+static unsigned int toc_pos_to_percent(unsigned long pos)
+{
+    if (pos >= ci->id3->filesize)
+        return 100;
+
+    /* Do a binary search comparing fractions pos/fsize and toc[i]/256 */
+    uint64_t xpos = (uint64_t)pos * 256;
+    unsigned int a = 0, b = 99;
+    while (a != b) {
+        unsigned int i = (a + b + 1) / 2;
+        uint64_t cmp = (uint64_t)ci->id3->toc[i] * ci->id3->filesize;
+        if (xpos < cmp)
+            b = i - 1;
+        else
+            a = i;
+    }
+
+    return a;
+}
+
+/*
+ * Get start and end points for linear interpolation within the given
+ * percent interval. "percent" must be from 0 to 99.
+ */
+static void
+toc_get_interpolation_points(unsigned int percent,
+                             unsigned long *pos_a, unsigned long *pos_b,
+                             unsigned long *time_a, unsigned long *time_b)
+{
+    /* Start point */
+    *pos_a = (uint64_t)ci->id3->toc[percent] * ci->id3->filesize / 256;
+    *time_a = (uint64_t)percent * ci->id3->length / 100;
+
+    /* End point is either the next TOC mark or end of file */
+    percent++;
+    if (percent < 100) {
+        *pos_b = (uint64_t)ci->id3->toc[percent] * ci->id3->filesize / 256;
+        *time_b = (uint64_t)percent * ci->id3->length / 100;
+    } else {
+        *pos_b = ci->id3->filesize;
+        *time_b = ci->id3->length;
+    }
+}
+
+/*
+ * Return an output value in the range [out_a, out_b] with the
+ * same relative position as the input w.r.t. the range [in_a, in_b]
+ */
+static unsigned long toc_interpolate(unsigned long input,
+                                     unsigned long in_a, unsigned long in_b,
+                                     unsigned long out_a, unsigned long out_b)
+{
+    if (input <= in_a)
+        return out_a;
+
+    if (input >= in_b)
+        return out_b;
+
+    unsigned long in_scale = in_b - in_a;
+    unsigned long out_scale = out_b - out_a;
+
+    unsigned long tmp = (uint64_t)out_scale * (input - in_a) / in_scale;
+    return tmp + out_a;
+}
+
+/*
+ * Compute the file position corresponding to an elapsed time using
+ * the TOC, using linear interpolation. Fast but inaccurate.
+ */
+static unsigned long toc_get_pos_interpolated(unsigned long time)
+{
+    unsigned int percent = toc_time_to_percent(time);
+    if (percent == 100)
+        return ci->id3->length;
+
+    unsigned long pos_a, pos_b;
+    unsigned long time_a, time_b;
+    toc_get_interpolation_points(percent, &pos_a, &pos_b, &time_a, &time_b);
+
+    return toc_interpolate(time, time_a, time_b, pos_a, pos_b);
+}
+
+/*
+ * Compute the elapsed time at file position "pos" using the TOC,
+ * using linear interpolation. Fast but inaccurate.
+ */
+static unsigned long toc_get_time_interpolated(unsigned long pos)
+{
+    unsigned int percent = toc_pos_to_percent(pos);
+    if (percent == 100)
+        return ci->id3->length;
+
+    unsigned long pos_a, pos_b;
+    unsigned long time_a, time_b;
+    toc_get_interpolation_points(percent, &pos_a, &pos_b, &time_a, &time_b);
+
+    return toc_interpolate(pos, pos_a, pos_b, time_a, time_b);
+}
+
 static int get_file_pos(int newtime)
 {
     int pos = -1;
@@ -177,23 +289,7 @@ static int get_file_pos(int newtime)
 
     if (id3->vbr) {
         if (id3->has_toc) {
-            /* Use the TOC to find the new position */
-            unsigned int percent = ((uint64_t)newtime * 100) / id3->length;
-            if (percent > 99)
-                percent = 99;
-
-            unsigned int pct_timestep = id3->length / 100;
-            unsigned int toc_sizestep = id3->filesize / 256;
-            unsigned int cur_toc = id3->toc[percent];
-            unsigned int next_toc = percent < 99 ? id3->toc[percent+1] : 256;
-            unsigned int plength = (next_toc - cur_toc) * toc_sizestep;
-
-            /* Seek to TOC mark */
-            pos = cur_toc * toc_sizestep;
-
-            /* Interpolate between this TOC mark and the next TOC mark */
-            newtime -= percent * pct_timestep;
-            pos += (uint64_t)plength * newtime / pct_timestep;
+            pos = toc_get_pos_interpolated(newtime);
         } else {
             /* No TOC exists, estimate the new position */
             pos = (uint64_t)newtime * id3->filesize / id3->length;
@@ -223,26 +319,7 @@ static void set_elapsed(struct mp3entry* id3)
 
     if ( id3->vbr ) {
         if ( id3->has_toc ) {
-            unsigned int pct_timestep = id3->length / 100;
-            unsigned int toc_sizestep = id3->filesize / 256;
-
-            int percent;
-            for (percent = 0; percent < 100; ++percent)
-                if (offset < id3->toc[percent] * toc_sizestep)
-                    break;
-            if (percent > 0)
-                --percent;
-
-            unsigned int cur_toc  = id3->toc[percent];
-            unsigned int next_toc = percent < 99 ? id3->toc[percent+1] : 256;
-            unsigned int plength = (next_toc - cur_toc) * toc_sizestep;
-
-            /* Set elapsed time to the TOC mark */
-            elapsed = percent * pct_timestep;
-
-            /* Interpolate between this TOC mark and the next TOC mark */
-            offset -= cur_toc * toc_sizestep;
-            elapsed += (uint64_t)pct_timestep * offset / plength;
+            elapsed = toc_get_time_interpolated(offset);
         } else {
             /* No TOC, use an approximation (this'll be wildly inaccurate) */
             uint64_t data_size = id3->filesize -
