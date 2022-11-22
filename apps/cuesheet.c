@@ -465,7 +465,7 @@ void browse_cuesheet(struct cuesheet *cue)
     if ((unsigned) len > sizeof(title))
         title[sizeof(title) - 2] = '~'; /* give indication of truncation */
 
-
+    push_current_activity(ACTIVITY_CUESHEET);
     gui_synclist_init(&lists, list_get_name_cb, cue, false, 2, NULL);
     gui_synclist_set_nb_items(&lists, 2*cue->track_count);
     gui_synclist_set_title(&lists, title, 0);
@@ -527,6 +527,7 @@ void browse_cuesheet(struct cuesheet *cue)
                 break;
         }
     }
+    pop_current_activity();
 }
 
 bool display_cuesheet_content(char* filename)
