@@ -531,6 +531,7 @@ bool browse_cuesheet(struct cuesheet *cue)
                 ctxReturn = true;
                 //passthrough
             case ACTION_STD_CANCEL:
+            case ACTION_STD_MENU:
                 done = true;
             default:
                 break;
