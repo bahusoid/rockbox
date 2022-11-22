@@ -522,6 +522,7 @@ void browse_cuesheet(struct cuesheet *cue)
                 } /* ACTION_STD_OK */
 
             case ACTION_STD_CANCEL:
+            case ACTION_STD_MENU:
                 done = true;
         }
     }
