@@ -628,6 +628,17 @@ static long do_wps_exit(long action, bool bookmark)
     return GO_TO_PREVIOUS;
 }
 
+static long cue_or_playlist_viewer(void)
+{
+    struct wps_state *state = get_wps_state();
+    if (state->id3->cuesheet)
+    {
+        browse_cuesheet(state->id3->cuesheet);
+        return GO_TO_WPS;
+    }
+
+    return GO_TO_PLAYLIST_VIEWER;
+}
 static long do_party_mode(long action)
 {
     if (global_settings.party_mode)
@@ -816,7 +827,7 @@ long gui_wps_show(void)
                     || !audio_status())
                     return GO_TO_ROOT;
                 else if (retval == ONPLAY_PLAYLIST)
-                    return GO_TO_PLAYLIST_VIEWER;
+                    return cue_or_playlist_viewer();
                 else if (retval == ONPLAY_PLUGIN)
                 {
                     restore_theme();
@@ -1056,7 +1067,7 @@ long gui_wps_show(void)
 #endif
             case ACTION_WPS_VIEW_PLAYLIST:
                 gwps_leave_wps(true);
-                return GO_TO_PLAYLIST_VIEWER;
+                return cue_or_playlist_viewer();
                 break;
             default:
                 switch(default_event_handler(button))
