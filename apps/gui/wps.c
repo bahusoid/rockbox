@@ -602,6 +602,17 @@ void wps_do_playpause(bool updatewps)
     }
 }
 
+static long cue_or_playlist_viewer(void)
+{
+    struct wps_state *state = get_wps_state();
+    if (state->id3->cuesheet)
+    {
+        browse_cuesheet(state->id3->cuesheet);
+        return GO_TO_WPS;
+    }
+
+    return GO_TO_PLAYLIST_VIEWER;
+}
 
 /* The WPS can be left in two ways:
  *      a)  call a function, which draws over the wps. In this case, the wps
@@ -701,7 +712,7 @@ long gui_wps_show(void)
                     || !audio_status())
                     return GO_TO_ROOT;
                 else if (retval == ONPLAY_PLAYLIST)
-                    return GO_TO_PLAYLIST_VIEWER;
+                    return cue_or_playlist_viewer();
                 else if (retval == ONPLAY_PLUGIN)
                     return GO_TO_PLUGIN;
                 restore = true;
@@ -957,7 +968,7 @@ long gui_wps_show(void)
 #endif
             case ACTION_WPS_VIEW_PLAYLIST:
                 gwps_leave_wps();
-                return GO_TO_PLAYLIST_VIEWER;
+                return cue_or_playlist_viewer();
                 break;
             default:
                 switch(default_event_handler(button))

@@ -178,7 +178,8 @@ enum current_activity {
     ACTIVITY_BOOKMARKSLIST,
     ACTIVITY_SHORTCUTSMENU,
     ACTIVITY_ID3SCREEN,
-    ACTIVITY_USBSCREEN
+    ACTIVITY_USBSCREEN,
+    ACTIVITY_CUESHEET,
 };
 
 void beep_play(unsigned int frequency, unsigned int duration,
