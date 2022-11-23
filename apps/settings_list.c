@@ -211,9 +211,7 @@ static const char off[] = "off";
 static const char off_on[] = "off,on";
 static const char off_on_ask[] = "off,on,ask";
 static const char off_number_spell[] = "off,number,spell";
-static const int timeout_sec_common[] = {-1,0,1,2,3,4,5,6,7,8,9,10,15,20,25,30,
-                                        45,60,90,120,180,240,300,600,900,1200,
-                                        1500,1800,2700,3600,4500,5400,6300,7200};
+static const int timeout_sec_common[] = {-1,0,5,10,15,30,};
 static const int time_recording_trigger[] = {0,1,2,5,10,15,20,25,30,60,120,300,600};
 #if defined(HAVE_BACKLIGHT_FADING_INT_SETTING)
 static const int backlight_fade[] = {0,100,200,300,500,1000,2000,3000,5000,10000};
@@ -1963,7 +1961,7 @@ const struct settings_list settings[] = {
                   "outro,track",
                   UNIT_SEC, formatter_time_unit_0_is_skip_track,
                   getlang_time_unit_0_is_skip_track, NULL,
-                  25, timeout_sec_common),
+                       sizeof(timeout_sec_common) / sizeof(int), timeout_sec_common),
     CHOICE_SETTING(F_CB_ON_SELECT_ONLY, start_in_screen, LANG_START_SCREEN, 1,
                    "start in screen", "previous,root,files,"
 #ifdef HAVE_TAGCACHE
