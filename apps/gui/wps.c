@@ -647,7 +647,8 @@ static long cue_or_playlist_viewer(void)
     struct wps_state *state = get_wps_state();
     if (state->id3->cuesheet)
     {
-        browse_cuesheet(state->id3->cuesheet);
+        if (browse_cuesheet(state->id3->cuesheet))
+            return GO_TO_PLAYLIST_VIEWER;
         return GO_TO_WPS;
     }
 
