@@ -32,6 +32,7 @@
 #include "button.h"
 #include "audio.h"
 #include "dsp_proc_settings.h"
+#include "gui/list.h"
 
 struct opt_items {
     unsigned const char* string;
@@ -813,6 +814,9 @@ struct user_settings
 #ifdef HAVE_TOUCHSCREEN
     int touch_mode;
     struct touchscreen_parameter ts_calibration_data;
+    struct list_kinetic_scroll_settings kinetic_scroll_accel;
+    struct list_kinetic_scroll_settings kinetic_scroll_decel;
+    struct list_kinetic_scroll_settings kinetic_scroll_press;
 #endif
 
 #ifdef HAVE_PITCHCONTROL
