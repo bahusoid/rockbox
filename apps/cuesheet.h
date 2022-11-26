@@ -68,7 +68,7 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue);
 bool get_trackname_from_cuesheet(char *filename, char *buf);
 
 /* display a cuesheet struct */
-void browse_cuesheet(struct cuesheet *cue);
+bool browse_cuesheet(struct cuesheet *cue);
 
 /* display a cuesheet file after parsing and loading it to the plugin buffer */
 bool display_cuesheet_content(char* filename);

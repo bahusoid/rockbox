@@ -449,7 +449,7 @@ static const char* list_get_name_cb(int selected_item,
     return buffer;
 }
 
-void browse_cuesheet(struct cuesheet *cue)
+bool browse_cuesheet(struct cuesheet *cue)
 {
     struct gui_synclist lists;
     int action;
@@ -457,6 +457,7 @@ void browse_cuesheet(struct cuesheet *cue)
     char title[MAX_PATH];
     int len;
 
+    bool ctxReturn = false;
     struct cuesheet_file cue_file;
     struct mp3entry *id3 = audio_current_track();
 
@@ -521,12 +522,16 @@ void browse_cuesheet(struct cuesheet *cue)
                 break;
                 } /* ACTION_STD_OK */
 
+            case ACTION_STD_CONTEXT:
+                ctxReturn = true;
+                //passthrough
             case ACTION_STD_CANCEL:
             case ACTION_STD_MENU:
                 done = true;
         }
     }
     pop_current_activity();
+    return ctxReturn;
 }
 
 bool display_cuesheet_content(char* filename)
