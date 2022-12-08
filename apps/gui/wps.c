@@ -747,7 +747,7 @@ long gui_wps_show(void)
                     break;
                 if (current_tick -last_right < HZ)
                 {
-                    if (state->id3->cuesheet)
+                    if (state->id3->cuesheet && playlist_check(1))
                     {
                         audio_next();
                     }
@@ -767,10 +767,9 @@ long gui_wps_show(void)
                     break;
                 if (current_tick -last_left < HZ)
                 {
-                    if (state->id3->cuesheet)
+                    if (state->id3->cuesheet && playlist_check(-1))
                     {
-                        audio_pre_ff_rewind();
-                        audio_ff_rewind(0);
+                        audio_prev();
                     }
                     else
                     {
