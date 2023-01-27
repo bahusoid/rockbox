@@ -867,7 +867,7 @@ long gui_wps_show(void)
             /* fast forward
                 OR next dir if this is straight after ACTION_WPS_SKIPNEXT */
             case ACTION_WPS_SEEKFWD:
-                if (current_tick -last_right < HZ)
+                if (global_settings.skip_length == 0 &&  current_tick -last_right < HZ)
                 {
                     if (state->id3->cuesheet && playlist_check(1))
                     {
@@ -885,7 +885,7 @@ long gui_wps_show(void)
             /* fast rewind
                 OR prev dir if this is straight after ACTION_WPS_SKIPPREV,*/
             case ACTION_WPS_SEEKBACK:
-                if (current_tick - last_left < HZ)
+                if (global_settings.skip_length == 0 && current_tick - last_left < HZ)
                 {
                     if (state->id3->cuesheet && playlist_check(-1))
                     {
