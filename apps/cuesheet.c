@@ -98,7 +98,7 @@ bool look_for_cuesheet_file(struct mp3entry *track_id3, struct cuesheet_file *cu
     return search_for_cuesheet(track_id3->path, cue_file);
 }
 
-static char *get_string(const char *line)
+static unsigned char *get_string(const char *line)
 {
     char *start, *end;
 
@@ -309,9 +309,7 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
         else if (option != eCS_NOTFOUND) 
         {
             char *dest = NULL;
-            char *string = get_string(s);
-            if (!string)
-                break;
+            unsigned char *string = get_string(s);
 
             size_t count = MAX_NAME*3 + 1;
             size_t count8859 = MAX_NAME;
@@ -355,6 +353,13 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
 
             if (dest)
             {
+                if (char_enc == CHAR_ENC_ISO_8859_1) 
+                {
+                    if (get_codepage() != CHAR_ENC_UTF_8
+                        && (*string == 208 || *string == 209)
+                        && *(string + 1) > 127 && *(string + 1) < 192)
+                        char_enc = CHAR_ENC_UTF_8;
+                }
                 if (char_enc == CHAR_ENC_ISO_8859_1)
                 {
                     dest = iso_decode(string, dest, -1,
