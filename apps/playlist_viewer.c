@@ -1138,7 +1138,6 @@ enum playlist_viewer_result playlist_viewer_ex(const char* filename,
                 break;
             }
             case ACTION_STD_MENU:
-                ret = PLAYLIST_VIEWER_MAINMENU;
                 goto exit;
 #ifdef HAVE_QUICKSCREEN
             case ACTION_STD_QUICKSCREEN:
