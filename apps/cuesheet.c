@@ -355,6 +355,11 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
 
             if (dest)
             {
+                if(char_enc == CHAR_ENC_ISO_8859_1)
+                {
+                    if(*dest == 0)
+                        char_enc = CHAR_ENC_UTF_8;
+                }
                 if (char_enc == CHAR_ENC_ISO_8859_1)
                 {
                     dest = iso_decode(string, dest, -1,
