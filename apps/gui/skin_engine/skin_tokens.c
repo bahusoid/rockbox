@@ -189,6 +189,12 @@ const char *get_cuesheetid3_token(struct wps_token *token, struct mp3entry *id3,
             return *cue->performer ? cue->performer : NULL;
         case SKIN_TOKEN_METADATA_TRACK_TITLE:
             return *track->title ? track->title : NULL;
+        case SKIN_TOKEN_PLAYLIST_ENTRIES:
+            snprintf(buf, buf_size, "%d", cue->track_count);
+            return buf;
+        case SKIN_TOKEN_PLAYLIST_POSITION:
+            snprintf(buf, buf_size, "%d", cue->curr_track_idx+offset_tracks+1);
+            return buf;
         case SKIN_TOKEN_METADATA_TRACK_NUMBER:
             snprintf(buf, buf_size, "%d/%d",
                      cue->curr_track_idx+offset_tracks+1, cue->track_count);
