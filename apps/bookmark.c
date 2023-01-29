@@ -739,6 +739,17 @@ static int bookmark_list_voice_cb(int list_index, void* data)
 /* ------------------------------------------------------------------------*/
 static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume, char** selected_bookmark)
 {
+    //TODO: extract to method and reuse in cycle
+    int count = get_bookmark_count(bookmark_file_name);
+    if (count < 1)
+    {
+        /* No more bookmarks, delete file and exit */
+        splash(HZ, ID2P(LANG_BOOKMARK_LOAD_EMPTY));
+        remove(bookmark_file_name);
+        *selected_bookmark = NULL;
+        return BOOKMARK_FAIL;
+    }
+
     struct bookmark_list* bookmarks;
     struct gui_synclist list;
     int item = 0;
@@ -753,6 +764,7 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
     bookmarks->show_dont_resume = show_dont_resume;
     bookmarks->filename = bookmark_file_name;
     bookmarks->start = 0;
+    bookmarks->total_count = 0;
     bookmarks->show_playlist_name
         = strcmp(bookmark_file_name, RECENT_BOOKMARK_FILE) == 0;
     gui_synclist_init(&list, &get_bookmark_info, (void*) bookmarks, false, 2, NULL);
@@ -766,7 +778,7 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
 
         if (refresh)
         {
-            int count = get_bookmark_count(bookmark_file_name);
+            count = bookmarks->total_count == 0 ? count : get_bookmark_count(bookmark_file_name);
             bookmarks->total_count = count;
 
             if (bookmarks->total_count < 1)
