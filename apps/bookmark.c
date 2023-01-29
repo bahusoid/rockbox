@@ -744,6 +744,16 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
     bool exit = false;
     bool refresh = true;
     int ret = BOOKMARK_FAIL;
+    //TODO: extract to method and reuse in cycle
+    int count = get_bookmark_count(bookmark_file_name);
+    if (count < 1)
+    {
+        /* No more bookmarks, delete file and exit */
+        splash(HZ, ID2P(LANG_BOOKMARK_LOAD_EMPTY));
+        remove(bookmark_file_name);
+        *selected_bookmark = NULL;
+        return BOOKMARK_FAIL;
+    }
 
     bookmarks = plugin_get_buffer(&size);
     bookmarks->buffer_size = size;
