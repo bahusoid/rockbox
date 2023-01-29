@@ -51,6 +51,7 @@ enum hotkey_action {
     HOTKEY_PLUGIN,
     HOTKEY_INSERT,
     HOTKEY_INSERT_SHUFFLED,
+    HOTKEY_BOOKMARK_LIST,
 };
 #endif
 
