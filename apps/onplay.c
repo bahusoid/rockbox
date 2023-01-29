@@ -377,7 +377,7 @@ static const char * playing_time_get_or_speak_info(int selected_item, void * dat
     }
     case 7: { /* Average bitrate */
         /* Convert power of 2 kilobytes to power of 10 kilobits */
-        long avg_bitrate = (pti->kbs[ePT_KBS_TTL] / pti->secs[ePT_SECS_TTL] 
+        long avg_bitrate = (pti->kbs[ePT_KBS_TTL] / pti->secs[ePT_SECS_TTL]
                             * 1024 * 8 / 1000);
         snprintf(buf, buffer_len, str(LANG_PLAYTIME_AVG_BITRATE), avg_bitrate);
 
@@ -1990,6 +1990,11 @@ static const struct hotkey_assignment hotkey_items[] = {
       .lang_id = LANG_BOOKMARK_MENU_CREATE,
       .func = HOTKEY_FUNC(bookmark_create_menu, NULL),
       .return_code = ONPLAY_OK,
+      .flags = HOTKEY_FLAG_WPS | HOTKEY_FLAG_NOSBS },
+    { .action = HOTKEY_BOOKMARK_LIST,
+      .lang_id = LANG_BOOKMARK_MENU_LIST,
+      .func = HOTKEY_FUNC(bookmark_load_menu, NULL),
+      .return_code = ONPLAY_START_PLAY,
       .flags = HOTKEY_FLAG_WPS | HOTKEY_FLAG_NOSBS },
     { .action = HOTKEY_PROPERTIES,
       .lang_id = LANG_PROPERTIES,
