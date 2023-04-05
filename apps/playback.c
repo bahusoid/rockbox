@@ -2593,6 +2593,7 @@ static void audio_begin_track_change(enum pcm_track_change_type type,
             if (info.audio_hid < 0)
                 return;
 
+            auto_skip = auto_skip || ff_rw_mode;
             /* Everything needed for the codec is ready - start it */
             if (audio_start_codec(auto_skip))
             {
@@ -2982,7 +2983,7 @@ static void audio_on_skip(int toskip)
     halt_decoding_track(true);
 
     /* Kill the ff/rw halt */
-    ff_rw_mode = false;
+    //ff_rw_mode = false;
 
     /* Manual skip */
     track_event_flags = TEF_NONE;
