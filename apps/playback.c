@@ -312,8 +312,6 @@ static enum track_skip_type
    clients so the correct metadata is read when sending the change events. */
 static unsigned int track_event_flags = TEF_NONE; /* (A, O-) */
 
-/* Pending manual track skip offset */
-static int skip_offset = 0; /* (A, O) */
 
 /* Track change notification */
 static struct
@@ -2970,18 +2968,9 @@ static void audio_on_pause(bool pause)
 
 /* Skip a certain number of tracks forwards or backwards
    (Q_AUDIO_SKIP) */
-static void audio_on_skip(void)
+static void audio_on_skip(int toskip)
 {
-    id3_mutex_lock();
-
-    /* Eat the delta to keep it synced, even if not playing */
-    int toskip = skip_offset;
-    skip_offset = 0;
-
     logf("%s(): %d", __func__, toskip);
-
-    id3_mutex_unlock();
-
     if (play_status == PLAY_STOPPED)
         return;
 
@@ -3066,10 +3055,6 @@ static void audio_on_skip(void)
 static void audio_on_dir_skip(int direction)
 {
     logf("%s(%d)", __func__, direction);
-
-    id3_mutex_lock();
-    skip_offset = 0;
-    id3_mutex_unlock();
 
     if (play_status == PLAY_STOPPED)
         return;
@@ -3357,7 +3342,7 @@ void audio_playback_handler(struct queue_event *ev)
 
         case Q_AUDIO_SKIP:
             LOGFQUEUE("playback < Q_AUDIO_SKIP");
-            audio_on_skip();
+            audio_on_skip(ev->data);
             break;
 
         case Q_AUDIO_DIR_SKIP:
@@ -3627,16 +3612,12 @@ bool audio_peek_track(struct mp3entry *id3, int offset)
 {
     bool retval = false;
 
-    id3_mutex_lock();
-
     if (play_status != PLAY_STOPPED)
     {
         id3->path[0] = '\0'; /* Null path means it should be filled now */
-        retval = audio_get_track_metadata(offset + skip_offset, id3) &&
+        retval = audio_get_track_metadata(offset, id3) &&
                 id3->path[0] != '\0';
     }
-
-    id3_mutex_unlock();
 
     return retval;
 }
@@ -3646,24 +3627,9 @@ struct mp3entry * audio_current_track(void)
 {
     struct mp3entry *id3;
 
-    id3_mutex_lock();
-
-#ifdef AUDIO_FAST_SKIP_PREVIEW
-    if (skip_offset != 0)
-    {
-        /* This is a peekahead */
-        id3 = id3_get(PLAYING_PEEK_ID3);
-        audio_peek_track(id3, 0);
-    }
-    else
-#endif
-    {
-        /* Normal case */
-        id3 = id3_get(PLAYING_ID3);
-        audio_get_track_metadata(0, id3);
-    }
-
-    id3_mutex_unlock();
+    /* Normal case */
+    id3 = id3_get(PLAYING_ID3);
+    audio_get_track_metadata(0, id3);
 
     return id3;
 }
@@ -3673,24 +3639,9 @@ struct mp3entry * audio_next_track(void)
 {
     struct mp3entry *id3 = id3_get(NEXTTRACK_ID3);
 
-    id3_mutex_lock();
-
-#ifdef AUDIO_FAST_SKIP_PREVIEW
-    if (skip_offset != 0)
-    {
-        /* This is a peekahead */
-        if (!audio_peek_track(id3, 1))
-            id3 = NULL;
-    }
-    else
-#endif
-    {
-        /* Normal case */
-        if (!audio_get_track_metadata(1, id3))
-            id3 = NULL;
-    }
-
-    id3_mutex_unlock();
+    /* Normal case */
+    if (!audio_get_track_metadata(1, id3))
+        id3 = NULL;
 
     return id3;
 }
@@ -3745,26 +3696,26 @@ void audio_resume(void)
     audio_queue_send(Q_AUDIO_PAUSE, false);
 }
 
-/* Skip the specified number of tracks forward or backward from the current */
-void audio_skip(int offset)
-{
-    id3_mutex_lock();
 
-    /* If offset has to be backed-out to stay in range, no skip is done */
-    int accum = skip_offset + offset;
+int get_safe_offset(int offset) {/* If offset has to be backed-out to stay in range, no skip is done */
+    int accum = offset;
 
     while (offset != 0 && !playlist_check(accum))
     {
         offset += offset < 0 ? 1 : -1;
-        accum = skip_offset + offset;
+        accum = offset;
     }
+    return offset;
+}
+
+
+/* Skip the specified number of tracks forward or backward from the current */
+void audio_skip(int offset)
+{
+    offset = get_safe_offset(offset);
 
     if (offset != 0)
     {
-        /* Accumulate net manual skip count since the audio thread last
-           processed one */
-        skip_offset = accum;
-
         system_sound_play(SOUND_TRACK_SKIP);
 
         LOGFQUEUE("audio > audio Q_AUDIO_SKIP %d", offset);
@@ -3779,16 +3730,26 @@ void audio_skip(int offset)
 
         /* Playback only needs the final state even if more than one is
            processed because it wasn't removed in time */
-        queue_remove_from_head(&audio_queue, Q_AUDIO_SKIP);
-        audio_queue_post(Q_AUDIO_SKIP, 0);
+
+        const long f[2] = {Q_AUDIO_SKIP, Q_AUDIO_SKIP};
+        struct queue_event ev;
+        int skip_offset = 0;
+        while (queue_peek_ex(&audio_queue, &ev,
+                             QPEEK_FILTER_HEAD_ONLY | QPEEK_REMOVE_EVENTS, &f)){
+            skip_offset += ev.data;
+        }
+        if (skip_offset != 0)
+        {
+            offset = get_safe_offset(offset + skip_offset);
+        }
+        if (offset != 0)
+            audio_queue_post(Q_AUDIO_SKIP, offset);
     }
     else
     {
         /* No more tracks */
         system_sound_play(SOUND_TRACK_NO_MORE);
     }
-
-    id3_mutex_unlock();
 }
 
 /* Skip one track forward from the current */
@@ -3844,6 +3805,7 @@ void audio_flush_and_reload_tracks(void)
 /* Return which album art handle is current for the user in the given slot */
 int playback_current_aa_hid(int slot)
 {
+    int skip_offset = 0;
     if ((unsigned)slot < MAX_MULTIPLE_AA)
     {
         struct track_info user_cur;
