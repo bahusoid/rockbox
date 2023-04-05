@@ -455,8 +455,7 @@ static void register_playbk_events(int flag_events)
         PLAYBACK_EVENT_CUR_TRACK_READY,       /* 0x4 */
         PLAYBACK_EVENT_TRACK_FINISH,          /* 0x8 */
         PLAYBACK_EVENT_TRACK_CHANGE,          /* 0x10*/
-        PLAYBACK_EVENT_TRACK_SKIP,            /* 0x20*/
-        PLAYBACK_EVENT_NEXTTRACKID3_AVAILABLE /* 0x40*/
+        PLAYBACK_EVENT_NEXTTRACKID3_AVAILABLE,            /* 0x20*/
     };
 
     for(i = 0; i < ARRAYLEN(playback_events); i++)

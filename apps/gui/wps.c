@@ -1104,12 +1104,6 @@ static void track_info_callback(unsigned short id, void *param)
             cue_find_current_track(state->id3->cuesheet, state->id3->elapsed);
         }
     }
-#ifdef AUDIO_FAST_SKIP_PREVIEW
-    else if (id == PLAYBACK_EVENT_TRACK_SKIP)
-    {
-        state->id3 = audio_current_track();
-    }
-#endif
     state->nid3 = audio_next_track();
     skin_request_full_update(WPS);
 }
@@ -1136,7 +1130,4 @@ static void wps_state_init(void)
     /* Use the same callback as ..._TRACK_CHANGE for when remaining handles have
        finished */
     add_event(PLAYBACK_EVENT_CUR_TRACK_READY, track_info_callback);
-#ifdef AUDIO_FAST_SKIP_PREVIEW
-    add_event(PLAYBACK_EVENT_TRACK_SKIP, track_info_callback);
-#endif
 }

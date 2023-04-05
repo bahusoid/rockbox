@@ -26,13 +26,6 @@
 #include <stdlib.h>
 #include "config.h"
 
-/* Including the code for fast previews is entirely optional since it
-   does add two more mp3entry's - for certain targets it may be less
-   beneficial such as flash-only storage */
-#if MEMORYSIZE > 2
-#define AUDIO_FAST_SKIP_PREVIEW
-#endif
-
 #ifdef HAVE_ALBUMART
 
 #include "bmp.h"

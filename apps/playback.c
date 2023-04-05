@@ -147,11 +147,6 @@ enum audio_id3_types
     /* These are allocated statically */
     PLAYING_ID3 = 0,
     NEXTTRACK_ID3,
-#ifdef AUDIO_FAST_SKIP_PREVIEW
-    /* The real playing metadata must has to be protected since it contains
-       critical info for other features */
-    PLAYING_PEEK_ID3,
-#endif
     ID3_TYPE_NUM_STATIC,
     /* These go in the scratch memory */
     UNBUFFERED_ID3 = ID3_TYPE_NUM_STATIC,
@@ -3719,14 +3714,6 @@ void audio_skip(int offset)
         system_sound_play(SOUND_TRACK_SKIP);
 
         LOGFQUEUE("audio > audio Q_AUDIO_SKIP %d", offset);
-
-#ifdef AUDIO_FAST_SKIP_PREVIEW
-        /* Do this before posting so that the audio thread can correct us
-           when things settle down - additionally, if audio gets a message
-           and the delta is zero, the Q_AUDIO_SKIP handler (audio_on_skip)
-           handler a skip event with the correct info but doesn't skip */
-        send_event(PLAYBACK_EVENT_TRACK_SKIP, NULL);
-#endif /* AUDIO_FAST_SKIP_PREVIEW */
 
         /* Playback only needs the final state even if more than one is
            processed because it wasn't removed in time */

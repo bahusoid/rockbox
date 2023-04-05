@@ -46,9 +46,6 @@ enum {
     /* A new current user track has begun
        data = &(struct track_event){} */
     PLAYBACK_EVENT_TRACK_CHANGE,
-    /* A manual skip is about to be processed
-       data = NULL */
-    PLAYBACK_EVENT_TRACK_SKIP,
     /* Next track medadata was just loaded
        data = &(struct track_event){} */
     PLAYBACK_EVENT_NEXTTRACKID3_AVAILABLE,
