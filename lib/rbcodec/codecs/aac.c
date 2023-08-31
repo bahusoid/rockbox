@@ -217,7 +217,13 @@ enum codec_status codec_run(void)
         /* NeAACDecDecode may sometimes return NULL without setting error. */
         if (ret == NULL || frame_info.error > 0) {
             LOGF("FAAD: decode error '%s'\n", NeAACDecGetErrorMessage(frame_info.error));
-            return CODEC_ERROR;
+
+            // Ignore not fatal errors: 
+            // 1 - Gain control not yet implemented
+            // 4 - Scalefactor out of range error 
+            // 6 - Channel coupling not yet implemented
+            if (frame_info.error != 4 && frame_info.error != 1 && frame_info.error != 6)
+                return CODEC_ERROR;
         }
 
         /* Advance codec buffer (no need to call set_offset because of this) */
