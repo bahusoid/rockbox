@@ -18,6 +18,9 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
+//#define DEBUG
+//#define LOGF_ENABLE
+#include "logf.h"
 
 #include "codeclib.h"
 #include "libm4a/m4a.h"
@@ -79,7 +82,7 @@ enum codec_status codec_run(void)
     /* Clean and initialize decoder structures */
     memset(&demux_res , 0, sizeof(demux_res));
     if (codec_init()) {
-        LOGF("FAAD: Codec init error\n");
+        logf("FAAD: Codec init error\n");
         return CODEC_ERROR;
     }
 
@@ -97,7 +100,7 @@ enum codec_status codec_run(void)
     /* if qtmovie_read returns successfully, the stream is up to
      * the movie data, which can be used directly by the decoder */
     if (!qtmovie_read(&input_stream, &demux_res)) {
-        LOGF("FAAD: File init error\n");
+        logf("FAAD: File init error\n");
         return CODEC_ERROR;
     }
 
@@ -105,7 +108,7 @@ enum codec_status codec_run(void)
     decoder = NeAACDecOpen();
 
     if (!decoder) {
-        LOGF("FAAD: Decode open error\n");
+        logf("FAAD: Decode open error\n");
         return CODEC_ERROR;
     }
 
@@ -115,7 +118,7 @@ enum codec_status codec_run(void)
 
     err = NeAACDecInit2(decoder, demux_res.codecdata, demux_res.codecdata_len, &s, &c);
     if (err) {
-        LOGF("FAAD: DecInit: %d, %d\n", err, decoder->object_type);
+        logf("FAAD: DecInit: %d, %d\n", err, decoder->object_type);
         return CODEC_ERROR;
     }
 
@@ -204,7 +207,7 @@ enum codec_status codec_run(void)
         }
         else if (file_offset == 0)
         {
-            LOGF("AAC: get_sample_offset error\n");
+            logf("AAC: get_sample_offset error\n");
             return CODEC_ERROR;
         }
         
@@ -216,7 +219,7 @@ enum codec_status codec_run(void)
 
         /* NeAACDecDecode may sometimes return NULL without setting error. */
         if (ret == NULL || frame_info.error > 0) {
-            LOGF("FAAD: decode error '%s'\n", NeAACDecGetErrorMessage(frame_info.error));
+            logf("FAAD: decode error '%s'\n", NeAACDecGetErrorMessage(frame_info.error));
 
             // Ignore not fatal errors: 
             // 1 - Gain control not yet implemented
@@ -308,6 +311,6 @@ enum codec_status codec_run(void)
         ++i;
     }
 
-    LOGF("AAC: Decoded %lu samples\n", (unsigned long)sound_samples_done);
+    logf("AAC: Decoded %lu samples\n", (unsigned long)sound_samples_done);
     return CODEC_OK;
 }

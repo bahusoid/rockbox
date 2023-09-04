@@ -391,7 +391,8 @@ static bool read_chunk_stsz(qtmovie_t *qtmovie, size_t chunk_len)
     }
     else
     {
-        DEBUGF("stsz too large, ignoring it\n");
+        qtmovie->res->sample_byte_sizes_offset = stream_tell(qtmovie->stream);
+        DEBUGF("stsz too large: %u, ignoring it\n", numsizes);
     }
 
     if (size_remaining)
@@ -461,6 +462,7 @@ static bool read_chunk_stco(qtmovie_t *qtmovie, size_t chunk_len)
         {
             // we failed to alloc memory for lookup table, so reduce seek accuracy and try again
             fit_numentries = numentries / ++accuracy_divider;
+            qtmovie->res->sample_byte_sizes_offset = 0; //can't use it with reduced accuracy
         }
     }
     DEBUGF("lookup_table numentries %d, fit_numentries %d\n", numentries, fit_numentries);
