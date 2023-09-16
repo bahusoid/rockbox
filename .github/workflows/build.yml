@@ -25,6 +25,7 @@ jobs:
     
     - name: make it all
       run: |
+        sudo apt-get update
         sudo apt-get install automake bison build-essential ccache flex libc6-dev libgmp3-dev libmpfr-dev libsdl1.2-dev libtool-bin texinfo zip gawk wget libmpc-dev gettext
         cd tools
         chmod +x rockboxdev.sh
