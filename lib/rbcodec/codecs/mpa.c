@@ -201,10 +201,11 @@ static int get_file_pos(int newtime)
         // VBR seek might be very inaccurate in long files 
         // So make sure that seeking actually happened in the intended direction 
         // Fix jumps in the wrong direction by seeking relative to the current position
-        long delta = id3->elapsed - newtime;
-        if ((delta >= 0 && pos > ci->curpos) || (delta < 0 && pos < ci->curpos))
+        long delta = id3->elapsed - newtime;        
+        int curpos = ci->curpos - id3->first_frame_offset;
+        if ((delta >= 0 && pos > curpos) || (delta < 0 && pos < curpos))
         {
-            pos = ci->curpos - delta * id3->filesize / id3->length;
+            pos = curpos - delta * id3->filesize / id3->length;
         }
     } else if (id3->bitrate) {
         pos = newtime * (id3->bitrate / 8);
