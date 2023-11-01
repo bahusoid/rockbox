@@ -124,6 +124,9 @@ const struct afmt_entry audio_formats[AFMT_NUM_CODECS] =
     /* WMA Professional in ASF */
     [AFMT_WMAPRO] =
         AFMT_ENTRY("WMAPro","wmapro",NULL,      NULL,            "wma\0wmv\0asf\0"),
+    /* MP3 in ASF) */
+    [AFMT_ASF_MP3] =
+            AFMT_ENTRY("MP3",   "mpa_asf",  NULL,  NULL,"asf\0"),
     /* Amiga MOD File */
     [AFMT_MOD] =
         AFMT_ENTRY("MOD",   "mod",  NULL,       get_mod_metadata,   "mod\0"),
