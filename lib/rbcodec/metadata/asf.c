@@ -389,8 +389,7 @@ static int asf_parse_header(int fd, struct mp3entry* id3,
                         } else if (wfx->codec_id == ASF_CODEC_ID_MP3) {
                             lseek(fd,current.size - 24 - 72,SEEK_CUR);
                             wfx->audiostream = flags&0x7f;
-                            id3->codectype = AFMT_MPA_L3;
-                            id3->is_asf_stream = true;
+                            id3->codectype = AFMT_ASF_MP3;
                         } else {
                             DEBUGF("Unsupported WMA codec (Lossless, Voice, etc)\n");
                             lseek(fd,current.size - 24 - 72,SEEK_CUR);
