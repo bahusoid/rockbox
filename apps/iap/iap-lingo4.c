@@ -1242,7 +1242,7 @@ void iap_handlepkt_mode4(const unsigned int len, const unsigned char *buf)
                                           we do nothing with it  */
                     {
                         last_selected_playlist = index;
-                        audio_skip(-iap_get_trackindex());
+                        audio_skip(-iap_get_trackindex(), 0);
                         seek_to_playlist(last_selected_playlist);
                     }
                     break;
@@ -1253,7 +1253,7 @@ void iap_handlepkt_mode4(const unsigned int len, const unsigned char *buf)
                 case 0x05: /* Track    */
                 case 0x06: /* Composer */
                 {
-                    audio_skip(index - playlist_next(0));
+                    audio_skip(index - playlist_next(0), 0);
                     break;
                 }
                 default:
@@ -2017,7 +2017,7 @@ void iap_handlepkt_mode4(const unsigned int len, const unsigned char *buf)
             {
                 playlist_sort(NULL, true);
             }
-            audio_skip(index - playlist_next(0));
+            audio_skip(index - playlist_next(0), 0);
             if (!paused)
                 audio_resume();
             /* respond with cmd ok packet */
@@ -2820,7 +2820,7 @@ void iap_handlepkt_mode4(const unsigned int len, const unsigned char *buf)
             long tracknum = get_u32(&buf[3]);
 
             audio_pause();
-            audio_skip(tracknum - playlist_next(0));
+            audio_skip(tracknum - playlist_next(0), 0);
             if (!paused)
                 audio_resume();
 
@@ -2996,7 +2996,7 @@ void iap_handlepkt_mode4(const unsigned int len, const unsigned char *buf)
                                           we do nothing with it  */
                     {
                         audio_pause();
-                        audio_skip(-iap_get_trackindex());
+                        audio_skip(-iap_get_trackindex(), 0);
                         playlist_sort(NULL, true);
                         last_selected_playlist = index;
                         seek_to_playlist(last_selected_playlist);
@@ -3011,9 +3011,9 @@ void iap_handlepkt_mode4(const unsigned int len, const unsigned char *buf)
                 case 0x05: /* Track*/
                 {
                     audio_pause();
-                    audio_skip(-iap_get_trackindex());
+                    audio_skip(-iap_get_trackindex(), 0);
                     playlist_sort(NULL, true);
-                    audio_skip(index - playlist_next(0));
+                    audio_skip(index - playlist_next(0), 0);
                     break;
                 }
             }
