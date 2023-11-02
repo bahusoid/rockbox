@@ -79,7 +79,7 @@
 #define AUDIO_REBUFFER_GUESS_SIZE    (1024*32)
 
 /* Define LOGF_ENABLE to enable logf output in this file */
-#if 0
+#if 1
 #define LOGF_ENABLE
 #endif
 #include "logf.h"
@@ -3016,9 +3016,9 @@ static void audio_on_pause(bool pause)
     }
 }
 
-/* Skip a certain number of tracks forwards or backwards
+/* Skip a certain number of tracks forwards or backwards, starts track at given elapsed position
    (Q_AUDIO_SKIP) */
-static void audio_on_skip(void)
+static void audio_on_skip(int elapsed)
 {
     id3_mutex_lock();
 
@@ -3111,6 +3111,18 @@ static void audio_on_skip(void)
         trackstat = audio_reset_and_rebuffer(TRACK_LIST_CLEAR_ALL, -1);
     }
 
+    if (elapsed !=0 && trackstat >= LOAD_TRACK_OK && track_list_current(0, &info))
+    {
+        if (elapsed < 0) 
+        {
+            struct mp3entry *id3 = bufgetid3(info.id3_hid);            
+            elapsed = id3->length + elapsed;
+            if (elapsed < 0)
+                elapsed = 0;
+        }
+        playing_id3_sync(&info, &(struct audio_resume_info){ elapsed, 0 }, true);
+    }
+
     audio_begin_track_change(TRACK_CHANGE_MANUAL, trackstat);
 }
 
@@ -3201,12 +3213,6 @@ static void audio_on_ff_rewind(long time)
 
         track_event_flags = TEF_NONE;
 
-        if (time < 0)
-        {
-            time = id3->length + time;
-            if (time < 0)
-                time = 0;
-        }
         /* Send event before clobbering the time if rewinding. */
         if (time == 0)
         {
@@ -3410,7 +3416,7 @@ void audio_playback_handler(struct queue_event *ev)
 
         case Q_AUDIO_SKIP:
             LOGFQUEUE("playback < Q_AUDIO_SKIP");
-            audio_on_skip();
+            audio_on_skip(ev->data);
             break;
 
         case Q_AUDIO_DIR_SKIP:
@@ -3807,7 +3813,7 @@ bool audio_pending_track_skip_is_manual(void)
 }
 
 /* Skip the specified number of tracks forward or backward from the current */
-void audio_skip(int offset)
+void audio_skip(int offset, int elapsed)
 {
     id3_mutex_lock();
 
@@ -3828,20 +3834,20 @@ void audio_skip(int offset)
 
         system_sound_play(SOUND_TRACK_SKIP);
 
-        LOGFQUEUE("audio > audio Q_AUDIO_SKIP %d", offset);
+        LOGFQUEUE("audio > audio Q_AUDIO_SKIP %d with elapsed %d", offset, elapsed);
 
 #ifdef AUDIO_FAST_SKIP_PREVIEW
         /* Do this before posting so that the audio thread can correct us
            when things settle down - additionally, if audio gets a message
            and the delta is zero, the Q_AUDIO_SKIP handler (audio_on_skip)
            handler a skip event with the correct info but doesn't skip */
-        send_event(PLAYBACK_EVENT_TRACK_SKIP, NULL);
+        send_event(PLAYBACK_EVENT_TRACK_SKIP, &(int){ elapsed });
 #endif /* AUDIO_FAST_SKIP_PREVIEW */
 
         /* Playback only needs the final state even if more than one is
            processed because it wasn't removed in time */
         queue_remove_from_head(&audio_queue, Q_AUDIO_SKIP);
-        audio_queue_post(Q_AUDIO_SKIP, 0);
+        audio_queue_post(Q_AUDIO_SKIP, elapsed);
     }
     else
     {
@@ -3855,13 +3861,13 @@ void audio_skip(int offset)
 /* Skip one track forward from the current */
 void audio_next(void)
 {
-    audio_skip(1);
+    audio_skip(1, 0);
 }
 
 /* Skip one track backward from the current */
 void audio_prev(void)
 {
-    audio_skip(-1);
+    audio_skip(-1, 0);
 }
 
 /* Move one directory forward */
