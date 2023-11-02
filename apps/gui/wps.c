@@ -426,11 +426,12 @@ static void next_track(void)
 
 static void play_hop(int direction)
 {
-    struct wps_state *state = get_wps_state();
-    struct cuesheet *cue = state->id3->cuesheet;
+    struct mp3entry *id3 = get_wps_state()->id3;
+
+    struct cuesheet *cue = id3->cuesheet;
     long step = global_settings.skip_length*1000;
-    long elapsed = state->id3->elapsed;
-    long remaining = state->id3->length - elapsed;
+    long elapsed = id3->elapsed;
+    long remaining = id3->length - elapsed;
 
     /* if cuesheet is active, then we want the current tracks end instead of
      * the total end */
@@ -441,7 +442,7 @@ static void play_hop(int direction)
         remaining = t->offset - elapsed;
     }
 
-    if (step < 0)
+    if (step < 0) // Skip to Outro
     {
         if (direction < 0)
         {
@@ -455,6 +456,11 @@ static void play_hop(int direction)
         }
         else
             elapsed += (remaining - DEFAULT_SKIP_THRESH*2);
+    }
+    else if (step && id3->length == 0 && id3->codectype == AFMT_UNKNOWN)
+    {
+        // metadata is not yet fully loaded so skip step based action as required length is not yet available
+        return;
     }
     else if (!global_settings.prevent_skip &&
            (!step ||
