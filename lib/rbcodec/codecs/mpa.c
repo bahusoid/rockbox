@@ -89,6 +89,8 @@ static int get_file_pos(int newtime)
     struct mp3entry *id3 = ci->id3;
 
     if (id3->vbr) {
+        int curpos = ci->curpos - id3->first_frame_offset;
+        long skipms_from_curpos = curpos > 0 ?  (long) (id3->elapsed - newtime) : - newtime;
         if (id3->has_toc) {
             /* Use the TOC to find the new position */
             unsigned int percent = ((uint64_t)newtime * 100) / id3->length;
@@ -96,29 +98,31 @@ static int get_file_pos(int newtime)
                 percent = 99;
 
             unsigned int pct_timestep = id3->length / 100;
-            unsigned int toc_sizestep = id3->filesize / 256;
-            unsigned int cur_toc = id3->toc[percent];
-            unsigned int next_toc = percent < 99 ? id3->toc[percent+1] : 256;
-            unsigned int plength = (next_toc - cur_toc) * toc_sizestep;
-
-            /* Seek to TOC mark */
-            pos = cur_toc * toc_sizestep;
 
             /* Interpolate between this TOC mark and the next TOC mark */
-            int newtime_toc = newtime - percent * pct_timestep;
-            pos += (uint64_t)plength * newtime_toc / pct_timestep;
+            int skipms_from_toc = newtime - percent * pct_timestep;
+            //LOGF("skip_from_curpos (s): %ld, skip_from_toc (s): %d, toc position (s): %u", skipms_from_curpos/1000, skipms_from_toc/1000, percent*pct_timestep/1000 );
+            if (skipms_from_toc < abs(skipms_from_curpos)) 
+            {
+                unsigned int toc_sizestep = id3->filesize / 256;
+                unsigned int cur_toc = id3->toc[percent];
+                unsigned int next_toc = percent < 99 ? id3->toc[percent+1] : 256;
+                unsigned int plength = (next_toc - cur_toc) * toc_sizestep;
+
+                pos = cur_toc * toc_sizestep + (uint64_t) plength * skipms_from_toc / pct_timestep;
+            }
         } else {
             /* No TOC exists, estimate the new position */
-            pos = (uint64_t)newtime * id3->filesize / id3->length;
+            if (newtime < abs(skipms_from_curpos))
+                pos = (uint64_t)newtime * id3->filesize / id3->length;
         }
         // VBR seek might be very inaccurate in long files 
         // So make sure that seeking actually happened in the intended direction 
         // Fix jumps in the wrong direction by seeking relative to the current position
-        long delta = id3->elapsed - newtime;        
-        int curpos = ci->curpos - id3->first_frame_offset;
-        if ((delta >= 0 && pos > curpos) || (delta < 0 && pos < curpos))
+        if (pos == -1 || (skipms_from_curpos >= 0 && pos > curpos) || (skipms_from_curpos < 0 && pos < curpos))
         {
-            pos = curpos - delta * id3->filesize / id3->length;
+            pos = curpos - skipms_from_curpos * (id3->filesize / id3->length);
+            //LOGF("сurpos relative seek: %d, curpos: %d, newtime: %d", pos, curpos, newtime);
         }
     } else if (id3->bitrate) {
         pos = newtime * (id3->bitrate / 8);
@@ -130,7 +134,7 @@ static int get_file_pos(int newtime)
        transition properly to the next song */
     if (pos >= (int)(id3->filesize - id3->id3v1len))
         pos = id3->filesize - id3->id3v1len - 1;
-
+    
     /* id3->filesize excludes id3->first_frame_offset, so add it now */
     pos += id3->first_frame_offset;
 
@@ -348,7 +352,14 @@ enum codec_status codec_run(void)
      if (ci->id3->offset) 
      {
         ci->seek_buffer(ci->id3->offset);
-        set_elapsed(ci->id3);
+        if (ci->id3->elapsed)
+        {
+            ci->set_elapsed(ci->id3->elapsed);
+        }
+        else
+        {
+            set_elapsed(ci->id3);
+        }
     }
     else if (ci->id3->elapsed)
          /* Have elapsed time but not offset */
