@@ -18,9 +18,11 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
-//#define LOGF_ENABLE
+
 #include "codeclib.h"
+#include "libasf/asf.h"
 #include <codecs/libmad/mad.h>
+#include <inttypes.h>
 
 CODEC_HEADER
 
@@ -54,6 +56,91 @@ static unsigned char mad_main_data[MAD_BUFFER_MDLEN] IBSS_ATTR;
 /* TODO: what latency does layer 1 have? */
 static int mpeg_latency[3] = { 0, 481, 529 };
 static int mpeg_framesize[3] = {384, 1152, 1152};
+
+static unsigned char stream_buffer[INPUT_CHUNK_SIZE] IBSS_ATTR;
+static unsigned char *stream_data_start;
+static unsigned char *stream_data_end;
+static unsigned char *packetdata;
+static int stream_data_available;
+static int packetlength;
+static int packetdatasize;
+static int packetrest;
+static unsigned char *lastpacketpos;
+
+static void reset_stream_buffer(void)
+{
+    stream_data_start = stream_buffer;
+    stream_data_end = stream_buffer;
+    stream_data_available = 1;
+    packetdatasize = 0;
+    packetrest = 0;
+    lastpacketpos = stream_buffer;
+}
+
+static inline unsigned char *get_stream_data(size_t *realsize, size_t reqsize)
+{
+    static int errcount = 0;
+    size_t datasize = stream_data_end - stream_data_start;
+    if (!ci->id3->is_asf_stream)
+        return ci->request_buffer(realsize, reqsize);
+    else if (datasize < INPUT_CHUNK_SIZE / 2)
+    {
+        if (stream_data_start < stream_data_end && stream_data_start > stream_buffer)
+        {
+            lastpacketpos -= stream_data_start - stream_buffer;
+            memmove(stream_buffer, stream_data_start, datasize);
+            stream_data_start = stream_buffer;
+            stream_data_end = stream_buffer + datasize;
+        }
+        while (datasize < INPUT_CHUNK_SIZE && (packetrest || stream_data_available > 0))
+        {
+            if (packetrest && packetdata)
+            {
+                datasize = INPUT_CHUNK_SIZE - datasize;
+                if (datasize > (size_t)packetrest)
+                    datasize = packetrest;
+                memcpy(stream_data_end, packetdata, datasize);
+                packetrest -= datasize;
+                stream_data_end += datasize;
+                if (packetrest)
+                    packetdata += datasize;
+                else
+                {
+                    ci->advance_buffer(packetlength);
+                    lastpacketpos = stream_data_end;
+                }
+                datasize = stream_data_end - stream_data_start;
+            }
+            else
+            {
+                asf_waveformatex_t *wfx = (asf_waveformatex_t *)(ci->id3->toc);
+                int res = asf_read_packet(&packetdata, &packetdatasize, &packetlength, wfx);
+                if (res < 0)
+                {
+                    if (res == ASF_ERROR_EOF)
+                        stream_data_available = 0;
+                    else if (++errcount > 5)
+                        stream_data_available = -1;
+                }
+                else errcount = 0;
+                packetrest = packetdatasize;
+            }
+        }
+    }
+    if (packetdatasize && lastpacketpos > stream_data_start)
+      ci->set_offset(ci->curpos - ((lastpacketpos - stream_data_start) / packetdatasize + 1) * packetlength);
+    *realsize = (datasize > reqsize) ? reqsize : datasize;
+    return stream_data_start;
+}
+
+static void advance_stream_buffer(size_t size)
+{
+    if (!ci->id3->is_asf_stream)
+        ci->advance_buffer(size);
+    else if (stream_data_start + size > stream_data_end)
+        stream_data_start = stream_data_end;
+    else stream_data_start += size;
+}
 
 static void init_mad(void)
 {
@@ -309,15 +396,30 @@ enum codec_status codec_main(enum codec_entry_call_reason reason)
 
 bool seek_by_time(int64_t* samplesdone, unsigned long current_frequency, unsigned long elapsed_ms)
 {
-    int newpos = elapsed_ms ? get_file_pos(elapsed_ms) : (int)(ci->id3->first_frame_offset);
+    if (ci->id3->is_asf_stream) {
+        asf_waveformatex_t *wfx = (asf_waveformatex_t *)(ci->id3->toc);
+        int elapsedtime = asf_seek(elapsed_ms, wfx);
 
-    *samplesdone = ((int64_t)elapsed_ms) * current_frequency / 1000;
+        *samplesdone = (elapsedtime > 0) ?
+                       (((int64_t)elapsedtime)*current_frequency/1000) : 0;
 
-    if (!ci->seek_buffer(newpos))
-        return false;
+        if (elapsedtime < 1) {
+            ci->set_elapsed(0);
+            return false;
+        } else {
+            ci->set_elapsed(elapsedtime);
+            reset_stream_buffer();
+        }
+    } else {
+        int newpos = elapsed_ms ? get_file_pos(elapsed_ms) : (int)(ci->id3->first_frame_offset);
 
-    ci->set_elapsed((*samplesdone * 1000LL) / current_frequency);
+        *samplesdone = ((int64_t)elapsed_ms) * current_frequency / 1000;
 
+        if (!ci->seek_buffer(newpos))
+            return false;
+
+        ci->set_elapsed((*samplesdone * 1000LL) / current_frequency);
+    }
     return true;
 }
 
@@ -345,10 +447,21 @@ enum codec_status codec_run(void)
     current_frequency = ci->id3->frequency;
     codec_set_replaygain(ci->id3);
 
-     if (ci->id3->offset) 
-     {
-        ci->seek_buffer(ci->id3->offset);
-        set_elapsed(ci->id3);
+     if (ci->id3->offset) {
+
+        if (ci->id3->is_asf_stream) {
+            asf_waveformatex_t *wfx = (asf_waveformatex_t *)(ci->id3->toc);
+            int packet_offset = ((ci->id3->offset > ci->id3->first_frame_offset) ?
+                                 (ci->id3->offset - ci->id3->first_frame_offset) : 0)
+              % wfx->packet_size;
+            ci->seek_buffer(ci->id3->offset - packet_offset);
+            ci->id3->elapsed = asf_get_timestamp(&packet_offset);
+            ci->set_elapsed(ci->id3->elapsed);
+        }
+        else {
+            ci->seek_buffer(ci->id3->offset);
+            set_elapsed(ci->id3);
+        }
     }
     else if (ci->id3->elapsed)
          /* Have elapsed time but not offset */
@@ -386,6 +499,8 @@ enum codec_status codec_run(void)
     else
         samples_to_skip = start_skip;
 
+    if (ci->id3->is_asf_stream)
+        reset_stream_buffer();
     framelength = 0;
 
     /* This is the decoding loop. */
@@ -417,11 +532,14 @@ enum codec_status codec_run(void)
 
         /* Lock buffers */
         if (stream.error == 0) {
-            inputbuffer = ci->request_buffer(&size, INPUT_CHUNK_SIZE);
-            if (size == 0 || inputbuffer == NULL)
+            inputbuffer = get_stream_data(&size, INPUT_CHUNK_SIZE);
+            if (size == 0 || inputbuffer == NULL) {
+                if (ci->id3->is_asf_stream && stream_data_available < 0)
+                    return CODEC_ERROR;
                 break;
+            }
             mad_stream_buffer(&stream, (unsigned char *)inputbuffer,
-                    size + padding);
+                              size + padding);
         }
 
         if (mad_frame_decode(&frame, &stream)) {
@@ -432,9 +550,9 @@ enum codec_status codec_run(void)
 
                 /* Fill the buffer */
                 if (stream.next_frame)
-                    ci->advance_buffer(stream.next_frame - stream.buffer);
+                    advance_stream_buffer(stream.next_frame - stream.buffer);
                 else
-                    ci->advance_buffer(size);
+                    advance_stream_buffer(size);
                 stream.error = 0; /* Must get new inputbuffer next time */
                 file_end++;
                 continue;
@@ -483,12 +601,10 @@ enum codec_status codec_run(void)
             }
         }
 
-        if (stream.next_frame) {
-            ci->advance_buffer(stream.next_frame - stream.buffer);
-        }
-        else {
-            ci->advance_buffer(size);
-        }
+        if (stream.next_frame)
+            advance_stream_buffer(stream.next_frame - stream.buffer);
+        else
+            advance_stream_buffer(size);
         stream.error = 0; /* Must get new inputbuffer next time */
         file_end = 0;
 

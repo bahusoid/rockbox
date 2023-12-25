@@ -3,7 +3,6 @@
 opus.c
 vorbis.c
 mpa.c
-mpa_asf.c
 flac.c
 wav.c
 a52.c

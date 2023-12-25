@@ -35,7 +35,7 @@ enum
     /* start formats */
     AFMT_MPA_L1,       /* MPEG Audio layer 1 */
     AFMT_MPA_L2,       /* MPEG Audio layer 2 */
-    AFMT_MPA_L3,       /* MPEG Audio layer 2 */
+    AFMT_MPA_L3,       /* MPEG Audio layer 3 */
 
     AFMT_AIFF,         /* Audio Interchange File Format */
     AFMT_PCM_WAV,      /* Uncompressed PCM in a WAV file */
@@ -93,7 +93,6 @@ enum
     AFMT_KSS,          /* KSS (MSX computer KSS Music File) */
     AFMT_OPUS,         /* Opus (see http://www.opus-codec.org ) */
     AFMT_AAC_BSF,
-    AFMT_ASF_MP3,       /* MP3 in ASF*/
 
     /* add new formats at any index above this line to have a sensible order -
        specified array index inits are used */
@@ -317,6 +316,9 @@ struct mp3entry {
 
     /* Musicbrainz Track ID */
     char* mb_track_id;
+
+    /* For ASF files with MP3 audio stream */
+    bool is_asf_stream;
 };
 
 unsigned int probe_file_format(const char *filename);
