@@ -18,7 +18,7 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
-
+#define LOGF_ENABLE
 #include "codeclib.h"
 #include "libasf/asf.h"
 #include <codecs/libmad/mad.h>
@@ -257,15 +257,16 @@ static unsigned long toc_interpolate(unsigned long input,
  * Compute the file position corresponding to an elapsed time using
  * the TOC, using linear interpolation. Fast but inaccurate.
  */
-static unsigned long toc_get_pos_interpolated(unsigned long time)
+static unsigned long toc_get_pos_interpolated(unsigned long time, unsigned long *time_adjusted)
 {
     unsigned int percent = toc_time_to_percent(time);
-    if (percent == 100)
-        return ci->id3->length;
+//    if (percent == 100)
+//        return ci->id3->length;
 
     unsigned long pos_a, pos_b;
     unsigned long time_a, time_b;
     toc_get_interpolation_points(percent, &pos_a, &pos_b, &time_a, &time_b);
+    *time_adjusted = time_a;
 
     if (accurate_seek)
         return pos_a;
@@ -293,14 +294,14 @@ static unsigned long toc_get_time_interpolated(unsigned long pos)
     return toc_interpolate(pos, pos_a, pos_b, time_a, time_b);
 }
 
-static unsigned long get_file_pos(unsigned long newtime)
+static unsigned long get_file_pos(unsigned long newtime, unsigned long *time_adjusted)
 {
     struct mp3entry *id3 = ci->id3;
     unsigned long pos;
 
     if (id3->vbr) {
         if (id3->has_toc) {
-            pos = toc_get_pos_interpolated(newtime);
+            pos = toc_get_pos_interpolated(newtime, &time_adjusted);
         } else if (accurate_seek) {
             /* Need to decode from the start of the file(!) */
             pos = 0;
@@ -311,18 +312,18 @@ static unsigned long get_file_pos(unsigned long newtime)
         // VBR seek might be very inaccurate in long files 
         // So make sure that seeking actually happened in the intended direction 
         // Fix jumps in the wrong direction by seeking relative to the current position
-        long delta = id3->elapsed - newtime;        
-        int curpos = ci->curpos - id3->first_frame_offset;
-        if ((delta >= 0 && pos > curpos) || (delta < 0 && pos < curpos))
-        {
-            pos = curpos - delta * id3->filesize / id3->length;
-        }
+//        long delta = id3->elapsed - newtime;        
+//        int curpos = ci->curpos - id3->first_frame_offset;
+//        if ((delta >= 0 && pos > curpos) || (delta < 0 && pos < curpos))
+//        {
+//            pos = curpos - delta * id3->filesize / id3->length;
+//        }
     } else if (id3->bitrate) {
         /* The calculation isn't always accurate for CBR because
          * frames can still be variable length due to padding. */
-        if (accurate_seek)
-            pos = 0;
-        else
+//        if (accurate_seek)
+//            pos = 0;
+//        else
             pos = newtime * (id3->bitrate / 8);
     } else {
         /* Seek not possible... is this really a thing? */
@@ -408,6 +409,7 @@ static bool mpa_seek(unsigned long time, unsigned long offset)
 
     if (id3->is_asf_stream)
         return mpa_seek_asf(time, offset);
+    unsigned long time_adjusted = 0;
 
     /* MP3 doesn't natively support accurate time-based seeks.
      * If the offset isn't provided, we need to compute it. */
@@ -415,12 +417,12 @@ static bool mpa_seek(unsigned long time, unsigned long offset)
         if (!time)
             return false;
 
-        offset = get_file_pos(time);
+        offset = get_file_pos(time, &time_adjusted);
 
         /* If seeking forward and the offset is below our current
          * offset, it's cheaper to start from the current position. */
         if (accurate_seek &&
-            time >= ci->id3->elapsed && offset < ci->id3->offset)
+            time >= ci->id3->elapsed && offset < ci->curpos)
             return true;
     }
 
@@ -430,8 +432,8 @@ static bool mpa_seek(unsigned long time, unsigned long offset)
     /* Update the elapsed time based on the offset we seeked to.
      * While not terribly accurate, this ensures the elapsed time
      * cannot accumulate errors indefinitely. */
-    unsigned long newtime;
-    if (!get_elapsed(offset, &newtime))
+    unsigned long newtime = time_adjusted;
+    if(!newtime && !get_elapsed(offset, &newtime))
         newtime = time;
 
     ci->set_elapsed(newtime);
@@ -673,6 +675,7 @@ enum codec_status codec_run(void)
                 seek_time = param;
             else
                 seek_time = 0;
+            LOGF("seek time: %d, current time: %d", seek_time, elapsed_base);
             resuming = false;
 
             if (!seek_time)
