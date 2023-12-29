@@ -20,7 +20,8 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
-
+//#define LOGF_ENABLE
+//#include "logf.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
@@ -47,6 +48,22 @@ static bool check_adts_syncword(int fd)
     return (syncword & 0xFFF6) == 0xFFF0;
 }
 
+static bool check_adts(int fd, const struct mp3entry *entry)
+{
+    const int max_sample_size = 2048; //see BUFFER_SIZE in faad/bits.c
+    for (int i = 0; i < max_sample_size; ++i) 
+    {
+        if (-1 == lseek(fd, entry->first_frame_offset + i, SEEK_SET))
+            return false;
+
+        if (check_adts_syncword(fd))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool get_aac_metadata(int fd, struct mp3entry *entry)
 {
     unsigned char buf[5];
@@ -65,8 +82,21 @@ bool get_aac_metadata(int fd, struct mp3entry *entry)
 
     if (-1 == lseek(fd, entry->first_frame_offset, SEEK_SET))
         return false;
+    if (read(fd, buf, 5) != 5)
+        return false;
+    if (!memcmp(buf, "ADIF", 4))
+    {
+        if (-1 == lseek(fd, (buf[4] & 0x80) ? (entry->first_frame_offset + 9) : entry->first_frame_offset, SEEK_SET))
+            return false;
 
-    if (check_adts_syncword(fd))
+        uint32_t bitrate;
+        read_uint32be(fd, &bitrate);
+        entry->vbr = (bitrate & 0x10000000) != 0;
+        entry->bitrate = ((bitrate & 0xFFFFFE0) + 16000) / 32000;
+        read_uint32be(fd, (uint32_t*)(&(entry->frequency)));
+        entry->frequency = sample_rates[(entry->frequency >> (entry->vbr ? 23 : 3)) & 0x0F];
+    }
+    else if (check_adts(fd, entry))
     {
         int frames;
         int stat_length;
@@ -98,23 +128,6 @@ bool get_aac_metadata(int fd, struct mp3entry *entry)
             entry->frequency <<= 1;
             entry->needs_upsampling_correction = true;
         }
-    }
-    else
-    {
-        uint32_t bitrate;
-        if (-1 == lseek(fd, entry->first_frame_offset, SEEK_SET))
-            return false;
-        if (read(fd, buf, 5) != 5)
-            return false;
-        if (memcmp(buf, "ADIF", 4))
-            return false;
-        if (-1 == lseek(fd, (buf[4] & 0x80) ? (entry->first_frame_offset + 9) : entry->first_frame_offset, SEEK_SET))
-            return false;
-        read_uint32be(fd, &bitrate);
-        entry->vbr = (bitrate & 0x10000000) != 0;
-        entry->bitrate = ((bitrate & 0xFFFFFE0) + 16000) / 32000;
-        read_uint32be(fd, (uint32_t*)(&(entry->frequency)));
-        entry->frequency = sample_rates[(entry->frequency >> (entry->vbr ? 23 : 3)) & 0x0F];
     }
     entry->length = (unsigned long)((entry->filesize * 8LL + (entry->bitrate >> 1)) / entry->bitrate);
 

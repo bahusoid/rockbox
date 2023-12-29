@@ -24,7 +24,8 @@
 **
 ** $Id$
 **/
-
+//#define LOGF_ENABLE
+//#include "logf.h"
 #include "common.h"
 #include "structs.h"
 
@@ -277,11 +278,8 @@ int32_t NEAACDECAPI NeAACDecInit(NeAACDecHandle hDecoder, uint8_t *buffer,
             bits = bit2byte(faad_get_processed_bits(&ld));
 
         /* Check if an ADTS header is present */
-        } else if (faad_showbits(&ld, 12) == 0xfff) {
+        } else if (adts_frame(&adts, &ld) == 0) {
             hDecoder->adts_header_present = 1;
-
-            adts.old_format = hDecoder->config.useOldADTSFormat;
-            adts_frame(&adts, &ld);
 
             hDecoder->sf_index = adts.sf_index;
             hDecoder->object_type = adts.profile + 1;
