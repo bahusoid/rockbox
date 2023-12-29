@@ -24,7 +24,8 @@
 **
 ** $Id$
 **/
-
+//#define LOGF_ENABLE
+//#include "logf.h"
 #include "common.h"
 #include "structs.h"
 
