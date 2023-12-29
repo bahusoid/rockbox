@@ -20,7 +20,7 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
-
+//#define LOGF_ENABLE
 #include "codeclib.h"
 #include "libfaad/common.h"
 #include "libfaad/structs.h"
@@ -32,6 +32,7 @@ CODEC_HEADER
  * as headroom (see libfaad/bits.c). FAAD_BYTE_BUFFER_SIZE bytes are buffered
  * for each frame. */
 #define FAAD_BYTE_BUFFER_SIZE (2048-12)
+#define ADTS_SYNC_ERRORS 5
 
 static void update_playing_time(void)
 {
@@ -48,6 +49,19 @@ enum codec_status codec_main(enum codec_entry_call_reason reason)
     }
 
     return CODEC_OK;
+}
+
+int find_adts_keyword_idx(const uint8_t *buffer, uint32_t buffer_size)
+{
+    uint32_t buffer_offset = 0;
+    while (buffer_offset + 1 < buffer_size) 
+    {
+        //ADTS header starts with 12 bit syncword 1111 1111 1111
+        if ((buffer[buffer_offset] == 0xFF && (buffer[buffer_offset + 1] & 0xF6) == 0xF0))
+            return buffer_offset;
+        ++buffer_offset;
+    } 
+    return -1;
 }
 
 /* this is called for each file to process */
@@ -109,6 +123,7 @@ enum codec_status codec_run(void)
         ci->set_offset(ci->id3->first_frame_offset);
     }
 
+    int allow_adts_sync_errors = decoder->adts_header_present ? ADTS_SYNC_ERRORS : 0;
     /* The main decoding loop */
     while (1) {
         if (action == CODEC_ACTION_NULL)
@@ -124,6 +139,7 @@ enum codec_status codec_run(void)
             ci->set_elapsed((unsigned long)param);
             NeAACDecPostSeekReset(decoder, 0);
             ci->seek_complete();
+            allow_adts_sync_errors = decoder->adts_header_present ? ADTS_SYNC_ERRORS : 0;
         }
 
         action = CODEC_ACTION_NULL;
@@ -137,6 +153,35 @@ enum codec_status codec_run(void)
         /* Decode one block - returned samples will be host-endian */
         if (NeAACDecDecode(decoder, &frame_info, buffer, n) == NULL || frame_info.error > 0) {
             LOGF("FAAD: decode error '%s'\n", NeAACDecGetErrorMessage(frame_info.error));
+
+            if (!allow_adts_sync_errors)
+            {
+                LOGF("EXIT BY DECODE ERROR!!!");
+                return CODEC_ERROR;
+            }
+
+            --allow_adts_sync_errors;
+            int advance_buffer = find_adts_keyword_idx(buffer, n);
+            if (advance_buffer > 0)
+            {
+                // 5 - Unable to find ADTS syncword (adts_fixed_header searches in first 768 bytes of stream)
+                // 14 - Input data buffer too small
+                if (frame_info.error != 5 && frame_info.error != 14)
+                {
+                    // Consider it erroneously detected keyword so skip it
+                    advance_buffer += 2;
+                }
+            }
+            else
+            {
+                advance_buffer = n - 1;
+            }
+
+            if (advance_buffer > 0 ) 
+            {
+                ci->advance_buffer(advance_buffer);
+                continue;
+            }
             return CODEC_ERROR;
         }
 

@@ -20,7 +20,8 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
-
+//#define LOGF_ENABLE
+//#include "logf.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
@@ -47,11 +48,10 @@ static bool check_adts_syncword(int fd)
     return (syncword & 0xFFF6) == 0xFFF0;
 }
 
-static bool find_adts_keyword(int fd, struct mp3entry *entry)
+static bool find_adts_keyword(int fd, const struct mp3entry *entry)
 {
-    /* logic is copied from adts_fixed_header libfaad/syntax.c:
-     * try to recover from sync errors */
-    for (int i = 0; i < 768; ++i)
+    const int max_sample_size = 2048; //see BUFFER_SIZE in faad/bits.c
+    for (int i = 0; i < max_sample_size; ++i) 
     {
         if (-1 == lseek(fd, entry->first_frame_offset + i, SEEK_SET))
             return false;
@@ -61,7 +61,6 @@ static bool find_adts_keyword(int fd, struct mp3entry *entry)
             return true;
         }
     }
-
     return false;
 }
 
