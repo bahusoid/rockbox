@@ -352,7 +352,7 @@ enum codec_status codec_run(void)
      if (ci->id3->offset) 
      {
         ci->seek_buffer(ci->id3->offset);
-        if (ci->id3->elapsed)
+        if (ci->id3->elapsed && ci->id3->elapsed < ci->id3->length)
         {
             ci->set_elapsed(ci->id3->elapsed);
         }
