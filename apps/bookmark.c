@@ -855,6 +855,7 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
 
         case ACTION_TREE_WPS:
         case ACTION_STD_CANCEL:
+        case ACTION_STD_MENU:
             exit = true;
             break;
 
