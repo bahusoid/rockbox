@@ -69,8 +69,10 @@ void panicf_f( const char *fmt, ...)
     asm volatile ("mov %[SP],r4 \n"
                   : [SP] "=r" (sp)
                  );
-
-    int pc = (int)__builtin_return_address(0);
+#if defined(HAVE_RB_BACKTRACE)
+    int pc = (int)
+#endif
+    __builtin_return_address(0);
 #elif defined(BACKTRACE_MIPSUNWINDER)
 void panicf( const char *fmt, ... )
 {
