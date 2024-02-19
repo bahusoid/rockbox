@@ -463,7 +463,7 @@ void lcd_mono_bitmap(const unsigned char *src, int x, int y, int width, int heig
     lcd_mono_bitmap_part(src, 0, 0, width, x, y, width, height);
 }
 
-
+#ifndef DISABLE_ALPHA_BITMAP
 /* About Rockbox' internal alpha channel format (for ALPHA_COLOR_FONT_DEPTH == 2)
  *
  * For each pixel, 4bit of alpha information is stored in a byte-stream,
@@ -836,3 +836,4 @@ static void ICODE_ATTR lcd_alpha_bitmap_part_mix(const fb_data* image,
 
     BLEND_FINISH;
 }
+#endif /* !DISABLE_ALPHA_BITMAP */

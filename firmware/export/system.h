@@ -255,7 +255,9 @@ static inline void cpu_boost_unlock(void)
 
 /* Define this if target has support for generating backtraces */
 #ifdef CPU_ARM
+#ifndef BOOTLOADER
     #define HAVE_RB_BACKTRACE
+#endif
 #endif
 
 #ifndef MIN_STACK_ALIGN
