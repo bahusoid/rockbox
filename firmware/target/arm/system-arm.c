@@ -145,11 +145,15 @@ void NORETURN_ATTR UIE(unsigned int pc, unsigned int num)
     }   /* num == 1 || num == 2 // prefetch/data abort */
 #endif /* !defined(CPU_ARM7TDMI */
 
+#ifndef BOOTLOADER
     if (!triggered)
     {
         triggered = true;
         rb_backtrace(pc, __get_sp(), &line);
     }
+#else
+    (void)triggered;
+#endif
 
     lcd_update();
 
