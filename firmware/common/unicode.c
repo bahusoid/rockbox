@@ -100,6 +100,7 @@ static const struct cp_info cp_info[NUM_CODEPAGES+1] =
 {
     [0 ... NUM_CODEPAGES] = { CP_TID_NONE, NULL   , "unknown"     },
     [ISO_8859_1]          = { CP_TID_NONE, NULL   , "ISO-8859-1"  },
+#ifndef BOOTLOADER
     [ISO_8859_7]          = { CP_TID_ISO , CPF_ISO, "ISO-8859-7"  },
     [ISO_8859_8]          = { CP_TID_ISO , CPF_ISO, "ISO-8859-8"  },
     [WIN_1251]            = { CP_TID_ISO , CPF_ISO, "CP1251"      },
@@ -113,6 +114,7 @@ static const struct cp_info cp_info[NUM_CODEPAGES+1] =
     [GB_2312]             = { CP_TID_936 , CPF_936, "GB-2312"     },
     [KSX_1001]            = { CP_TID_949 , CPF_949, "KSX-1001"    },
     [BIG_5]               = { CP_TID_950 , CPF_950, "BIG5"        },
+#endif
     [UTF_8]               = { CP_TID_NONE, NULL   , "UTF-8"       },
 };
 
@@ -121,13 +123,10 @@ static int default_cp_tid = CP_TID_NONE;
 static int default_cp_handle = 0;
 static int volatile default_cp_table_ref = 0;
 
-static int loaded_cp_tid = CP_TID_NONE;
 static int volatile cp_table_ref = 0;
 #define CP_LOADING BIT_N(sizeof(int)*8-1) /* guard against multi loaders */
 
-/* non-default codepage table buffer (cannot be bufalloced! playback itself
-   may be making the load request) */
-static unsigned short codepage_table[MAX_CP_TABLE_SIZE+1];
+
 
 #if defined(APPLICATION) && defined(__linux__)
 static const char * const name_codepages_linux[NUM_CODEPAGES+1] =
@@ -266,13 +265,19 @@ unsigned char* iso_decode(const unsigned char *iso, unsigned char *utf8,
                           int cp, int count)
 {
     uint16_t *table = NULL;
-
-    cp_lock_enter();
+    bool lock_default_cp = false;
 
     if (cp < 0 || cp >= NUM_CODEPAGES)
         cp = default_cp;
-
     int tid = cp_info[cp].tid;
+
+#ifndef BOOTLOADER
+    /* non-default codepage table buffer (cannot be bufalloced! playback itself
+   may be making the load request) */
+    static unsigned short codepage_table[MAX_CP_TABLE_SIZE+1];
+    static int loaded_cp_tid = CP_TID_NONE;
+
+    cp_lock_enter();
 
     while (1) {
         if (tid == default_cp_tid) {
@@ -280,6 +285,7 @@ unsigned char* iso_decode(const unsigned char *iso, unsigned char *utf8,
             if (default_cp_handle > 0) {
                 table = cp_table_get_data(default_cp_handle);
                 default_cp_table_ref++;
+                lock_default_cp = true;
             }
 
             break;
@@ -321,6 +327,9 @@ unsigned char* iso_decode(const unsigned char *iso, unsigned char *utf8,
     }
 
     cp_lock_leave();
+#else
+    tid = CP_TID_NONE;
+#endif /* !BOOTLOADER */
 
     while (count--) {
         unsigned short ucs, tmp;
@@ -381,7 +390,7 @@ unsigned char* iso_decode(const unsigned char *iso, unsigned char *utf8,
 
     if (table) {
         cp_lock_enter();
-        if (table == codepage_table) {
+        if (!lock_default_cp) {
             cp_table_ref--;
         } else {
             default_cp_table_ref--;
