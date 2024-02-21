@@ -84,6 +84,7 @@
 #define IRAM_LCDFRAMEBUFFER IBSS_ATTR
 
 #define CONFIG_KEYPAD SANSA_E200_PAD
+#define HAVE_VOLUME_IN_LIST
 
 /* Define this to enable morse code input */
 #define HAVE_MORSE_INPUT
@@ -139,7 +140,7 @@
 /* define this if the unit uses a scrollwheel for navigation */
 #define HAVE_SCROLLWHEEL
 /* define to activate advanced wheel acceleration code */
-#define HAVE_WHEEL_ACCELERATION
+//#define HAVE_WHEEL_ACCELERATION
 /* define from which rotation speed [degree/sec] on the acceleration starts */
 #define WHEEL_ACCEL_START 540
 /* define type of acceleration (1 = ^2, 2 = ^3, 3 = ^4) */
