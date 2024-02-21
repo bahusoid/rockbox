@@ -48,7 +48,8 @@
 
 #define MAX_BOOKMARKS 10
 #define MAX_BOOKMARK_SIZE  350
-#define RECENT_BOOKMARK_FILE ROCKBOX_DIR "/most-recent.bmark"
+#define RECENT_BOOKMARK_FILE_NAME "/most-recent.bmark"
+#define RECENT_BOOKMARK_FILE ROCKBOX_DIR RECENT_BOOKMARK_FILE_NAME
 
 /* Used to buffer bookmarks while displaying the bookmark list. */
 struct bookmark_list
@@ -149,6 +150,32 @@ int bookmark_load_menu(void)
     return ret;
 }
 
+static char* get_mrb_path(char* dirbuf, int dirbuf_sz)
+{
+    char *pl_dir = NULL;
+
+    /* directory config is of the format: "dir: /path/to/dir" */
+    if (global_settings.playlist_catalog_dir[0] != '\0')
+    {
+        pl_dir = global_settings.playlist_catalog_dir;
+    }
+    else {
+        return RECENT_BOOKMARK_FILE;
+    }
+    /* remove duplicate leading '/' */
+    if ((pl_dir[1] == '/' && pl_dir[0] == '/') || !dir_exists(pl_dir))
+    {
+        return RECENT_BOOKMARK_FILE;
+    }
+    int size = strlcpy(dirbuf, pl_dir, dirbuf_sz);
+    if(size > 0 && dirbuf[size-1] == PATH_SEPCH)
+    {
+        --size;
+    }
+    strlcpy(dirbuf + size, RECENT_BOOKMARK_FILE_NAME, dirbuf_sz - size);
+    return dirbuf;
+}
+
 /* ----------------------------------------------------------------------- */
 /* Gives the user a list of the Most Recent Bookmarks.  This is an         */
 /* interface function                                                      */
@@ -160,7 +187,8 @@ bool bookmark_mrb_load()
     bool ret = false;
 
     push_current_activity(ACTIVITY_BOOKMARKSLIST);
-    select_bookmark(RECENT_BOOKMARK_FILE, false, &bookmark);
+    char max_path[MAX_PATH];
+    select_bookmark(get_mrb_path(max_path, MAX_PATH), false, &bookmark);
     if (bookmark != NULL)
     {
         ret = play_bookmark(bookmark);
@@ -235,8 +263,10 @@ static bool write_bookmark(bool create_bookmark_file, const char *bookmark)
     }
     else
     {
-        if (global_settings.usemrb)
-            ret = add_bookmark(RECENT_BOOKMARK_FILE, bookmark, true);
+        if (global_settings.usemrb) {
+            char max_path[MAX_PATH];
+            ret = add_bookmark(get_mrb_path(max_path, MAX_PATH), bookmark, true);
+        }
 
 
         /* writing the bookmark */
@@ -758,6 +788,7 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
     bool exit = false;
     bool refresh = true;
     int ret = BOOKMARK_FAIL;
+    char max_path[MAX_PATH];
 
     bookmarks = plugin_get_buffer(&size);
     bookmarks->buffer_size = size;
@@ -766,7 +797,7 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
     bookmarks->start = 0;
     bookmarks->total_count = 0;
     bookmarks->show_playlist_name
-        = strcmp(bookmark_file_name, RECENT_BOOKMARK_FILE) == 0;
+        = strcmp(bookmark_file_name, get_mrb_path(max_path, MAX_PATH)) == 0;
     gui_synclist_init(&list, &get_bookmark_info, (void*) bookmarks, false, 2, NULL);
     if(global_settings.talk_menu)
         gui_synclist_set_voice_callback(&list, bookmark_list_voice_cb);
