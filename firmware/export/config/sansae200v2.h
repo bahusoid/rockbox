@@ -5,7 +5,7 @@
 /* For Rolo and boot loader */
 #define MODEL_NUMBER 41
 #define MODEL_NAME   "Sandisk Sansa e200v2 series"
-
+#define ROCKBOX_NO_TEMP_SETTINGS_FILE
 /* Define if boot data from bootloader has been enabled for the target */
 #define HAVE_BOOTDATA
 
