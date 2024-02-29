@@ -101,6 +101,8 @@ struct system_status global_status;
 #include "usb-ibasso.h"
 #endif
 
+static void debug_available_settings(void);
+
 #ifdef ROCKBOX_NO_TEMP_SETTINGS_FILE /* Overwrites same file each time */
 #define CONFIGFILE_TEMP CONFIGFILE
 #define NVRAM_FILE_TEMP NVRAM_FILE
@@ -112,7 +114,6 @@ struct system_status global_status;
 #ifdef LOGF_ENABLE
 static char *debug_get_flags(uint32_t flags);
 #endif
-static void debug_available_settings(void);
 
 static void rename_temp_file(const char *tempfile,
                             const char *file,
@@ -233,7 +234,6 @@ static void write_nvram_data(void)
     write(fd, buf, sizeof(buf));
     close(fd);
 }
-
 /** Reading from a config file **/
 /*
  * load settings from disk or RTC RAM
