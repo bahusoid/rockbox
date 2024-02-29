@@ -123,6 +123,8 @@ static char *debug_get_flags(uint32_t flags);
 
 #ifndef __PCTOOL__
 
+static void debug_available_settings(void);
+
 #ifdef ROCKBOX_NO_TEMP_SETTINGS_FILE /* Overwrites same file each time */
 #define CONFIGFILE_TEMP CONFIGFILE
 #define RESUMEFILE_TEMP RESUMEFILE
@@ -130,8 +132,6 @@ static char *debug_get_flags(uint32_t flags);
 #else /* creates temp files on save, renames next load, saves old file if desired */
 #define CONFIGFILE_TEMP CONFIGFILE".new"
 #define RESUMEFILE_TEMP RESUMEFILE".new"
-
-static void debug_available_settings(void);
 
 static void rename_temp_file(const char *tempfile,
                             const char *file,
