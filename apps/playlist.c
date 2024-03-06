@@ -2281,7 +2281,9 @@ int playlist_get_resume_info(int *resume_index)
 {
     struct playlist_info* playlist = &current_playlist;
 
-    return (*resume_index = playlist->index);
+    *resume_index = playlist->index;
+
+    return 0;
 }
 
 /* returns shuffle seed of playlist */
