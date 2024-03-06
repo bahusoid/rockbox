@@ -3694,12 +3694,8 @@ int playlist_update_resume_info(const struct mp3entry* id3)
         {
             unsigned int crc = playlist_get_filename_crc32(playlist,
                                                            playlist->index);
-            // CRC is -1 on usb insert, seems caused by https://gerrit.rockbox.org/r/c/rockbox/+/5163
-            if((int)crc != -1 || global_status.resume_index != playlist->index)
-            {
-                global_status.resume_crc32 = crc;
-            }
             global_status.resume_index  = playlist->index;
+            global_status.resume_crc32 = crc;
             global_status.resume_elapsed = id3->elapsed;
             global_status.resume_offset = id3->offset;
             status_save();
