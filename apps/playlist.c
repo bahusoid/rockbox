@@ -394,55 +394,178 @@ static int rotate_index(const struct playlist_info* playlist, int index)
     return index;
 }
 
-static void sync_control_unlocked(struct playlist_info* playlist)
+/*
+ * sync control file to disk
+ */
+static void sync_control(struct playlist_info* playlist, bool force)
 {
-    if (playlist->control_fd >= 0)
-        fsync(playlist->control_fd);
+#ifndef HAVE_DIRCACHE /*non dircache targets sync every time */
+    force = true;
+#endif
+
+    if (playlist->started && force)
+    {
+        if (playlist->pending_control_sync)
+        {
+            playlist_write_lock(playlist);
+
+            fsync(playlist->control_fd);
+            playlist->pending_control_sync = false;
+
+            playlist_write_unlock(playlist);
+        }
+    }
 }
 
-static int update_control_unlocked(struct playlist_info* playlist,
-                                   enum playlist_command command, int i1, int i2,
-                                   const char* s1, const char* s2, int *seekpos)
-{
-    int fd = playlist->control_fd;
-    int result;
+static int flush_cached_control_unlocked(struct playlist_info* playlist);
 
-    lseek(fd, 0, SEEK_END);
+#if USING_STORAGE_CALLBACK
+static void flush_control_cache_idle_cb(unsigned short id, void *ev, void *ud)
+{
+    (void)id;
+    (void)ev;
+
+    struct playlist_info *playlist = ud;
+    playlist_write_lock(playlist);
+
+    if (playlist->control_fd >= 0)
+        flush_cached_control_unlocked(playlist);
+
+    playlist_write_unlock(playlist);
+}
+#endif
+
+/*
+ * Flush any cached control commands to disk.  Called when playlist is being
+ * modified.  Returns 0 on success and -1 on failure.
+ */
+static int flush_cached_control_unlocked(struct playlist_info* playlist)
+{
+    int result = 0;
+
+    if (playlist->num_cached <= 0)
+        return 0;
+
+    lseek(playlist->control_fd, 0, SEEK_END);
+
+    for (int i = 0; i < playlist->num_cached; i++)
+    {
+        struct playlist_control_cache* cache = &playlist->control_cache[i];
+        switch (cache->command)
+        {
+            case PLAYLIST_COMMAND_PLAYLIST:
+                result = fdprintf(playlist->control_fd, "P:%d:%s:%s\n",
+                    cache->i1, cache->s1, cache->s2);
+                break;
+            case PLAYLIST_COMMAND_ADD:
+            case PLAYLIST_COMMAND_QUEUE:
+                result = fdprintf(playlist->control_fd, "%c:%d:%d:",
+                    (cache->command == PLAYLIST_COMMAND_ADD)?'A':'Q',
+                    cache->i1, cache->i2);
+                if (result > 0)
+                {
+                    /* save the position in file where name is written */
+                    int* seek_pos = (int *)cache->data;
+                    *seek_pos = lseek(playlist->control_fd, 0, SEEK_CUR);
+                    result = fdprintf(playlist->control_fd, "%s\n", cache->s1);
+                }
+                break;
+            case PLAYLIST_COMMAND_DELETE:
+                result = fdprintf(playlist->control_fd, "D:%d\n", cache->i1);
+                break;
+            case PLAYLIST_COMMAND_SHUFFLE:
+                result = fdprintf(playlist->control_fd, "S:%d:%d\n",
+                    cache->i1, cache->i2);
+                break;
+            case PLAYLIST_COMMAND_UNSHUFFLE:
+                result = fdprintf(playlist->control_fd, "U:%d\n", cache->i1);
+                break;
+            case PLAYLIST_COMMAND_RESET:
+                result = fdprintf(playlist->control_fd, "%s\n", "R");
+                break;
+            case PLAYLIST_COMMAND_CLEAR:
+                result = fdprintf(playlist->control_fd, "%s\n", "C");
+                break;
+            default:
+                break;
+        }
+
+        if (result <= 0)
+            break;
+    }
+
+    if (result > 0)
+    {
+        playlist->num_cached = 0;
+        playlist->pending_control_sync = true;
+        result = 0;
+    }
+    else
+    {
+        /* At this point the control file is likely corrupted. We still
+         * need to clear the cache to avoid a buffer overflow from the
+         * next command. It's unsafe to splash() because this function
+         * can be called off the main thread.
+         *
+         * TODO: recover from failed playlist control file writes.
+         */
+        playlist->num_cached = 0;
+        result = -1;
+    }
+
+#if USING_STORAGE_CALLBACK
+    remove_event_ex(DISK_EVENT_SPINUP, flush_control_cache_idle_cb, playlist);
+#endif
+    return result;
+}
+
+/*
+ * Update control data with new command.  Depending on the command, it may be
+ * cached or flushed to disk.
+ */
+static int update_control(struct playlist_info* playlist,
+                          enum playlist_command command, int i1, int i2,
+                          const char* s1, const char* s2, void* data)
+{
+    int result = 0;
+    struct playlist_control_cache* cache;
+    bool flush = false;
+
+    playlist_write_lock(playlist);
+    cache = &playlist->control_cache[playlist->num_cached++];
+
+    cache->command = command;
+    cache->i1 = i1;
+    cache->i2 = i2;
+    cache->s1 = s1;
+    cache->s2 = s2;
+    cache->data = data;
 
     switch (command)
     {
-    case PLAYLIST_COMMAND_PLAYLIST:
-        result = fdprintf(fd, "P:%d:%s:%s\n", i1, s1, s2);
-        break;
-    case PLAYLIST_COMMAND_ADD:
-    case PLAYLIST_COMMAND_QUEUE:
-        result = fdprintf(fd, "%c:%d:%d:",
-                          command == PLAYLIST_COMMAND_ADD ? 'A' : 'Q', i1, i2);
-        if (result > 0)
-        {
-            *seekpos = lseek(fd, 0, SEEK_CUR);
-            result = fdprintf(fd, "%s\n", s1);
-        }
-        break;
-    case PLAYLIST_COMMAND_DELETE:
-        result = fdprintf(fd, "D:%d\n", i1);
-        break;
-    case PLAYLIST_COMMAND_SHUFFLE:
-        result = fdprintf(fd, "S:%d:%d\n", i1, i2);
-        break;
-    case PLAYLIST_COMMAND_UNSHUFFLE:
-        result = fdprintf(fd, "U:%d\n", i1);
-        break;
-    case PLAYLIST_COMMAND_RESET:
-        result = write(fd, "R\n", 2);
-        break;
-    case PLAYLIST_COMMAND_CLEAR:
-        result = write(fd, "C\n", 2);
-        break;
-    default:
-        return -1;
+        case PLAYLIST_COMMAND_PLAYLIST:
+        case PLAYLIST_COMMAND_ADD:
+        case PLAYLIST_COMMAND_QUEUE:
+            /*
+             * These commands can use s1/s2, which may point to
+             * stack allocated buffers, so flush them immediately.
+             */
+            flush = true;
+            break;
+        default:
+            break;
     }
 
+    if (flush || playlist->num_cached == PLAYLIST_MAX_CACHE)
+        result = flush_cached_control_unlocked(playlist);
+    else
+    {
+#if USING_STORAGE_CALLBACK
+        add_event_ex(DISK_EVENT_SPINUP, true, flush_control_cache_idle_cb, playlist);
+#endif
+    }
+
+    playlist_write_unlock(playlist);
     return result;
 }
 
@@ -486,6 +609,7 @@ static void empty_playlist_unlocked(struct playlist_info* playlist, bool resume)
     playlist->filename[0] = '\0';
 
     playlist->seed = 0;
+    playlist->num_cached = 0;
 
     playlist->utf8 = true;
     playlist->control_created = false;
@@ -500,6 +624,7 @@ static void empty_playlist_unlocked(struct playlist_info* playlist, bool resume)
     playlist->last_insert_pos = -1;
 
     playlist->started = false;
+    playlist->pending_control_sync = false;
 
     if (!resume && playlist == &current_playlist)
     {
@@ -595,9 +720,9 @@ static void new_playlist_unlocked(struct playlist_info* playlist,
 
     if (playlist->control_fd >= 0)
     {
-        update_control_unlocked(playlist, PLAYLIST_COMMAND_PLAYLIST,
+        update_control(playlist, PLAYLIST_COMMAND_PLAYLIST,
             PLAYLIST_CONTROL_FILE_VERSION, -1, dirused, fileused, NULL);
-        sync_control_unlocked(playlist);
+        sync_control(playlist, false);
     }
 }
 
@@ -622,9 +747,9 @@ static int check_control(struct playlist_info* playlist)
 
             playlist->filename[playlist->dirlen-1] = '\0';
 
-            update_control_unlocked(playlist, PLAYLIST_COMMAND_PLAYLIST,
+            update_control(playlist, PLAYLIST_COMMAND_PLAYLIST,
                 PLAYLIST_CONTROL_FILE_VERSION, -1, dir, file, NULL);
-            sync_control_unlocked(playlist);
+            sync_control(playlist, false);
             playlist->filename[playlist->dirlen-1] = c;
         }
     }
@@ -706,8 +831,9 @@ static int recreate_control_unlocked(struct playlist_info* playlist)
 
         playlist->filename[playlist->dirlen-1] = '\0';
 
-        update_control_unlocked(playlist, PLAYLIST_COMMAND_PLAYLIST,
-                        PLAYLIST_CONTROL_FILE_VERSION, -1, dir, file, NULL);
+        /* cannot call update_control() because of mutex */
+        result = fdprintf(playlist->control_fd, "P:%d:%s:%s\n",
+            PLAYLIST_CONTROL_FILE_VERSION, dir, file);
 
         playlist->filename[playlist->dirlen-1] = c;
 
@@ -1262,9 +1388,8 @@ static int remove_all_tracks_unlocked(struct playlist_info *playlist, bool write
 
     if (write && playlist->control_fd >= 0)
     {
-        update_control_unlocked(playlist, PLAYLIST_COMMAND_CLEAR,
-                                -1, -1, NULL, NULL, NULL);
-        sync_control_unlocked(playlist);
+        update_control(playlist, PLAYLIST_COMMAND_CLEAR, -1, -1, NULL, NULL, NULL);
+        sync_control(playlist, false);
     }
 
     return 0;
@@ -1419,7 +1544,7 @@ static int add_track_to_playlist_unlocked(struct playlist_info* playlist,
 
     if (seek_pos < 0 && playlist->control_fd >= 0)
     {
-        int result = update_control_unlocked(playlist,
+        int result = update_control(playlist,
             (queue?PLAYLIST_COMMAND_QUEUE:PLAYLIST_COMMAND_ADD), position,
             playlist->last_insert_pos, filename, NULL, &seek_pos);
 
@@ -1524,10 +1649,10 @@ static int remove_track_unlocked(struct playlist_info* playlist,
 
     if (write && playlist->control_fd >= 0)
     {
-        result = update_control_unlocked(playlist, PLAYLIST_COMMAND_DELETE,
+        result = update_control(playlist, PLAYLIST_COMMAND_DELETE,
             position, -1, NULL, NULL, NULL);
         if (result >= 0)
-            sync_control_unlocked(playlist);
+            sync_control(playlist, false);
     }
 
     return result;
@@ -1605,7 +1730,7 @@ static int randomise_playlist_unlocked(struct playlist_info* playlist,
 
     if (write)
     {
-        update_control_unlocked(playlist, PLAYLIST_COMMAND_SHUFFLE, seed,
+        update_control(playlist, PLAYLIST_COMMAND_SHUFFLE, seed,
             playlist->first_index, NULL, NULL, NULL);
     }
 
@@ -1670,7 +1795,7 @@ static int sort_playlist_unlocked(struct playlist_info* playlist,
     if (write && playlist->control_fd >= 0)
     {
         playlist->first_index = 0;
-        update_control_unlocked(playlist, PLAYLIST_COMMAND_UNSHUFFLE,
+        update_control(playlist, PLAYLIST_COMMAND_UNSHUFFLE,
             playlist->first_index, -1, NULL, NULL, NULL);
     }
 
@@ -2031,7 +2156,10 @@ void playlist_shutdown(void)
     playlist_write_lock(playlist);
 
     if (playlist->control_fd >= 0)
+    {
+        flush_cached_control_unlocked(playlist);
         pl_close_control(playlist);
+    }
 
     playlist_write_unlock(playlist);
 }
@@ -2529,7 +2657,7 @@ int playlist_insert_directory(struct playlist_info* playlist,
     result = playlist_directory_tracksearch(dirname, recurse,
         directory_search_callback, &context);
 
-    sync_control_unlocked(playlist);
+    sync_control(playlist, false);
 
     cpu_boost(false);
 
@@ -2663,7 +2791,7 @@ int playlist_insert_playlist(struct playlist_info* playlist, const char *filenam
 
     close(fd);
 
-    sync_control_unlocked(playlist);
+    sync_control(playlist, false);
 
     display_playlist_count(count, count_str, true);
 
@@ -2997,16 +3125,15 @@ int playlist_next(int steps)
             playlist->last_insert_pos = -1;
             if (playlist->control_fd >= 0)
             {
-                int result = update_control_unlocked(playlist,
-                                                     PLAYLIST_COMMAND_RESET,
-                                                     -1, -1, NULL, NULL, NULL);
+                int result = update_control(playlist, PLAYLIST_COMMAND_RESET,
+                    -1, -1, NULL, NULL, NULL);
+
                 if (result < 0)
                 {
                     index = result;
                     goto out;
                 }
-
-                sync_control_unlocked(playlist);
+                sync_control(playlist, false);
             }
         }
     }
@@ -3834,6 +3961,11 @@ int playlist_set_current(struct playlist_info* playlist)
     current_playlist.seed = playlist->seed;
     current_playlist.modified = playlist->modified;
 
+    memcpy(current_playlist.control_cache, playlist->control_cache,
+        sizeof(current_playlist.control_cache));
+
+    current_playlist.num_cached = playlist->num_cached;
+    current_playlist.pending_control_sync = playlist->pending_control_sync;
     result = 0;
 
 out:
@@ -3936,7 +4068,7 @@ void playlist_start(int start_index, unsigned long elapsed,
     playlist->index = start_index;
     playlist->started = true;
 
-    sync_control_unlocked(playlist);
+    sync_control(playlist, false);
 
     playlist_write_unlock(playlist);
 
@@ -3949,12 +4081,7 @@ void playlist_sync(struct playlist_info* playlist)
     if (!playlist)
         playlist = &current_playlist;
 
-    playlist_write_lock(playlist);
-
-    sync_control_unlocked(playlist);
-
-    playlist_write_unlock(playlist);
-
+    sync_control(playlist, false);
     if ((audio_status() & AUDIO_STATUS_PLAY) && playlist->started)
         audio_flush_and_reload_tracks();
 }
