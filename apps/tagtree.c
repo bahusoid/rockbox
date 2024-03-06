@@ -2361,6 +2361,7 @@ static int tagtree_play_folder(struct tree_context* c)
     }
 
     playlist_start(start_index, 0, 0);
+    playlist_set_modified(NULL, false);
     return 0;
 }
 

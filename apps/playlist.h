@@ -38,9 +38,6 @@
 
 #define PLAYLIST_UNTITLED_PREFIX "Playlist "
 
-#define PLAYLIST_FLAG_MODIFIED (1u << 0) /* playlist was manually modified */
-#define PLAYLIST_FLAG_DIRPLAY  (1u << 1) /* enable directory skipping */
-
 enum playlist_command {
     PLAYLIST_COMMAND_PLAYLIST,
     PLAYLIST_COMMAND_ADD,
@@ -50,7 +47,6 @@ enum playlist_command {
     PLAYLIST_COMMAND_UNSHUFFLE,
     PLAYLIST_COMMAND_RESET,
     PLAYLIST_COMMAND_CLEAR,
-    PLAYLIST_COMMAND_FLAGS,
     PLAYLIST_COMMAND_COMMENT
 };
 
@@ -68,7 +64,8 @@ struct playlist_info
 {
     bool utf8;           /* playlist is in .m3u8 format             */
     bool control_created; /* has control file been created?         */
-    unsigned int flags;  /* flags for misc. state */
+    bool modified;       /* has playlist been modified by the user? */
+    bool dirplay;        /* are we playing a directory directly? */
     int  fd;             /* descriptor of the open playlist file    */
     int  control_fd;     /* descriptor of the open control file     */
     int  max_playlist_size; /* Max number of files in playlist. Mirror of
@@ -165,7 +162,6 @@ int playlist_randomise(struct playlist_info* playlist, unsigned int seed,
 int playlist_sort(struct playlist_info* playlist, bool start_current);
 bool playlist_modified(const struct playlist_info* playlist);
 void playlist_set_modified(struct playlist_info* playlist, bool modified);
-bool playlist_allow_dirplay(const struct playlist_info* playlist);
 int playlist_get_first_index(const struct playlist_info* playlist);
 int playlist_get_seed(const struct playlist_info* playlist);
 int playlist_amount_ex(const struct playlist_info* playlist);
