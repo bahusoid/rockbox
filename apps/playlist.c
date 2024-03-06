@@ -3890,8 +3890,6 @@ static int pl_save_update_control(struct playlist_info* playlist,
 
     /* Reset shuffle seed */
     playlist->seed = 0;
-    if (playlist == &current_playlist)
-        global_settings.playlist_shuffle = false;
 
     pl_close_control(playlist);
     close(old_fd);
