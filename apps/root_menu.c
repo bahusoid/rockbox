@@ -328,6 +328,10 @@ static int wpsscrn(void* param)
         talk_shutup();
         ret_val = gui_wps_show();
     }
+    else if (global_settings.resume_from_recent_bookmark && global_settings.usemrb && bookmark_mrb_autoload())
+    {
+        ret_val = gui_wps_show();
+    }
     else if ( global_status.resume_index != -1 )
     {
         DEBUGF("Resume index %X crc32 %lX offset %lX\n",

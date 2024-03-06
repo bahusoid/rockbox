@@ -645,9 +645,10 @@ MENUITEM_SETTING(autocreatebookmark,
 MENUITEM_SETTING(autoupdatebookmark, &global_settings.autoupdatebookmark, NULL);
 MENUITEM_SETTING(autoloadbookmark, &global_settings.autoloadbookmark, NULL);
 MENUITEM_SETTING(usemrb, &global_settings.usemrb, NULL);
+MENUITEM_SETTING(resume_mrb, &global_settings.resume_from_recent_bookmark, NULL);
 MAKE_MENU(bookmark_settings_menu, ID2P(LANG_BOOKMARK_SETTINGS), 0,
           Icon_Bookmark,
-          &autocreatebookmark, &autoupdatebookmark, &autoloadbookmark, &usemrb);
+          &autocreatebookmark, &autoupdatebookmark, &autoloadbookmark, &usemrb, &resume_mrb);
 /*    BOOKMARK MENU                */
 /***********************************/
 
