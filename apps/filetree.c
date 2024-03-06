@@ -74,7 +74,6 @@ int ft_build_playlist(struct tree_context* c, int start_index)
     int i;
     int res = 0;
     int start=start_index;
-    struct playlist_info *playlist = playlist_get_current();
 
     tree_lock_cache(c);
     struct entry *entries = tree_get_entries(c);
@@ -83,8 +82,7 @@ int ft_build_playlist(struct tree_context* c, int start_index)
     {
         if((entries[i].attr & FILE_ATTR_MASK) == FILE_ATTR_AUDIO)
         {
-            res = playlist_insert_track(playlist, entries[i].name,
-                                        PLAYLIST_INSERT_LAST, false, false);
+            res = playlist_add(entries[i].name);
             if (res < 0)
                 break;
         }
@@ -129,9 +127,10 @@ bool ft_play_playlist(char* pathname, char* dirname,
     if (playlist_create(dirname, filename) != -1)
     {
         if (global_settings.playlist_shuffle)
+        {
             playlist_shuffle(current_tick, -1);
+        }
 
-        playlist_set_modified(NULL, false);
         playlist_start(0, 0, 0);
         return true;
     }
@@ -535,7 +534,6 @@ int ft_enter(struct tree_context* c)
                             start_index = 0;
                     }
 
-                    playlist_set_modified(NULL, false);
                     playlist_start(start_index, 0, 0);
                     play = true;
                 }
