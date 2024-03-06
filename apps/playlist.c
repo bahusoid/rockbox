@@ -1107,8 +1107,8 @@ static int get_next_dir(char *dir, int direction)
 /*
  * gets pathname for track at seek index
  */
-static int get_track_filename(struct playlist_info* playlist, int index,
-                              char *buf, int buf_length)
+static int get_track_filename(struct playlist_info* playlist, int index, int seek,
+                              bool control_file, char *buf, int buf_length)
 {
     int fd;
     int max = -1;
@@ -1116,10 +1116,8 @@ static int get_track_filename(struct playlist_info* playlist, int index,
     char dir_buf[MAX_PATH+1];
     bool utf8 = playlist->utf8;
 
-    playlist_write_lock(playlist);
-
-    bool control_file = playlist->indices[index] & PLAYLIST_INSERT_TYPE_MASK;
-    unsigned long seek = playlist->indices[index] & PLAYLIST_SEEK_MASK;
+    if (buf_length > MAX_PATH+1)
+        buf_length = MAX_PATH+1;
 
 #ifdef HAVE_DIRCACHE
     if (playlist->dcfrefs_handle)
@@ -1135,6 +1133,8 @@ static int get_track_filename(struct playlist_info* playlist, int index,
 
     if (max < 0)
     {
+        playlist_write_lock(playlist);
+
         if (control_file)
         {
             fd = playlist->control_fd;
@@ -1147,7 +1147,7 @@ static int get_track_filename(struct playlist_info* playlist, int index,
 
         if(-1 != fd)
         {
-            if (lseek(fd, seek, SEEK_SET) != (off_t)seek)
+            if (lseek(fd, seek, SEEK_SET) != seek)
                 max = -1;
             else
             {
@@ -1170,10 +1170,10 @@ static int get_track_filename(struct playlist_info* playlist, int index,
             }
         }
 
+        playlist_write_unlock(playlist);
+
         if (max < 0)
         {
-            playlist_write_unlock(playlist);
-
             if (usb_detect() == USB_INSERTED)
                 ; /* ignore error on usb plug */
             else if (control_file)
@@ -1186,12 +1186,10 @@ static int get_track_filename(struct playlist_info* playlist, int index,
     }
 
     strmemccpy(dir_buf, playlist->filename, playlist->dirlen);
-    playlist_write_unlock(playlist);
 
-    if (format_track_path(buf, tmp_buf, buf_length, dir_buf) < 0)
-        return -1;
+    return format_track_path(buf, tmp_buf, buf_length, dir_buf);
 
-    return 0;
+    (void)index;
 }
 
 /*
@@ -1825,6 +1823,8 @@ static void dc_thread_playlist(void)
     struct playlist_info *playlist = &current_playlist;
     struct dircache_fileref *dcfrefs;
     int index;
+    int seek;
+    bool control_file;
 
     /* Thread starts out stopped */
     long sleep_time = TIMEOUT_BLOCK;
@@ -1902,8 +1902,12 @@ static void dc_thread_playlist(void)
                         break;
                     }
 
+                    control_file = playlist->indices[index] & PLAYLIST_INSERT_TYPE_MASK;
+                    seek = playlist->indices[index] & PLAYLIST_SEEK_MASK;
+
                     /* Load the filename from playlist file. */
-                    if (get_track_filename(playlist, index, tmp, sizeof(tmp)))
+                    if (get_track_filename(playlist, index, seek,
+                                           control_file, tmp, sizeof(tmp)) < 0)
                         break;
 
                     /* Obtain the dircache file entry cookie. */
@@ -2424,24 +2428,31 @@ int playlist_get_seed(const struct playlist_info* playlist)
 int playlist_get_track_info(struct playlist_info* playlist, int index,
                             struct playlist_track_info* info)
 {
+    int seek;
+    bool control_file;
+
     if (!playlist)
         playlist = &current_playlist;
 
     if (index < 0 || index >= playlist->amount)
         return -1;
 
-    if (get_track_filename(playlist, index,
-                           info->filename, sizeof(info->filename)))
+    control_file = playlist->indices[index] & PLAYLIST_INSERT_TYPE_MASK;
+    seek = playlist->indices[index] & PLAYLIST_SEEK_MASK;
+
+    if (get_track_filename(playlist, index, seek, control_file,
+                           info->filename, sizeof(info->filename)) < 0)
         return -1;
 
     info->attr = 0;
 
-    if (playlist->indices[index] & PLAYLIST_INSERT_TYPE_MASK)
+    if (control_file)
     {
         if (playlist->indices[index] & PLAYLIST_QUEUE_MASK)
             info->attr |= PLAYLIST_ATTR_QUEUED;
         else
             info->attr |= PLAYLIST_ATTR_INSERTED;
+
     }
 
     if (playlist->indices[index] & PLAYLIST_SKIPPED)
@@ -2737,6 +2748,8 @@ bool playlist_dynamic_only(void)
 int playlist_move(struct playlist_info* playlist, int index, int new_index)
 {
     int result = -1;
+    int seek;
+    bool control_file;
     bool queue;
     bool current = false;
     int r;
@@ -2793,10 +2806,15 @@ int playlist_move(struct playlist_info* playlist, int index, int new_index)
         }
     }
 
+    control_file = playlist->indices[index] & PLAYLIST_INSERT_TYPE_MASK;
     queue = playlist->indices[index] & PLAYLIST_QUEUE_MASK;
+    seek = playlist->indices[index] & PLAYLIST_SEEK_MASK;
 
-    if (get_track_filename(playlist, index, filename, sizeof(filename)))
+    if (get_track_filename(playlist, index, seek,
+                           control_file, filename, sizeof(filename)) < 0)
+    {
         goto out;
+    }
 
     /* We want to insert the track at the position that was specified by
        new_index.  This may be different then new_index because of the
@@ -3002,8 +3020,10 @@ bool playlist_next_dir(int direction)
 const char* playlist_peek(int steps, char* buf, size_t buf_size)
 {
     struct playlist_info* playlist = &current_playlist;
+    int seek;
     char *temp_ptr;
     int index;
+    bool control_file;
 
     index = get_next_index(playlist, steps, -1);
     if (index < 0)
@@ -3013,7 +3033,11 @@ const char* playlist_peek(int steps, char* buf, size_t buf_size)
     if (!buf || !buf_size)
         return "";
 
-    if (get_track_filename(playlist, index, buf, buf_size))
+    control_file = playlist->indices[index] & PLAYLIST_INSERT_TYPE_MASK;
+    seek = playlist->indices[index] & PLAYLIST_SEEK_MASK;
+
+    if (get_track_filename(playlist, index, seek,
+                           control_file, buf, buf_size) < 0)
         return NULL;
 
     temp_ptr = buf;
@@ -3629,6 +3653,10 @@ int playlist_save(struct playlist_info* playlist, char *filename,
     index = playlist->first_index;
     for (i=0; i<playlist->amount; i++)
     {
+        bool control_file;
+        bool queue;
+        int seek;
+
         /* user abort */
         if (action_userabort(TIMEOUT_NOBLOCK))
         {
@@ -3636,10 +3664,15 @@ int playlist_save(struct playlist_info* playlist, char *filename,
             break;
         }
 
+        control_file = playlist->indices[index] & PLAYLIST_INSERT_TYPE_MASK;
+        queue = playlist->indices[index] & PLAYLIST_QUEUE_MASK;
+        seek = playlist->indices[index] & PLAYLIST_SEEK_MASK;
+
         /* Don't save queued files */
-        if (!(playlist->indices[index] & PLAYLIST_QUEUE_MASK))
+        if (!queue)
         {
-            if (get_track_filename(playlist, index, tmp_buf, sizeof(tmp_buf)))
+            if (get_track_filename(playlist, index, seek,
+                                   control_file, tmp_buf, MAX_PATH+1) < 0)
             {
                 result = -1;
                 break;
