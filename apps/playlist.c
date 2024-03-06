@@ -3826,26 +3826,6 @@ error:
     return err;
 }
 
-static void pl_reverse(struct playlist_info *playlist, int start, int end)
-{
-    for (; start < end; start++, end--)
-    {
-        unsigned long index_swap = playlist->indices[start];
-        playlist->indices[start] = playlist->indices[end];
-        playlist->indices[end]   = index_swap;
-
-#ifdef HAVE_DIRCACHE
-        if (playlist->dcfrefs_handle)
-        {
-            struct dircache_fileref *dcfrefs = core_get_data(playlist->dcfrefs_handle);
-            struct dircache_fileref dcf_swap = dcfrefs[start];
-            dcfrefs[start] = dcfrefs[end];
-            dcfrefs[end] = dcf_swap;
-        }
-#endif
-    }
-}
-
 /*
  * Update the control file after saving the playlist under a new name.
  * A new control file is generated, containing the new playlist filename.
@@ -3858,7 +3838,7 @@ static void pl_reverse(struct playlist_info *playlist, int start, int end)
 static int pl_save_update_control(struct playlist_info* playlist,
                                   char *tmpbuf, size_t tmpsize)
 {
-    int old_fd;
+    int old_fd, index;
     int err;
     char c;
     bool any_queued = false;
@@ -3898,20 +3878,12 @@ static int pl_save_update_control(struct playlist_info* playlist,
     if (err <= 0)
         return -4;
 
-    if (playlist->first_index > 0)
+    index = playlist->first_index;
+    for (int i = 0; i < playlist->amount; ++i, ++index)
     {
-        /* rotate indices so they'll be in sync with new control file */
-        pl_reverse(playlist, 0, playlist->amount - 1);
-        pl_reverse(playlist, 0, playlist->amount - playlist->first_index - 1);
-        pl_reverse(playlist, playlist->amount - playlist->first_index, playlist->amount - 1);
+        if (index == playlist->amount)
+            index = 0;
 
-        playlist->index = rotate_index(playlist, playlist->index);
-        playlist->last_insert_pos = rotate_index(playlist, playlist->last_insert_pos);
-        playlist->first_index = 0;
-    }
-    
-    for (int index = 0; index < playlist->amount; ++index)
-    {
         /* We only need to update queued files */
         if (!(playlist->indices[index] & PLAYLIST_QUEUED))
             continue;
@@ -3923,7 +3895,7 @@ static int pl_save_update_control(struct playlist_info* playlist,
         /* Write it out to the new control file */
         int seekpos;
         err = update_control_unlocked(playlist, PLAYLIST_COMMAND_QUEUE,
-                                      index, playlist->last_insert_pos,
+                                      i, playlist->last_insert_pos,
                                       tmpbuf, NULL, &seekpos);
         if (err <= 0)
             return -5;
