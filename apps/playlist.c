@@ -157,6 +157,7 @@
  */
 #define PLAYLIST_SEEK_MASK              0x0FFFFFFF
 #define PLAYLIST_INSERT_TYPE_MASK       0xC0000000
+#define PLAYLIST_QUEUE_MASK             0x20000000
 
 #define PLAYLIST_INSERT_TYPE_PREPEND    0x40000000
 #define PLAYLIST_INSERT_TYPE_INSERT     0x80000000
@@ -717,7 +718,7 @@ static int recreate_control_unlocked(struct playlist_info* playlist)
     {
         if (playlist->indices[i] & PLAYLIST_INSERT_TYPE_MASK)
         {
-            bool queue = playlist->indices[i] & PLAYLIST_QUEUED;
+            bool queue = playlist->indices[i] & PLAYLIST_QUEUE_MASK;
             char inserted_file[MAX_PATH+1];
 
             lseek(temp_fd, playlist->indices[i] & PLAYLIST_SEEK_MASK,
@@ -1748,7 +1749,7 @@ static int get_next_index(const struct playlist_info* playlist, int steps,
                 /* second time around so skip the queued files */
                 for (i=0; i<playlist->amount; i++)
                 {
-                    if (playlist->indices[index] & PLAYLIST_QUEUED)
+                    if (playlist->indices[index] & PLAYLIST_QUEUE_MASK)
                         index = (index+1) % playlist->amount;
                     else
                     {
@@ -2395,7 +2396,7 @@ int playlist_get_track_info(struct playlist_info* playlist, int index,
 
     if (playlist->indices[index] & PLAYLIST_INSERT_TYPE_MASK)
     {
-        if (playlist->indices[index] & PLAYLIST_QUEUED)
+        if (playlist->indices[index] & PLAYLIST_QUEUE_MASK)
             info->attr |= PLAYLIST_ATTR_QUEUED;
         else
             info->attr |= PLAYLIST_ATTR_INSERTED;
@@ -2747,7 +2748,7 @@ int playlist_move(struct playlist_info* playlist, int index, int new_index)
         }
     }
 
-    queue = playlist->indices[index] & PLAYLIST_QUEUED;
+    queue = playlist->indices[index] & PLAYLIST_QUEUE_MASK;
 
     if (get_track_filename(playlist, index, filename, sizeof(filename)))
         goto out;
@@ -2870,7 +2871,7 @@ int playlist_next(int steps)
             {
                 index = get_next_index(playlist, i, -1);
 
-                if (index >= 0 && playlist->indices[index] & PLAYLIST_QUEUED)
+                if (index >= 0 && playlist->indices[index] & PLAYLIST_QUEUE_MASK)
                 {
                     remove_track_unlocked(playlist, index, true);
                     steps--; /* one less track */
@@ -3591,7 +3592,7 @@ int playlist_save(struct playlist_info* playlist, char *filename,
         }
 
         /* Don't save queued files */
-        if (!(playlist->indices[index] & PLAYLIST_QUEUED))
+        if (!(playlist->indices[index] & PLAYLIST_QUEUE_MASK))
         {
             if (get_track_filename(playlist, index, tmp_buf, sizeof(tmp_buf)))
             {
@@ -3653,7 +3654,7 @@ int playlist_save(struct playlist_info* playlist, char *filename,
                     index = playlist->first_index;
                     for (i=0, count=0; i<playlist->amount; i++)
                     {
-                        if (!(playlist->indices[index] & PLAYLIST_QUEUED))
+                        if (!(playlist->indices[index] & PLAYLIST_QUEUE_MASK))
                         {
                             playlist->indices[index] = seek_buf[count];
                             count++;
