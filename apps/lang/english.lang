@@ -16641,3 +16641,17 @@
     *: "Go to Last Album"
   </voice>
 </phrase>
+<phrase>
+  id: LANG_BOOKMARK_SETTINGS_RESUME_RECENT_BOOKMARK
+  desc: prompt for user to decide whether to resume playback from recent bookmark instead of playlist_control file
+  user: core
+  <source>
+    *: "Resume Recent Bookmark"
+  </source>
+  <dest>
+    *: "Resume Recent Bookmark"
+  </dest>
+  <voice>
+    *: "Resume Recent Bookmark"
+  </voice>
+</phrase>
