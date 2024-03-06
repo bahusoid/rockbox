@@ -122,6 +122,8 @@ static struct playlist_viewer  viewer;
 static struct playlist_info temp_playlist;
 static bool temp_playlist_init = false;
 
+static bool dirty = false;
+
 static void playlist_buffer_init(struct playlist_buffer *pb, char *names_buffer,
                                  int names_buffer_size);
 static void playlist_buffer_load_entries(struct playlist_buffer * pb, int index,
@@ -661,9 +663,10 @@ static enum pv_onplay_result onplay_menu(int index)
                 ret = PV_ONPLAY_CHANGED;
                 break;
             case 6:
-                save_playlist_screen(viewer.playlist);
-                /* playlist indices of current playlist may have changed */
-                ret = viewer.playlist ? PV_ONPLAY_UNCHANGED : PV_ONPLAY_SAVED;
+                /* save playlist */
+                if (!save_playlist_screen(viewer.playlist))
+                    dirty = false;
+                ret = PV_ONPLAY_UNCHANGED;
                 break;
             case 7:
                 /* playlist viewer settings */
@@ -808,8 +811,8 @@ static bool update_viewer_with_changes(struct gui_synclist *playlist_lists, enum
         res == PV_ONPLAY_SAVED ||
         res == PV_ONPLAY_ITEM_REMOVED)
     {
-        if (res != PV_ONPLAY_SAVED)
-            playlist_set_modified(viewer.playlist, true);
+        if (!viewer.playlist)
+            playlist_set_modified(NULL, true);
 
         if (res == PV_ONPLAY_ITEM_REMOVED)
             gui_synclist_del_item(playlist_lists);
@@ -821,6 +824,8 @@ static bool update_viewer_with_changes(struct gui_synclist *playlist_lists, enum
 
         if (viewer.selected_track >= viewer.num_tracks)
             viewer.selected_track = viewer.num_tracks-1;
+
+        dirty = true;
     }
 
     /* the show_icons option in the playlist viewer settings
@@ -943,11 +948,13 @@ enum playlist_viewer_result playlist_viewer_ex(const char* filename,
                                                                str(LANG_FAILED));
                     }
 
-                    playlist_set_modified(viewer.playlist, true);
+                    if (!viewer.playlist)
+                        playlist_set_modified(NULL, true);
 
                     update_playlist(true);
                     viewer.moving_track = -1;
                     viewer.moving_playlist_index = -1;
+                    dirty = true;
                 }
                 else if (!viewer.playlist)
                 {
@@ -1112,10 +1119,11 @@ static void close_playlist_viewer(void)
         if (viewer.initial_selection)
             *(viewer.initial_selection) = viewer.selected_track;
 
-        if(playlist_modified(viewer.playlist) && yesno_pop(ID2P(LANG_SAVE_CHANGES)))
+        if(dirty && yesno_pop(ID2P(LANG_SAVE_CHANGES)))
             save_playlist_screen(viewer.playlist);
         playlist_close(viewer.playlist);
     }
+    dirty = false;
 }
 
 static const char* playlist_search_callback_name(int selected_item, void * data,
