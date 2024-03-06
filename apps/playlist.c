@@ -259,40 +259,6 @@ static void dc_thread_stop(struct playlist_info *playlist)
 #endif
 }
 
-/*
- * Open playlist file and return file descriptor or -1 on error.
- * The fd should not be closed manually. Not thread-safe.
- */
-static int pl_open_playlist(struct playlist_info *playlist)
-{
-    if (playlist->fd >= 0)
-        return playlist->fd;
-
-    int fd = open_utf8(playlist->filename, O_RDONLY);
-    if (fd < 0)
-        return fd;
-
-    /* Presence of UTF-8 BOM forces UTF-8 encoding. */
-    if (lseek(fd, 0, SEEK_CUR) > 0)
-        playlist->utf8 = true;
-
-    playlist->fd = fd;
-    return fd;
-}
-
-/*
- * Close any open file descriptor for the playlist file.
- * Not thread-safe.
- */
-static void pl_close_playlist(struct playlist_info *playlist)
-{
-    if (playlist->fd >= 0)
-    {
-        close(playlist->fd);
-        playlist->fd = -1;
-    }
-}
-
 static void close_playlist_control_file(struct playlist_info *playlist)
 {
     playlist_write_lock(playlist);
@@ -597,7 +563,10 @@ static void update_playlist_filename_unlocked(struct playlist_info* playlist,
  */
 static void empty_playlist_unlocked(struct playlist_info* playlist, bool resume)
 {
-    pl_close_playlist(playlist);
+    if(playlist->fd >= 0) /* If there is an already open playlist, close it. */
+    {
+        close(playlist->fd);
+    }
 
     if(playlist->control_fd >= 0)
     {
@@ -616,6 +585,7 @@ static void empty_playlist_unlocked(struct playlist_info* playlist, bool resume)
     playlist->in_ram = false;
     playlist->modified = false;
 
+    playlist->fd = -1;
     playlist->control_fd = -1;
 
     playlist->index = 0;
@@ -905,8 +875,14 @@ static int add_indices_to_playlist(struct playlist_info* playlist,
 
     playlist_write_lock(playlist);
 
-    /* Open playlist file for reading */
-    if (pl_open_playlist(playlist) < 0)
+    if(-1 == playlist->fd)
+    {
+        playlist->fd = open_utf8(playlist->filename, O_RDONLY);
+        if(playlist->fd >= 0 && lseek(playlist->fd, 0, SEEK_CUR) > 0)
+            playlist->utf8 = true; /* Override any earlier indication. */
+    }
+
+    if(playlist->fd < 0)
     {
         result = -1;
         goto exit;
@@ -1275,7 +1251,10 @@ static int get_track_filename(struct playlist_info* playlist, int index, int see
         }
         else
         {
-            fd = pl_open_playlist(playlist);
+            if(-1 == playlist->fd)
+                playlist->fd = open(playlist->filename, O_RDONLY);
+
+            fd = playlist->fd;
         }
 
         if(-1 != fd)
@@ -2373,7 +2352,12 @@ void playlist_close(struct playlist_info* playlist)
     if (!playlist)
         return;
 
-    pl_close_playlist(playlist);
+    if (playlist->fd >= 0)
+    {
+        close(playlist->fd);
+        playlist->fd = -1;
+    }
+
     close_playlist_control_file(playlist);
 
     if (playlist->control_created)
