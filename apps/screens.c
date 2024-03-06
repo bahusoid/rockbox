@@ -635,12 +635,10 @@ static const char * id3_get_or_speak_info(int selected_item, void* data,
                      playlist_name(info->playlist, buffer, buffer_len);
                 else
                 {
-                    if (playlist_allow_dirplay(NULL))
-                        strmemccpy(buffer, "(Folder)", buffer_len);
-                    else if (playlist_dynamic_only())
-                        strmemccpy(buffer, "(Dynamic)", buffer_len);
-                    else
-                        playlist_name(NULL, buffer, buffer_len);
+                    if(!playlist_name(NULL, buffer, buffer_len))
+                    {
+                        strmemccpy(buffer, pl_modified ? "(Dynamic)" : "(Folder)", buffer_len);
+                    }
                 }
 
                 if(say_it)

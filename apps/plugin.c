@@ -696,7 +696,6 @@ static const struct plugin_api rockbox_api = {
     playlist_amount,
     playlist_resume,
     playlist_resume_track,
-    playlist_set_modified,
     playlist_start,
     playlist_add,
     playlist_sync,
@@ -836,7 +835,8 @@ static const struct plugin_api rockbox_api = {
 #ifdef HAVE_TAGCACHE
     tagcache_commit_finalize,
 #endif
-    adjust_volume,
+    playlist_get_first_index,
+    playlist_get_display_index,
 };
 
 static int plugin_buffer_handle;

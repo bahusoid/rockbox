@@ -805,7 +805,6 @@ struct plugin_api {
     int (*playlist_resume)(void);
     void (*playlist_resume_track)(int start_index, unsigned int crc,
                                   unsigned long elapsed, unsigned long offset);
-    void (*playlist_set_modified)(struct playlist_info *playlist, bool modified);
     void (*playlist_start)(int start_index, unsigned long elapsed,
                            unsigned long offset);
     int (*playlist_add)(const char *filename);
@@ -973,7 +972,8 @@ struct plugin_api {
 #ifdef HAVE_TAGCACHE
     void (*tagcache_commit_finalize)(void);
 #endif
-    void (*adjust_volume)(int steps);
+    int (*playlist_get_first_index)(const struct playlist_info* playlist);
+    int (*playlist_get_display_index)(void);
 };
 
 /* plugin header */
