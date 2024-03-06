@@ -1446,6 +1446,8 @@ const struct settings_list settings[] = {
                    ID2P(LANG_SET_BOOL_YES),
                    ID2P(LANG_BOOKMARK_SETTINGS_ONE_PER_PLAYLIST),
                    ID2P(LANG_BOOKMARK_SETTINGS_ONE_PER_TRACK)),
+        OFFON_SETTING(0, resume_from_recent_bookmark, LANG_BOOKMARK_SETTINGS_RESUME_RECENT_BOOKMARK,
+                false, "resume most-recent-bookmark", NULL),
     /* peak meter */
     TABLE_SETTING_LIST(F_TIME_SETTING | F_ALLOW_ARBITRARY_VALS, peak_meter_clip_hold,
                   LANG_PM_CLIP_HOLD, 60, "peak meter clip hold", "eternal",
