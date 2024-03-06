@@ -359,7 +359,6 @@ static int add_to_playlist(void* arg)
         onplay_result = ONPLAY_START_PLAY;
     }
 
-    playlist_set_modified(NULL, true);
     return false;
 }
 
