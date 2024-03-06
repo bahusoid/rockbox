@@ -593,7 +593,7 @@ struct user_settings
     bool autoupdatebookmark;/* auto update option */
     int usemrb;             /* use MRB list: 0=No, 1=Yes, 2=One per playlist,
                                              3=One per playlist and track */
-
+    bool resume_from_recent_bookmark;
 #ifdef HAVE_DIRCACHE
     bool dircache;          /* enable directory cache */
 #endif
@@ -676,7 +676,7 @@ struct user_settings
     bool spdif_enable; /* S/PDIF power on/off */
 #endif
 #ifdef HAVE_USB_CHARGING_ENABLE
-    int usb_charging;
+        int usb_charging;
 #endif
     /* device settings */
 #ifdef HAVE_LCD_CONTRAST

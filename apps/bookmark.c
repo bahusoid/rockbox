@@ -176,6 +176,12 @@ static char* get_mrb_path(char* dirbuf, int dirbuf_sz)
     return dirbuf;
 }
 
+bool bookmark_mrb_autoload()
+{
+    char max_path[MAX_PATH];
+    return bookmark_load(get_mrb_path(max_path, MAX_PATH), true);
+}
+
 /* ----------------------------------------------------------------------- */
 /* Gives the user a list of the Most Recent Bookmarks.  This is an         */
 /* interface function                                                      */
