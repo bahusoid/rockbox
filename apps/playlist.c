@@ -434,7 +434,7 @@ static int update_control_unlocked(struct playlist_info* playlist,
         result = write(fd, "R\n", 2);
         break;
     case PLAYLIST_COMMAND_CLEAR:
-        result = fdprintf(fd, "C:%d\n", i1);
+        result = write(fd, "C\n", 2);
         break;
     case PLAYLIST_COMMAND_FLAGS:
         result = fdprintf(fd, "F:%u:%u\n", i1, i2);
@@ -1178,6 +1178,7 @@ static int remove_all_tracks_unlocked(struct playlist_info *playlist, bool write
 #endif
 
     /* Update playlist state as if by remove_track_unlocked() */
+    playlist->index = 0;
     playlist->first_index = 0;
     playlist->amount = 1;
     playlist->indices[0] |= PLAYLIST_QUEUED;
@@ -1190,11 +1191,9 @@ static int remove_all_tracks_unlocked(struct playlist_info *playlist, bool write
     if (write && playlist->control_fd >= 0)
     {
         update_control_unlocked(playlist, PLAYLIST_COMMAND_CLEAR,
-                                playlist->index, -1, NULL, NULL, NULL);
+                                -1, -1, NULL, NULL, NULL);
         sync_control_unlocked(playlist);
     }
-
-    playlist->index = 0;
 
     return 0;
 }
@@ -3354,8 +3353,6 @@ int playlist_resume(void)
                     }
                     case PLAYLIST_COMMAND_CLEAR:
                     {
-                        if (strp[0])
-                            playlist->index = atoi(strp[0]);
                         if (remove_all_tracks_unlocked(playlist, false) < 0)
                         {
                             result = -16;
