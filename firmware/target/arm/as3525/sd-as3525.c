@@ -299,6 +299,8 @@ static bool send_cmd(const int drive, const int cmd, const int arg,
 
         /* Clear old status flags */
         MCI_CLEAR(drive) = 0x7ff;
+        
+        //MCI_CLEAR(drive) = MCI_CMD_ACTIVE;
 
         /* Load command argument or clear if none */
         MCI_ARGUMENT(drive) = arg;
@@ -464,18 +466,25 @@ static int sd_init_card(const int drive)
         return -10;
 
 #if 0 /* FIXME : it seems that reading fails on some models */
-    /*  Switch to to 4 bit widebus mode  */
+
     if(sd_wait_for_tran_state(drive) < 0)
-        return -11;
-    /* ACMD42  */
-    if(!send_cmd(drive, SD_SET_CLR_CARD_DETECT, 0, MCI_ACMD|MCI_RESP, &response))
-        return -15;
-    /* ACMD6  */
-    if(!send_cmd(drive, SD_SET_BUS_WIDTH, 2, MCI_ACMD|MCI_RESP, &response))
         return -13;
+
+    /* ACMD6: set bus width to 4-bit */
+    if(!send_cmd(drive, SD_SET_BUS_WIDTH, 2, MCI_ACMD|MCI_RESP, &response))
+        return -15;
+    /* ACMD42: disconnect the pull-up resistor on CD/DAT3 */
+    if(!send_cmd(drive, SD_SET_CLR_CARD_DETECT, 0, MCI_ACMD|MCI_RESP, &response))
+        return -17;
     /* Now that card is widebus make controller aware */
     MCI_CLOCK(drive) |= MCI_CLOCK_WIDEBUS;
+    mci_delay();
+
+//    /*  CMD7 w/rca: Select card to put it in TRAN state */
+//    if(!send_cmd(drive, SD_SELECT_CARD, card_info[drive].rca, MCI_RESP, &response))
+//        return -19;
 #endif
+
 
     /*
      * enable bank switching
@@ -689,7 +698,7 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
     const int drive = 0;
 #endif
     bool aligned = !((uintptr_t)buf & (CACHEALIGN_SIZE - 1));
-    int retry_all = 2;
+    int retry_all = 5;
     int const retry_data_max = 2;
     int retry_data = retry_data_max;
     unsigned int real_numblocks;
@@ -814,9 +823,10 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
 
         if (!tranState)
         {
-            if (sd_wait_for_tran_state(drive) < 0)
+            if (sd_wait_for_tran_state(drive) != 0)
             {
-                if (!send_cmd(drive, SD_SELECT_CARD, card_info[drive].rca, MCI_NO_RESP, NULL))
+                if (!send_cmd(drive, SD_DESELECT_CARD, 0, MCI_NO_RESP, NULL)
+                    || !send_cmd(drive, SD_SELECT_CARD, card_info[drive].rca, MCI_RESP, NULL))
                 {
                     ret = -20;
                     break;
@@ -870,24 +880,24 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
 
         last_disk_activity = current_tick;
         tranState = false;
-        if (!send_cmd(drive, SD_STOP_TRANSMISSION, 0, MCI_NO_RESP, &response))
-        {
-            ret = -4 * 20;
-            break;
-        }
-
 //        if (!send_cmd(drive, SD_STOP_TRANSMISSION, 0, MCI_RESP, &response))
 //        {
-//            if(!send_cmd(drive, SD_DESELECT_CARD, 0, MCI_NO_RESP, NULL)
-//            || !send_cmd(drive, SD_SELECT_CARD, card_info[drive].rca, MCI_NO_RESP, NULL))
-//            {
-//                ret = -4 * 20;
-//                break;
-//            } else
-//            {
-//                tranState = true;
-//            }
+//            ret = -4 * 20;
+//            break;
 //        }
+
+        if (!send_cmd(drive, SD_STOP_TRANSMISSION, 0, MCI_RESP, &response))
+        {
+            if (!send_cmd(drive, SD_DESELECT_CARD, 0, MCI_NO_RESP, NULL)
+            || !send_cmd(drive, SD_SELECT_CARD, card_info[drive].rca, MCI_RESP, NULL))
+            {
+                ret = -4 * 20;
+                break;
+            } else
+            {
+                tranState = true;
+            }
+        }
 
         if(!transfer_error[drive])
         {
