@@ -3764,7 +3764,7 @@ int playlist_update_resume_info(const struct mp3entry* id3)
                 status_save();
         }
     }
-    else
+    else if (global_status.resume_index != -1)
     {
         global_status.resume_index  = -1;
         global_status.resume_crc32 = -1;
