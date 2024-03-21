@@ -385,6 +385,11 @@ bool dbg_hw_info(void)
             ((AS3525_PCLK_FREQ/ D_MHZ) /
             ((dbg.mci_sd & MCI_CLOCK_BYPASS) ? 1: (((dbg.mci_sd & 0xff) + 1) * 2))),
             calc_freq(CLK_SD_MCLK_MSD)/D_MHZ);
+        lcd_putsf(x, line++, "SD Transfer Errors:");
+        lcd_putsf(x, line++, "stop: %d, full: %d, data: %d",
+                dbg.sd_reinit_count,
+                dbg.full_reinit_count,
+                dbg.data_error_count);
 #endif
 
 #else /*AS3525v2*/
