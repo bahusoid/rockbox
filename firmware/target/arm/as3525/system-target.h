@@ -93,6 +93,9 @@ struct ams_sd_debug_info
 {
     unsigned long mci_nand;
     unsigned long mci_sd;
+    unsigned long sd_reinit_count;
+    unsigned long data_error_count;
+    unsigned long full_reinit_count;
 };
 
 void ams_sd_get_debug_info(struct ams_sd_debug_info *info);
