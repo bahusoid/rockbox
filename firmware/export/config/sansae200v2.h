@@ -5,7 +5,6 @@
 /* For Rolo and boot loader */
 #define MODEL_NUMBER 41
 #define MODEL_NAME   "Sandisk Sansa e200v2 series"
-#define ROCKBOX_NO_TEMP_SETTINGS_FILE
 /* Define if boot data from bootloader has been enabled for the target */
 #define HAVE_BOOTDATA
 
@@ -216,6 +215,8 @@
 
 /* Define this if you have adjustable CPU frequency */
 #define HAVE_ADJUSTABLE_CPU_FREQ
+/*define this to enable CPU voltage scaling on AMS devices*/
+//#define HAVE_ADJUSTABLE_CPU_VOLTAGE
 
 #define BOOTFILE_EXT    "sansa"
 #define BOOTFILE        "rockbox." BOOTFILE_EXT
