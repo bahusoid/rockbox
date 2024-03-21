@@ -485,7 +485,7 @@ void set_cpu_frequency(long frequency)
 #if 0
         ascodec_write(AS3514_CVDD_DCDC3, (AS314_CP_DCDC3_SETTING | CVDD_1_10));
 #else
-        ascodec_write(AS3514_CVDD_DCDC3, (AS314_CP_DCDC3_SETTING | CVDD_1_15));
+        ascodec_write(AS3514_CVDD_DCDC3, (AS314_CP_DCDC3_SETTING | CVDD_1_20));
 #endif
 #endif  /*  HAVE_ADJUSTABLE_CPU_VOLTAGE */
 

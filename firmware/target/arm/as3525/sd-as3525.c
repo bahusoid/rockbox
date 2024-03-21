@@ -125,6 +125,11 @@ static int sd_first_drive = 0;
 /* for compatibility */
 static long last_disk_activity = -1;
 
+static long stat_sd_reinint_count = 0;
+static long stat_full_reinint_count = 0;
+static long stat_sd_data_errors = 0;
+
+
 #define MIN_YIELD_PERIOD 5  /* ticks */
 static long next_yield = 0;
 
@@ -137,6 +142,7 @@ static bool hs_card = false;
 
 static struct semaphore transfer_completion_signal;
 static volatile unsigned int transfer_error[NUM_DRIVES];
+static volatile unsigned int transfer_status[NUM_DRIVES];
 #define PL180_MAX_TRANSFER_ERRORS 10
 
 #define UNALIGNED_NUM_SECTORS 10
@@ -280,8 +286,9 @@ void INT_MCI0(void)
 
     transfer_error[SD_SLOT_AS3525] = status & MCI_DATA_ERROR;
 
+    transfer_status[SD_SLOT_AS3525] = status;
+    MCI_CLEAR(SD_SLOT_AS3525) = MCI_DATA_ERROR | MCI_DATA_END;
     semaphore_release(&transfer_completion_signal);
-    MCI_CLEAR(SD_SLOT_AS3525) = status;
 }
 #endif
 
@@ -298,9 +305,7 @@ static bool send_cmd(const int drive, const int cmd, const int arg,
             return false;
 
         /* Clear old status flags */
-        MCI_CLEAR(drive) = 0x7ff;
-        
-        //MCI_CLEAR(drive) = MCI_CMD_ACTIVE;
+        MCI_CLEAR(drive) = MCI_RESPONSE_ERROR | MCI_CMD_RESP_END | MCI_CMD_SENT;
 
         /* Load command argument or clear if none */
         MCI_ARGUMENT(drive) = arg;
@@ -316,9 +321,8 @@ static bool send_cmd(const int drive, const int cmd, const int arg,
 
         /* Wait while cmd completes then disable CPSM */
         while(MCI_STATUS(drive) & MCI_CMD_ACTIVE);
-        MCI_COMMAND(drive) = 0;
-
         status = MCI_STATUS(drive);
+        MCI_COMMAND(drive) = 0;
 
         /*  Handle command responses */
         if(flags & MCI_RESP)                /* CMD expects response */
@@ -332,13 +336,6 @@ static bool send_cmd(const int drive, const int cmd, const int arg,
                 logf("sd cmd error: drive %d cmd %d arg %08x sd_status %08x resp0 %08lx",
                      drive, cmd, arg, status, response[0]);
                 continue;
-            }
-
-            if((flags & MCI_RESP) &&
-               !(flags & MCI_LONG_RESP) &&
-               (response[0] & SD_R1_CARD_ERROR)) {
-                logf("sd card error: drive %d cmd %d arg %08x r1 %08lx",
-                     drive, cmd, arg, response[0]);
             }
 
             if(status & MCI_CMD_RESP_END)   /* Response passed CRC check */
@@ -600,6 +597,7 @@ bool sd_present(IF_MD_NONVOID(int drive))
 }
 #endif /* HAVE_HOTSWAP */
 
+volatile long lastResponse;
 static int sd_wait_for_tran_state(const int drive)
 {
     unsigned long response = 0;
@@ -611,6 +609,7 @@ static int sd_wait_for_tran_state(const int drive)
                     &response))
             return -1;
 
+        lastResponse = response;
         if (((response >> 9) & 0xf) == SD_TRAN)
             return 0;
 
@@ -698,7 +697,7 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
     const int drive = 0;
 #endif
     bool aligned = !((uintptr_t)buf & (CACHEALIGN_SIZE - 1));
-    int retry_all = 5;
+    int retry_all = 4;
     int const retry_data_max = 2;
     int retry_data = retry_data_max;
     unsigned int real_numblocks;
@@ -718,14 +717,12 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
     if (drive == INTERNAL_AS3525)
         start += AMS_OF_SIZE;
 
-    bool tranState = false;
     while (card_info[drive].initialized<=0)
     {
         retry_with_reinit:
         if (--retry_all < 0)
             goto exit;
         ret = sd_init_card(drive);
-        tranState = true;
     }
 
     /* Check the real block size after the card has been initialized */
@@ -737,19 +734,16 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
     if ((start+count) > real_numblocks)
     {
         ret = -19;
+        ++stat_full_reinint_count;
         goto retry_with_reinit;
     }
 
-//    /*  CMD7 w/rca: Select card to put it in TRAN state */
-//    if(!tranState && !send_cmd(drive, SD_SELECT_CARD, card_info[drive].rca, MCI_RESP, NULL))
-//    {
-//        ret = -20;
-//        goto retry_with_reinit;
-//    }
-//    else
-//    {
-//        tranState = true;
-//    }
+    if (sd_wait_for_tran_state(drive) != 0)
+    {
+        ret = -20;
+        ++stat_full_reinint_count;
+        goto retry_with_reinit;
+    }
 
     dma_retain();
 
@@ -763,13 +757,6 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
     const int cmd = write ? SD_WRITE_MULTIPLE_BLOCK : SD_READ_MULTIPLE_BLOCK;
     while(count > 0)
     {
-//        /*  CMD7 w/rca: Select card to put it in TRAN state */
-//        if (!tranState && write && !send_cmd(drive, SD_SELECT_CARD, card_info[drive].rca, MCI_NO_RESP, NULL))
-//        {
-//            ret = -20;
-//            goto retry_with_reinit;
-//        }
-
         /* 128 * 512 = 2^16, and doesn't fit in the 16 bits of DATA_LENGTH
          * register, so we have to transfer maximum 127 sectors at a time. */
         unsigned int transfer = (count >= 128) ? 127 : count; /* sectors */
@@ -807,6 +794,18 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
         if(!(card_info[drive].ocr & (1<<30)))   /* not SDHC */
             bank_start *= SD_BLOCK_SIZE;
 
+        if(!send_cmd(drive, cmd, bank_start, MCI_RESP, &response))
+        {
+            ret = -3*20;
+            break;
+        }
+
+        if (response & SD_R1_CARD_ERROR)
+        {
+            ret = -4*20;
+            break;
+        }
+
         if(aligned)
         {
             dma_buf = AS3525_PHYSICAL_ADDR(buf);
@@ -819,25 +818,6 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
 
             if(write)
                 memcpy(uncached_buffer, buf, transfer * SD_BLOCK_SIZE);
-        }
-
-        if (!tranState)
-        {
-            if (sd_wait_for_tran_state(drive) != 0)
-            {
-                if (!send_cmd(drive, SD_DESELECT_CARD, 0, MCI_NO_RESP, NULL)
-                    || !send_cmd(drive, SD_SELECT_CARD, card_info[drive].rca, MCI_RESP, NULL))
-                {
-                    ret = -20;
-                    break;
-                }
-            }
-        }
-
-        if(!send_cmd(drive, cmd, bank_start, MCI_RESP, &response))
-        {
-            ret = -3*20;
-            break;
         }
 
         if(write)
@@ -872,31 +852,27 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
         while(MCI_STATUS(drive) & MCI_TX_ACTIVE);
 
         /*
-         * If the write aborted early due to a tx underrun, disable the
-         * dma channel here, otherwise there are still 4 words in the fifo
-         * and the retried write will get corrupted.
-         */
+     * If the write aborted early due to a tx underrun, disable the
+     * dma channel here, otherwise there are still 4 words in the fifo
+     * and the retried write will get corrupted.
+     */
         dma_disable_channel(1);
 
         last_disk_activity = current_tick;
-        tranState = false;
-//        if (!send_cmd(drive, SD_STOP_TRANSMISSION, 0, MCI_RESP, &response))
-//        {
-//            ret = -4 * 20;
-//            break;
-//        }
-
         if (!send_cmd(drive, SD_STOP_TRANSMISSION, 0, MCI_RESP, &response))
         {
-            if (!send_cmd(drive, SD_DESELECT_CARD, 0, MCI_NO_RESP, NULL)
-            || !send_cmd(drive, SD_SELECT_CARD, card_info[drive].rca, MCI_RESP, NULL))
+            ret = -5*20;
+            break;
+        }
+
+        if (sd_wait_for_tran_state(drive) != 0)
+        {
+            if( sd_init_card(drive) < 0 || sd_wait_for_tran_state(drive) != 0)
             {
-                ret = -4 * 20;
+                ret = -6*20;
                 break;
-            } else
-            {
-                tranState = true;
             }
+            ++stat_sd_reinint_count;
         }
 
         if(!transfer_error[drive])
@@ -911,8 +887,10 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
         else
         {
             if (--retry_data >= 0)
+            {
+                ++stat_sd_data_errors;
                 continue;
-
+            }
             ret = -24;
             break;
         }
@@ -922,13 +900,9 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
 
     if (ret != 0) /* if we have error */
     {
+        ++stat_full_reinint_count;
         goto retry_with_reinit;
     }
-//
-//    /* CMD lines are separate, not common, so we need to actively deselect */
-//    /*  CMD7 w/rca =0 : deselects card & puts it in STBY state */
-//    if(!send_cmd(drive, SD_DESELECT_CARD, 0, MCI_NO_RESP, NULL))
-//        ret = -23;
 
     exit:
 
@@ -1032,6 +1006,10 @@ void ams_sd_get_debug_info(struct ams_sd_debug_info *info)
 #ifdef HAVE_MULTIDRIVE
     info->mci_sd = MCI_SD;
 #endif
+
+    info->sd_reinit_count = stat_sd_reinint_count;
+    info->full_reinit_count = stat_full_reinint_count;
+    info->data_error_count = stat_sd_data_errors;
 
     for (int i = 0; i < NUM_DRIVES ; i++)
         enable_controller(false, i);
