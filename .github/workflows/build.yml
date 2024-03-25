@@ -13,6 +13,10 @@ jobs:
             # Other platform targets https://github.com/Rockbox/rockbox/blob/dd1fbd51fc7bb3fa7237b3bc34335e99bef29e35/tools/configure#L1560-L1615
             platform: 240
 
+          - name: xDuoo X3II
+            arch: y
+            platform: 242
+
           - name: clipZip
             arch: a
             platform: 65
