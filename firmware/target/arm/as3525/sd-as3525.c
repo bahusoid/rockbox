@@ -109,6 +109,8 @@ static void init_pl180_controller(const int drive);
 
 #define BLOCKS_PER_BANK 0x7a7800u
 
+static bool forceSlow = false;
+
 static tCardInfo card_info[NUM_DRIVES];
 
 /* maximum timeouts recommended in the SD Specification v2.00 */
@@ -140,9 +142,6 @@ static bool hs_card = false;
 #define EXT_SD_BITS (1<<2)
 #endif
 
-static struct semaphore transfer_completion_signal;
-static volatile unsigned int transfer_error[NUM_DRIVES];
-static volatile unsigned int transfer_status[NUM_DRIVES];
 #define PL180_MAX_TRANSFER_ERRORS 10
 
 #define UNALIGNED_NUM_SECTORS 10
@@ -269,29 +268,6 @@ void sd_gpioa_isr(void)
 }
 #endif  /* HAVE_HOTSWAP */
 
-void INT_NAND(void)
-{
-    const int status = MCI_STATUS(INTERNAL_AS3525);
-
-    transfer_error[INTERNAL_AS3525] = status & MCI_DATA_ERROR;
-
-    semaphore_release(&transfer_completion_signal);
-    MCI_CLEAR(INTERNAL_AS3525) = status;
-}
-
-#ifdef HAVE_MULTIDRIVE
-void INT_MCI0(void)
-{
-    const int status = MCI_STATUS(SD_SLOT_AS3525);
-
-    transfer_error[SD_SLOT_AS3525] = status & MCI_DATA_ERROR;
-
-    transfer_status[SD_SLOT_AS3525] = status;
-    MCI_CLEAR(SD_SLOT_AS3525) = MCI_DATA_ERROR | MCI_DATA_END;
-    semaphore_release(&transfer_completion_signal);
-}
-#endif
-
 static bool send_cmd(const int drive, const int cmd, const int arg,
                      const int flags, long *response)
 {
@@ -320,7 +296,7 @@ static bool send_cmd(const int drive, const int cmd, const int arg,
            /* b10*/| MCI_COMMAND_ENABLE;     /* Enables CPSM */
 
         /* Wait while cmd completes then disable CPSM */
-        while(MCI_STATUS(drive) & MCI_CMD_ACTIVE);
+        while(MCI_STATUS(drive) & (MCI_CMD_ACTIVE | MCI_TX_ACTIVE));
         status = MCI_STATUS(drive);
         MCI_COMMAND(drive) = 0;
 
@@ -445,7 +421,7 @@ static int sd_init_card(const int drive)
     sd_parse_csd(&card_info[drive]);
 
 #if defined(HAVE_MULTIDRIVE)
-    hs_card = (card_info[drive].speed == 50000000);
+    hs_card =  !forceSlow && (card_info[drive].speed == 50000000);
 #endif
 
     /* Boost MCICLK to operating speed */
@@ -524,11 +500,11 @@ static void init_pl180_controller(const int drive)
     MCI_COMMAND(drive) = MCI_DATA_CTRL(drive) = 0;
     MCI_CLEAR(drive) = 0x7ff;
 
-    MCI_MASK0(drive) = MCI_DATA_ERROR | MCI_DATA_END;
+    MCI_MASK0(drive) = 0;
     MCI_MASK1(drive) = 0;
 #ifdef HAVE_MULTIDRIVE
-    VIC_INT_ENABLE =
-        (drive == INTERNAL_AS3525) ? INTERRUPT_NAND : INTERRUPT_MCI0;
+    VIC_INT_ENABLE = 0;
+        //(drive == INTERNAL_AS3525) ? INTERRUPT_NAND : INTERRUPT_MCI0;
     /* clear previous irq */
     GPIOA_IC = EXT_SD_BITS;
     /* enable edge detecting */
@@ -539,10 +515,10 @@ static void init_pl180_controller(const int drive)
     GPIOA_IE |= EXT_SD_BITS;
 
 #else
-    VIC_INT_ENABLE = INTERRUPT_NAND;
+    VIC_INT_ENABLE = 0;
 #endif
 
-    MCI_POWER(drive) = MCI_POWER_UP | (MCI_VDD_3_0);  /*  OF Setting  */
+    MCI_POWER(drive) = MCI_POWER_UP | (MCI_VDD_3_5);  /*  OF Setting  */
     mci_delay();
 
     MCI_POWER(drive) |= MCI_POWER_ON;
@@ -565,8 +541,6 @@ int sd_init(void)
     bitset32(&CGU_PERI, CGU_MCI_CLOCK_ENABLE);
     bitmod32(&CCU_IO, 1<<2, 3<<2);  /* bits 3:2 = 01, xpd is SD interface */
 #endif
-
-    semaphore_init(&transfer_completion_signal, 1, 0);
 
     init_pl180_controller(INTERNAL_AS3525);
     ret = sd_init_card(INTERNAL_AS3525);
@@ -598,6 +572,19 @@ bool sd_present(IF_MD_NONVOID(int drive))
 #endif /* HAVE_HOTSWAP */
 
 volatile long lastResponse;
+
+static int get_state(const int drive)
+{
+    unsigned long response = 0;
+    
+    if(!send_cmd(drive, SD_SEND_STATUS, card_info[drive].rca, MCI_RESP,
+            &response))
+        panicf( "mci status: %lu",  MCI_STATUS(drive));
+
+    unsigned long x = ((response >> 9) & 0xf);
+    return x;
+}
+
 static int sd_wait_for_tran_state(const int drive)
 {
     unsigned long response = 0;
@@ -639,10 +626,11 @@ static int sd_select_bank(signed char bank)
     else
         uncached_buffer[0] = bank;
 
+    int transfer_error = 0;
     do {
         if(loops++ > PL180_MAX_TRANSFER_ERRORS)
             panicf("SD bank %d error : 0x%x", bank,
-                    transfer_error[INTERNAL_AS3525]);
+                    transfer_error);
 
         ret = sd_wait_for_tran_state(INTERNAL_AS3525);
         if (ret < 0)
@@ -673,24 +661,29 @@ static int sd_select_bank(signed char bank)
                                 (1<<3) /* DMA */                |
                                 (9<<4) /* 2^9 = 512 */ ;
 
-        /* Wakeup signal from NAND/MCIO isr on MCI_DATA_ERROR | MCI_DATA_END */
-        semaphore_wait(&transfer_completion_signal, TIMEOUT_BLOCK);
-
         /*  Wait for FIFO to empty, card may still be in PRG state  */
+        while(! (MCI_STATUS(INTERNAL_AS3525) &  (MCI_DATA_ERROR | MCI_DATA_END)));
         while(MCI_STATUS(INTERNAL_AS3525) & MCI_TX_ACTIVE );
+        transfer_error = MCI_STATUS(INTERNAL_AS3525) & MCI_DATA_ERROR;
+        MCI_CLEAR(INTERNAL_AS3525) = MCI_DATA_ERROR | MCI_DATA_END;
 
         dma_release();
 
-    } while(transfer_error[INTERNAL_AS3525]);
+    } while(transfer_error);
 
     card_info[INTERNAL_AS3525].current_bank = (bank == -1) ? 0 : bank;
 
     return 0;
 }
 
+int totalWrites = 0;
 static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
                                int count, void* buf, const bool write)
 {
+    int lastTransfer = 0;
+
+    int lastStatus = 0;
+    int count_all = count;
     unsigned long response;
     int ret = 0;
 #ifndef HAVE_MULTIDRIVE
@@ -702,20 +695,17 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
     int retry_data = retry_data_max;
     unsigned int real_numblocks;
 
-    enable_controller(true, drive);
-    led(true);
-
     if(count < 1) /* XXX: why is it signed ? */
     {
-//        panicf("SD count:%d write:%d drive:%d", count, write, drive);
-
-        ret = -18;
-        goto exit;
+        panicf("SD count:%d write:%d drive:%d", count, write, drive);
     }
 
     /* skip SanDisk OF */
     if (drive == INTERNAL_AS3525)
         start += AMS_OF_SIZE;
+
+    enable_controller(true, drive);
+    led(true);
 
     while (card_info[drive].initialized<=0)
     {
@@ -740,6 +730,12 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
 
     if (sd_wait_for_tran_state(drive) != 0)
     {
+        led(false);
+        enable_controller(false, drive);
+
+        enable_controller(true, drive);
+        led(true);
+
         ret = -20;
         ++stat_full_reinint_count;
         goto retry_with_reinit;
@@ -760,6 +756,7 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
         /* 128 * 512 = 2^16, and doesn't fit in the 16 bits of DATA_LENGTH
          * register, so we have to transfer maximum 127 sectors at a time. */
         unsigned int transfer = (count >= 128) ? 127 : count; /* sectors */
+        lastTransfer = transfer;
         void *dma_buf;
 
         unsigned long bank_start = start;
@@ -845,37 +842,21 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
                                 (1<<3) /* DMA */                        |
                                 (9<<4) /* 2^9 = 512 */ ;
 
-        /* Wakeup signal from NAND/MCIO isr on MCI_DATA_ERROR | MCI_DATA_END */
-        semaphore_wait(&transfer_completion_signal, TIMEOUT_BLOCK);
-
-        /*  Wait for FIFO to empty, card may still be in PRG state for writes */
-        while(MCI_STATUS(drive) & MCI_TX_ACTIVE);
-
-        /*
-     * If the write aborted early due to a tx underrun, disable the
-     * dma channel here, otherwise there are still 4 words in the fifo
-     * and the retried write will get corrupted.
-     */
-        dma_disable_channel(1);
+        while(! ( MCI_STATUS(drive) & (MCI_DATA_ERROR | MCI_DATA_END)));
+        while(MCI_STATUS(drive) & MCI_TX_ACTIVE );
+        const int transfer_error = MCI_STATUS(drive) & MCI_DATA_ERROR;
+        MCI_CLEAR(drive) = MCI_DATA_ERROR | MCI_DATA_END;
 
         last_disk_activity = current_tick;
+        lastStatus = MCI_STATUS(drive);
+        
         if (!send_cmd(drive, SD_STOP_TRANSMISSION, 0, MCI_RESP, &response))
         {
             ret = -5*20;
             break;
         }
 
-        if (sd_wait_for_tran_state(drive) != 0)
-        {
-            if( sd_init_card(drive) < 0 || sd_wait_for_tran_state(drive) != 0)
-            {
-                ret = -6*20;
-                break;
-            }
-            ++stat_sd_reinint_count;
-        }
-
-        if(!transfer_error[drive])
+        if(!transfer_error)
         {
             if(!write && !aligned)
                 memcpy(buf, uncached_buffer, transfer * SD_BLOCK_SIZE);
@@ -883,6 +864,9 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
             start += transfer;
             count -= transfer;
             retry_data = retry_data_max;  /* reset errors counter */
+            retry_all = 4;
+            if(write)
+                totalWrites += transfer;
         }
         else
         {
@@ -894,12 +878,44 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
             ret = -24;
             break;
         }
+        if (sd_wait_for_tran_state(drive) != 0)
+        {
+            led(false);
+            enable_controller(false, drive);
+
+            enable_controller(true, drive);
+            led(true);
+            mci_delay();
+            if(sd_init_card(drive) < 0)
+            {
+                ret = -6 * 20;
+                break;
+            }
+
+            if (sd_wait_for_tran_state(drive) != 0)
+            {
+                ret = -7 * 20;
+                break;
+            }
+            ++stat_sd_reinint_count;
+        }
+        /*
+* If the write aborted early due to a tx underrun, disable the
+* dma channel here, otherwise there are still 4 words in the fifo
+* and the retried write will get corrupted.
+*/
+        dma_disable_channel(1);
     }
-
     dma_release();
-
     if (ret != 0) /* if we have error */
     {
+        forceSlow = !forceSlow;
+        led(false);
+        enable_controller(false, drive);
+
+        enable_controller(true, drive);
+        led(true);
+        mci_delay();
         ++stat_full_reinint_count;
         goto retry_with_reinit;
     }
@@ -910,8 +926,17 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
     enable_controller(false, drive);
 
     if (ret)    /* error */
+    {
         card_info[drive].initialized = 0;
-
+        
+        panicf("error:%d response:%lu, stop: %d, full: %d, data: %d, retry_all: %d, retry_data: %d, status: %d, total writes: %d", 
+                 ret, response, stat_sd_reinint_count, stat_full_reinint_count, stat_sd_data_errors, retry_all, retry_data, lastStatus, totalWrites);
+    }
+    if (forceSlow)
+    {
+        forceSlow = false;
+        card_info[drive].initialized = 0;
+    }
     return ret;
 }
 
