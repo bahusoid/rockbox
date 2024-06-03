@@ -46,13 +46,13 @@ jobs:
         make zip
       
     - name: Upload build
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{matrix.name}}.zip
         path: build/rockbox.zip
     
     - name: Upload log
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: failure()
       with:
         name: ${{matrix.name}}Logs
