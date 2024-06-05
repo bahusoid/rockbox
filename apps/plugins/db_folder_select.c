@@ -640,6 +640,15 @@ enum plugin_status plugin_start(const void* parameter)
                 return 1;
             }
         }
+        else if (rb->strcmp(parameter, rb->str(LANG_ALT_SETTINGS)) == 0)
+        {
+            if (folder_select(rb->str(LANG_ALT_SETTINGS),
+                    rb->global_settings->altmenu_paths,
+                    MAX_PATHNAME+1))
+            {
+                return 1;
+            }
+        }
     }
     else if (folder_select(rb->str(LANG_SELECT_FOLDER),
                            rb->global_settings->tagcache_scan_paths,
