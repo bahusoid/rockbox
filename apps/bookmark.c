@@ -204,6 +204,15 @@ bool bookmark_mrb_load()
     return ret;
 }
 
+int get_autocreatebookmark()
+{
+    if(!global_settings.alt_settings_enable)
+        return global_settings.autocreatebookmark;
+    struct mp3entry *id3 = audio_current_track();
+    init_alt_settings(id3);
+    return id3->altsettings == ALTSETTINGS_TRUE? global_settings.alt_autocreatebookmark : global_settings.autocreatebookmark;
+}
+
 /* ----------------------------------------------------------------------- */
 /* This function handles an autobookmark creation.  This is an interface   */
 /* function.                                                               */
@@ -222,7 +231,8 @@ bool bookmark_autobookmark(bool prompt_ok)
     if (update)
         return write_bookmark(true);
 
-    switch (global_settings.autocreatebookmark)
+    int autocreatebookmark = get_autocreatebookmark();
+    switch (autocreatebookmark)
     {
         case BOOKMARK_YES:
             return write_bookmark(true);
@@ -238,7 +248,7 @@ bool bookmark_autobookmark(bool prompt_ok)
 
     if(prompt_ok && gui_syncyesno_run(&message, NULL, NULL)==YESNO_YES)
     {
-        if (global_settings.autocreatebookmark == BOOKMARK_RECENT_ONLY_ASK)
+        if (autocreatebookmark == BOOKMARK_RECENT_ONLY_ASK)
             return write_bookmark(false);
         else
             return write_bookmark(true);
