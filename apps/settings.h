@@ -533,6 +533,7 @@ struct user_settings
     unsigned char lang_file[MAX_FILENAME+1]; /* last language */
     unsigned char playlist_catalog_dir[MAX_PATHNAME+1];
     int skip_length; /* skip length */
+    int alt_skip_length; /* skip length */
     int max_files_in_dir; /* Max entries in directory (file browser) */
     int max_files_in_playlist; /* Max entries in playlist */
     int volume_type;   /* how volume is displayed: 0=graphic, 1=percent */
@@ -567,6 +568,7 @@ struct user_settings
     /* auto bookmark settings */
     int autoloadbookmark;   /* auto load option: 0=off, 1=ask, 2=on */
     int autocreatebookmark; /* auto create option: 0=off, 1=ask, 2=on */
+    int alt_autocreatebookmark; /* auto create option: 0=off, 1=ask, 2=on */
     bool autoupdatebookmark;/* auto update option */
     int usemrb;             /* use MRB list: 0=No, 1=Yes, 2=One per playlist,
                                              3=One per playlist and track */
@@ -580,6 +582,7 @@ struct user_settings
 #endif
     bool tagcache_autoupdate; /* automatically keep tagcache in sync? */
     bool autoresume_enable;   /* enable auto-resume feature? */
+    //bool alt_settings_enable;   /* enable auto-resume feature? */
     int autoresume_automatic; /* resume next track? 0=never, 1=always,
                                  2=custom */
     unsigned char autoresume_paths[MAX_PATHNAME+1]; /* colon-separated list */
@@ -587,7 +590,8 @@ struct user_settings
     unsigned char tagcache_scan_paths[MAX_PATHNAME+1];
     unsigned char tagcache_db_path[MAX_PATHNAME+1];
 #endif /* HAVE_TAGCACHE */
-
+    bool alt_settings_enable; /* resume next track? 0=no, 1=custom */
+    unsigned char altmenu_paths[MAX_PATHNAME+1]; /* colon-separated list */
 #if LCD_DEPTH > 1
     unsigned char backdrop_file[MAX_PATHNAME+1];  /* backdrop bitmap file */
 #endif
