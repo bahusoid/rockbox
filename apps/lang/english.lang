@@ -16554,3 +16554,45 @@
     *: "Resume Recent Bookmark"
   </voice>
 </phrase>
+<phrase>
+  id: LANG_ALT_SETTINGS
+  desc: resume settings menu
+  user: core
+  <source>
+    *: "Alt Settings"
+  </source>
+  <dest>
+    *: "Alt Settings"
+  </dest>
+  <voice>
+    *: "Alternative settings"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_ALT_BOOKMARK_SETTINGS_AUTOCREATE
+  desc: prompt for user to decide to create an bookmark
+  user: core
+  <source>
+    *: "Alt Bookmark on Stop"
+  </source>
+  <dest>
+    *: "Alt Bookmark on Stop"
+  </dest>
+  <voice>
+    *: "Alt Bookmark on Stop"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_ALT_SKIP_LENGTH
+  desc: playback settings menu
+  user: core
+  <source>
+    *: "Alt Skip Length"
+  </source>
+  <dest>
+    *: "Alt Skip Length"
+  </dest>
+  <voice>
+    *: "Alt Skip Length"
+  </voice>
+</phrase>

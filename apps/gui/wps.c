@@ -424,12 +424,21 @@ static void next_track(void)
     audio_next();
 }
 
+static int get_skip_length(struct mp3entry *id3)
+{
+    if (!global_settings.alt_settings_enable)             /* result cached? */
+        return global_settings.skip_length;
+
+    init_alt_settings(id3);
+    return id3->altsettings == ALTSETTINGS_TRUE ? global_settings.alt_skip_length : global_settings.skip_length;
+}
+
 static void play_hop(int direction)
 {
     struct mp3entry *id3 = get_wps_state()->id3;
 
     struct cuesheet *cue = id3->cuesheet;
-    long step = global_settings.skip_length*1000;
+    long step = get_skip_length(id3) * 1000;
     long elapsed = id3->elapsed;
     long remaining = id3->length - elapsed;
 
@@ -880,7 +889,7 @@ long gui_wps_show(void)
             /* fast forward
                 OR next dir if this is straight after ACTION_WPS_SKIPNEXT */
             case ACTION_WPS_SEEKFWD:
-                if (global_settings.skip_length == 0 &&  current_tick -last_right < HZ)
+                if (get_skip_length(state->id3) == 0 &&  current_tick -last_right < HZ)
                 {
                     if (state->id3->cuesheet && playlist_check(1))
                     {
@@ -898,7 +907,7 @@ long gui_wps_show(void)
             /* fast rewind
                 OR prev dir if this is straight after ACTION_WPS_SKIPPREV,*/
             case ACTION_WPS_SEEKBACK:
-                if (global_settings.skip_length == 0 && current_tick - last_left < HZ)
+                if (get_skip_length(state->id3) == 0 && current_tick - last_left < HZ)
                 {
                     if (state->id3->cuesheet && playlist_check(-1))
                     {

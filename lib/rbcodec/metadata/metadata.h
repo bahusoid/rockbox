@@ -288,6 +288,7 @@ struct mp3entry {
 
 #ifdef HAVE_TAGCACHE
     unsigned char autoresumable; /* caches result of autoresumable() */
+    unsigned char altsettings; /* caches result of autoresumable() */
 
     /* runtime database fields */
     long tagcache_idx;     /* 0=invalid, otherwise idx+1 */
