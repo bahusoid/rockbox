@@ -97,7 +97,7 @@ static const char* get_bookmark_info(int list_index,
                                      char *buffer,
                                      size_t buffer_len);
 static int   select_bookmark(const char* bookmark_file_name, bool show_dont_resume, char** selected_bookmark);
-static bool  write_bookmark(bool create_bookmark_file, const char *bookmark);
+static bool  write_bookmark(bool create_bookmark_file);
 static int   get_bookmark_count(const char* bookmark_file_name);
 
 #define TEMP_BUF_SIZE (MAX_PATH + 1)
@@ -116,7 +116,7 @@ static char global_filename[MAX_PATH];
 /* ----------------------------------------------------------------------- */
 bool bookmark_create_menu(void)
 {
-    return write_bookmark(true, create_bookmark());
+    return write_bookmark(true);
 }
 
 /* ----------------------------------------------------------------------- */
@@ -211,7 +211,6 @@ bool bookmark_mrb_load()
 /* ----------------------------------------------------------------------- */
 bool bookmark_autobookmark(bool prompt_ok)
 {
-    char*  bookmark;
     bool update;
 
     if (!bookmark_is_bookmarkable_state())
@@ -219,21 +218,20 @@ bool bookmark_autobookmark(bool prompt_ok)
 
     audio_pause();    /* first pause playback */
     update = (global_settings.autoupdatebookmark && bookmark_exists());
-    bookmark = create_bookmark();
 
     if (update)
-        return write_bookmark(true, bookmark);
+        return write_bookmark(true);
 
     switch (global_settings.autocreatebookmark)
     {
         case BOOKMARK_YES:
-            return write_bookmark(true, bookmark);
+            return write_bookmark(true);
 
         case BOOKMARK_NO:
             return false;
 
         case BOOKMARK_RECENT_ONLY_YES:
-            return write_bookmark(false, bookmark);
+            return write_bookmark(false);
     }
     const char *lines[]={ID2P(LANG_AUTO_BOOKMARK_QUERY)};
     const struct text_message message={lines, 1};
@@ -241,9 +239,9 @@ bool bookmark_autobookmark(bool prompt_ok)
     if(prompt_ok && gui_syncyesno_run(&message, NULL, NULL)==YESNO_YES)
     {
         if (global_settings.autocreatebookmark == BOOKMARK_RECENT_ONLY_ASK)
-            return write_bookmark(false, bookmark);
+            return write_bookmark(false);
         else
-            return write_bookmark(true, bookmark);
+            return write_bookmark(true);
     }
     return false;
 }
@@ -259,8 +257,9 @@ bool bookmark_autobookmark(bool prompt_ok)
 /* possible that a bookmark is successfully added to the most recent        */
 /* bookmark list but fails to be added to the bookmark file or vice versa. */
 /* ------------------------------------------------------------------------*/
-static bool write_bookmark(bool create_bookmark_file, const char *bookmark)
+static bool write_bookmark(bool create_bookmark_file)
 {
+    const char *bookmark = create_bookmark();
     bool ret=true;
 
     if (!bookmark)
