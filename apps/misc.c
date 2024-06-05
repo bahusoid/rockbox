@@ -2027,3 +2027,55 @@ void clear_screen_buffer(bool update)
 }
 
 #endif /* ndef __PCTOOL__ */
+
+
+
+static bool is_from_path(const struct mp3entry *id3, unsigned char *path_to_check)
+{
+    char *path;
+    size_t len;
+    bool is_resumable;
+
+    is_resumable = false;
+
+    if (*id3->path)
+    {
+        for (path = path_to_check;
+             *path;                     /* search terms left? */
+             path++)
+        {
+            if (*path == ':')           /* Skip empty search patterns */
+                continue;
+
+            len = strcspn(path, ":");
+
+            /* Note: At this point, len is always > 0 */
+
+            if (strncasecmp(id3->path, path, len) == 0)
+            {
+                /* Full directory-name matches only.  Trailing '/' in
+                   search path OK. */
+                if (id3->path[len] == '/' || id3->path[len - 1] == '/')
+                {
+                    is_resumable = true;
+                    break;
+                }
+            }
+            path += len - 1;
+        }
+    }
+    return is_resumable;
+}
+
+void init_alt_settings(struct mp3entry *id3)
+{
+    if (id3->altsettings)
+        return;
+
+    /* cache result */
+    id3->altsettings = is_from_path(id3, global_settings.altmenu_paths) ? ALTSETTINGS_TRUE : ALTSETTINGS_FALSE;
+
+//    logf("autoresumable: %s is%s resumable",
+//            id3->path, is_resumable ? "" : " not");
+
+}

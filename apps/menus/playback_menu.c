@@ -167,7 +167,7 @@ MENUITEM_SETTING(unplug_autoresume, &global_settings.unplug_autoresume, NULL);
 MAKE_MENU(unplug_menu, ID2P(LANG_HEADPHONE_UNPLUG), 0, Icon_NOICON,
           &unplug_mode, &unplug_autoresume);
 #endif
-
+//This one to alt
 MENUITEM_SETTING(skip_length, &global_settings.skip_length, NULL);
 MENUITEM_SETTING(prevent_skip, &global_settings.prevent_skip, NULL);
 MENUITEM_SETTING(rewind_across_tracks, &global_settings.rewind_across_tracks, NULL);
