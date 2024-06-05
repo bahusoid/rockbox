@@ -642,6 +642,7 @@ static int bmark_callback(int action,
 }
 MENUITEM_SETTING(autocreatebookmark,
                  &global_settings.autocreatebookmark, bmark_callback);
+
 MENUITEM_SETTING(autoupdatebookmark, &global_settings.autoupdatebookmark, NULL);
 MENUITEM_SETTING(autoloadbookmark, &global_settings.autoloadbookmark, NULL);
 MENUITEM_SETTING(usemrb, &global_settings.usemrb, NULL);
@@ -711,6 +712,43 @@ MAKE_MENU(autoresume_menu, ID2P(LANG_AUTORESUME),
 
 #endif /* HAVE_TAGCACHE */
 /*    AUTORESUME MENU              */
+/***********************************/
+
+/***********************************/
+/*    ALT SETTINGS              */
+static int altmenu_nexttrack_callback(int action,
+                                         const struct menu_item_ex *this_item,
+                                         struct gui_synclist *this_list)
+{
+    (void)this_item;
+    (void)this_list;
+    static int oldval = 0;
+    switch (action)
+    {
+        case ACTION_ENTER_MENUITEM:
+            oldval = global_settings.alt_settings_enable;
+            break;
+        case ACTION_EXIT_MENUITEM:
+            if (global_settings.alt_settings_enable == true
+                && plugin_load(VIEWERS_DIR"/db_folder_select.rock",
+                               str(LANG_ALT_SETTINGS)) == PLUGIN_OK)
+            {
+                global_settings.alt_settings_enable = oldval;
+            }
+    }
+    return action;
+}
+
+MENUITEM_SETTING(altmenu_enable, &global_settings.alt_settings_enable,
+                 altmenu_nexttrack_callback);
+MENUITEM_SETTING(alt_skip_length, &global_settings.alt_skip_length, NULL);
+MENUITEM_SETTING(alt_autocreatebookmark,
+        &global_settings.alt_autocreatebookmark, NULL);
+MAKE_MENU(altmenu_menu, ID2P(LANG_ALT_SETTINGS),
+          0, Icon_NOICON,
+          &altmenu_enable, &alt_skip_length, &alt_autocreatebookmark);
+
+/*    ALT SETTINGS              */
 /***********************************/
 
 /***********************************/
@@ -807,6 +845,7 @@ MAKE_MENU(settings_menu_item, ID2P(LANG_GENERAL_SETTINGS), 0,
 #ifdef HAVE_TAGCACHE
           &autoresume_menu,
 #endif
+          &altmenu_menu,
           &browse_langs, &voice_settings_menu,
           &wps_set_context_plugin,
 #ifdef HAVE_HOTKEY
