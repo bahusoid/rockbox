@@ -283,4 +283,9 @@ long from_normalized_volume(long norm, long min_vol, long max_vol, long max_norm
  * will be written to the lcd */
 void clear_screen_buffer(bool update);
 
+
+/* Check settings for whether the file should be autoresumed */
+enum { ALTSETTINGS_UNKNOWN = 0, ALTSETTINGS_TRUE, ALTSETTINGS_FALSE };
+void init_alt_settings(struct mp3entry *id3);
+//static bool is_from_path(const struct mp3entry *id3, unsigned char *path_to_check);
 #endif /* MISC_H */
