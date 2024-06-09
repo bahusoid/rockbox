@@ -264,8 +264,8 @@ simcc () {
  macbuild=""
  GCCOPTS=`echo $CCOPTS | sed -e s/\ -ffreestanding// -e s/\ -nostdlib//`
 
- if [ "yes" = "$use_debug" ]; then
-    GCCOPTS=`echo $GCCOPTS | sed -e s/\ -Os/\ -Og/`
+ if [ "$debug" ]; then
+    GCCOPTS=`echo $GCCOPTS | sed -e s/\ -Os//`
  fi
 
  GCCOPTS="$GCCOPTS -fno-builtin -g"
