@@ -12688,3 +12688,45 @@
     *: "Обмеження автоматичних змін"
   </voice>
 </phrase>
+<phrase>
+  id: LANG_PLAYING_TIME
+  desc: onplay menu
+  user: core
+  <source>
+    *: "Playing time"
+  </source>
+  <dest>
+    *: "Час вiдтворення"
+  </dest>
+  <voice>
+    *: "Час вiдтворення"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_PLAYTIME_REMAINING
+  desc: playing time screen
+  user: core
+  <source>
+    *: "Playlist remaining:"
+  </source>
+  <dest>
+    *: "Залишилось в Списку Вiдтворення:"
+  </dest>
+  <voice>
+    *: "Залишилось в Списку Вiдтворення"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_PLAYTIME_ELAPSED
+  desc: playing time screen
+  user: core
+  <source>
+    *: "Playlist elapsed:"
+  </source>
+  <dest>
+    *: "Програно в Списку Вiдтворення:"
+  </dest>
+  <voice>
+    *: "Програно в Списку Вiдтворення"
+  </voice>
+</phrase>
