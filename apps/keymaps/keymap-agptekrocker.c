@@ -150,6 +150,7 @@ static const struct button_mapping button_context_quickscreen[]  = {
     { ACTION_QS_RIGHT,      BUTTON_RIGHT|BUTTON_REPEAT,      BUTTON_NONE },
     { ACTION_STD_CONTEXT,   BUTTON_SELECT|BUTTON_REPEAT,     BUTTON_SELECT },
     { ACTION_STD_CANCEL,    BUTTON_SELECT|BUTTON_REL,        BUTTON_SELECT },
+    { ACTION_STD_CANCEL,    BUTTON_POWER,                   BUTTON_NONE},
 
     LAST_ITEM_IN_LIST
 }; /* button_context_quickscreen */
