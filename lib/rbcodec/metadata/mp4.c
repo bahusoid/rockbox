@@ -594,23 +594,24 @@ static bool read_mp4_tags(int fd, struct mp3entry* id3,
 }
 
 static bool read_mp4_container(int fd, struct mp3entry* id3, 
-                               uint32_t size_left)
+                               uint32_t size_left, bool skipTags)
 {
     uint32_t size    = 0;
     uint32_t type    = 0;
     uint32_t handler = 0;
     bool rc = true;
     bool done = false;
-    
+    //int level = ++global_level;
+    //DEBUGF("START CONTAINER %d\n", level);
     do
     {
         size_left = read_mp4_atom(fd, &size, &type, size_left);
         
-        /* DEBUGF("Atom: '%c%c%c%c' (0x%08lx, %lu bytes left)\n", 
+         DEBUGF("Atom: '%c%c%c%c' (0x%08lx, %lu bytes left)\n", 
             (int) ((type >> 24) & 0xff), (int) ((type >> 16) & 0xff),
             (int) ((type >> 8) & 0xff), (int) (type & 0xff),
-            type, size); */
-        
+            type, size);
+
         switch (type)
         {
         case MP4_ftyp:
@@ -632,14 +633,18 @@ static bool read_mp4_container(int fd, struct mp3entry* id3,
         case MP4_udta:
         case MP4_mdia:
         case MP4_stbl:
+            size_left += size;
+            continue;
+
         case MP4_trak:
-            rc = read_mp4_container(fd, id3, size);
+            //DEBUGF("Start new container from %d\n", level);
+            rc = read_mp4_container(fd, id3, size, true);
             size = 0;
             break;
         
         case MP4_ilst:
             /* We need at least a size of 8 to read the next atom. */
-            if (handler == MP4_mdir && size>8)
+            if (!skipTags && handler == MP4_mdir && size>8)
             {
                 rc = read_mp4_tags(fd, id3, size);
                 size = 0;
@@ -649,18 +654,17 @@ static bool read_mp4_container(int fd, struct mp3entry* id3,
         case MP4_minf:
             if (handler == MP4_soun)
             {
-                rc = read_mp4_container(fd, id3, size);
-                size = 0;
+                size_left += size;
+                continue;
             }
             break;
         
         case MP4_stsd:
             lseek(fd, 8, SEEK_CUR);
             size -= 8;
-            rc = read_mp4_container(fd, id3, size);
-            size = 0;
-            break;
-        
+            size_left += size;
+            continue;
+
         case MP4_hdlr:
             lseek(fd, 8, SEEK_CUR);
             read_uint32be(fd, &handler);
@@ -803,6 +807,7 @@ static bool read_mp4_container(int fd, struct mp3entry* id3,
         }
     } while (rc && (size_left > 0) && (errno == 0) && !done);
     
+    //DEBUGF("END OF CONTAINER %d, rc:%d, size_left: %d, done: %d\n", level, size_left, done);
     return rc;
 }
 
@@ -812,7 +817,8 @@ bool get_mp4_metadata(int fd, struct mp3entry* id3)
     id3->filesize = 0;
     errno = 0;
 
-    if (read_mp4_container(fd, id3, filesize(fd)) && (errno == 0) 
+    if (read_mp4_container(fd, id3, filesize(fd), false) 
+        && (errno == 0) 
         && (id3->samples > 0) && (id3->frequency > 0) 
         && (id3->filesize > 0))
     {
