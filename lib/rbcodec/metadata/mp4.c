@@ -33,6 +33,10 @@
 #include "debug.h"
 #include "replaygain.h"
 
+#ifdef DEBUGF
+#undef DEBUGF
+#define DEBUGF(...)
+#endif
 
 #define MP4_3gp6 FOURCC('3', 'g', 'p', '6')
 #define MP4_aART FOURCC('a', 'A', 'R', 'T')
@@ -66,12 +70,8 @@
 #define MP4_stts FOURCC('s', 't', 't', 's')
 #define MP4_trak FOURCC('t', 'r', 'a', 'k')
 #define MP4_trkn FOURCC('t', 'r', 'k', 'n')
-#define MP4_tref FOURCC('t', 'r', 'e', 'f')
-#define MP4_tkhd FOURCC('t', 'k', 'h', 'd')
 #define MP4_udta FOURCC('u', 'd', 't', 'a')
-#define MP4_chap FOURCC('c','h', 'a', 'p')
 #define MP4_extra FOURCC('-', '-', '-', '-')
-#define LOG4CC(what, handler) DEBUGF("    "what" '%c%c%c%c'\n", handler >> 24 & 0xff, handler >> 16 & 0xff, handler >> 8 & 0xff,handler & 0xff)
 
 /* Read the tag data from an MP4 file, storing up to buffer_size bytes in
  * buffer.
@@ -377,8 +377,8 @@ static bool read_mp4_tags(int fd, struct mp3entry* id3,
     {
         size_left = read_mp4_atom(fd, &size, &type, size_left);
 
-        DEBUGF("Tag atom: '%c%c%c%c' (%d bytes left)\n", type >> 24 & 0xff, 
-            type >> 16 & 0xff, type >> 8 & 0xff, type & 0xff, size);
+        /* DEBUGF("Tag atom: '%c%c%c%c' (%d bytes left)\n", type >> 24 & 0xff, 
+            type >> 16 & 0xff, type >> 8 & 0xff, type & 0xff, size); */
 
         switch (type)
         {
@@ -591,14 +591,13 @@ static bool read_mp4_tags(int fd, struct mp3entry* id3,
 }
 
 static bool read_mp4_container(int fd, struct mp3entry* id3, 
-                               uint32_t size_left, bool trak_container)
+                               uint32_t size_left, bool skipTags)
 {
     uint32_t size    = 0;
     uint32_t type    = 0;
     uint32_t handler = 0;
     bool rc = true;
     bool done = false;
-    bool chapters = false;
     //int level = ++global_level;
     //DEBUGF("START CONTAINER %d\n", level);
     do
@@ -639,60 +638,10 @@ static bool read_mp4_container(int fd, struct mp3entry* id3,
             rc = read_mp4_container(fd, id3, size, true);
             size = 0;
             break;
-        /* track reference: */
-        case MP4_tref:
-            /* reference type size 4*/
-            lseek(fd, 4, SEEK_CUR);  /* Skip */
-            size -= 4;
-
-            uint32_t  referenceType;
-            read_uint32be(fd, &referenceType);
-            LOG4CC("Ref type", referenceType);
-            size -= 4;
-            if(referenceType == MP4_chap)
-            {
-                chapters = true;
-                DEBUGF("DETECTED QT CHAPTERS\n");
-            }
-        break;
-        // track header:
-        case MP4_tkhd:
-            uint32_t flags;
-            read_uint32be(fd, &flags);
-            size -= 4;
-            uint8_t version = (flags >> 24) & 0xFF;
-            flags &= ((1 << 24) - 1);
-            
-            if(version == 1)
-            {
-                /* creation_time 8 */
-                /* modification_time 8*/
-                /* track_ID 4 */
-                /* reserved 4*/
-                /* duration 8*/
-                //lseek(fd, 8 + 8 + 4 + 4 + 8, SEEK_CUR);  /* Skip */
-            }
-            else
-            {
-                /* creation_time 4*/
-                /* modification_time 4*/
-                /* track_ID 4*/
-                /* reserved 4*/
-                /* duration 4*/
-                //lseek(fd, 4*5, SEEK_CUR);  /* Skip */
-                
-            }
-            /* reserved 8 */
-            /* layer & alternate_group 4 */
-            /* volume & reserved 4*/
-            /* matrix 9*4 */
-            //lseek(fd, 8, SEEK_CUR);  /* Skip */
-            
-            break;
-
+        
         case MP4_ilst:
             /* We need at least a size of 8 to read the next atom. */
-            if (!trak_container && handler == MP4_mdir && size > 8)
+            if (!skipTags && handler == MP4_mdir && size>8)
             {
                 rc = read_mp4_tags(fd, id3, size);
                 size = 0;
@@ -700,11 +649,6 @@ static bool read_mp4_container(int fd, struct mp3entry* id3,
             break;
         
         case MP4_minf:
-            LOG4CC("Handler", handler);
-            if(chapters)
-            {
-                DEBUGF("NEED TO PROCESS TIMINGS FROM STSZ here!!!\n");
-            }
             if (handler == MP4_soun)
             {
                 size_left += size;
@@ -722,8 +666,8 @@ static bool read_mp4_container(int fd, struct mp3entry* id3,
             lseek(fd, 8, SEEK_CUR);
             read_uint32be(fd, &handler);
             size -= 12;
-            DEBUGF("    Handler '%c%c%c%c'\n", handler >> 24 & 0xff, 
-                handler >> 16 & 0xff, handler >> 8 & 0xff,handler & 0xff); 
+            /* DEBUGF("    Handler '%c%c%c%c'\n", handler >> 24 & 0xff, 
+                handler >> 16 & 0xff, handler >> 8 & 0xff,handler & 0xff); */
             break;
         
         case MP4_stts:
