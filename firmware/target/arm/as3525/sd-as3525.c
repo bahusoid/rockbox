@@ -430,8 +430,7 @@ static int sd_init_card(const int drive)
 #if defined(HAVE_MULTIDRIVE)
     else
         /* MCICLK = PCLK/2 = 31MHz(HS) or PCLK/4 = 15.5 Mhz (STD)*/
-        MCI_CLOCK(drive) = (hs_card ? MCI_HALFSPEED : MCI_QUARTERSPEED) | 
-                           MCI_CLOCK_POWERSAVE; /* SD supports powersave */
+        MCI_CLOCK(drive) = (hs_card ? MCI_HALFSPEED : MCI_QUARTERSPEED);
 #endif
 
     /*  CMD7 w/rca: Select card to put it in TRAN state */
@@ -439,7 +438,6 @@ static int sd_init_card(const int drive)
         return -10;
 
 #if 0 /* FIXME : it seems that reading fails on some models */
-
     if(sd_wait_for_tran_state(drive) < 0)
         return -13;
 
@@ -489,6 +487,9 @@ static int sd_init_card(const int drive)
         if(!send_cmd(drive, SD_SELECT_CARD, card_info[drive].rca, MCI_RESP, &response))
             return -19;
     }
+
+    if(sd_wait_for_tran_state(drive) < 0)
+        return -13;
 
     card_info[drive].initialized = 1;
 
@@ -690,7 +691,7 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
     const int drive = 0;
 #endif
     bool aligned = !((uintptr_t)buf & (CACHEALIGN_SIZE - 1));
-    int retry_all = 4;
+    int retry_all = 10;
     int const retry_data_max = 2;
     int retry_data = retry_data_max;
     unsigned int real_numblocks;
@@ -706,6 +707,12 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
 
     enable_controller(true, drive);
     led(true);
+    forceSlow = true;
+//    if (forceSlow && !write)
+//    {
+//        forceSlow = false;
+//        goto retry_with_reinit;
+//    }
 
     while (card_info[drive].initialized<=0)
     {
@@ -730,11 +737,11 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
 
     if (sd_wait_for_tran_state(drive) != 0)
     {
-        led(false);
-        enable_controller(false, drive);
-
-        enable_controller(true, drive);
-        led(true);
+//        led(false);
+//        enable_controller(false, drive);
+//
+//        enable_controller(true, drive);
+//        led(true);
 
         ret = -20;
         ++stat_full_reinint_count;
@@ -856,6 +863,36 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
             break;
         }
 
+        if (sd_wait_for_tran_state(drive) != 0)
+        {
+            udelay(4);
+
+//            led(false);
+//            enable_controller(false, drive);
+//
+//            enable_controller(true, drive);
+//            led(true);
+//            mci_delay();
+            if (sd_wait_for_tran_state(drive) != 0 && sd_init_card(drive) < 0)
+            {
+                ret = -6 * 20;
+                break;
+            }
+
+            if (sd_wait_for_tran_state(drive) != 0)
+            {
+                ret = -7 * 20;
+                break;
+            }
+            ++stat_sd_reinint_count;
+        }
+        /*
+* If the write aborted early due to a tx underrun, disable the
+* dma channel here, otherwise there are still 4 words in the fifo
+* and the retried write will get corrupted.
+*/
+        dma_disable_channel(1);
+        
         if(!transfer_error)
         {
             if(!write && !aligned)
@@ -878,44 +915,17 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
             ret = -24;
             break;
         }
-        if (sd_wait_for_tran_state(drive) != 0)
-        {
-            led(false);
-            enable_controller(false, drive);
-
-            enable_controller(true, drive);
-            led(true);
-            mci_delay();
-            if(sd_init_card(drive) < 0)
-            {
-                ret = -6 * 20;
-                break;
-            }
-
-            if (sd_wait_for_tran_state(drive) != 0)
-            {
-                ret = -7 * 20;
-                break;
-            }
-            ++stat_sd_reinint_count;
-        }
-        /*
-* If the write aborted early due to a tx underrun, disable the
-* dma channel here, otherwise there are still 4 words in the fifo
-* and the retried write will get corrupted.
-*/
-        dma_disable_channel(1);
     }
     dma_release();
     if (ret != 0) /* if we have error */
     {
-        forceSlow = !forceSlow;
-        led(false);
-        enable_controller(false, drive);
-
-        enable_controller(true, drive);
-        led(true);
-        mci_delay();
+        forceSlow = write ? true: false;
+//        led(false);
+//        enable_controller(false, drive);
+//
+//        enable_controller(true, drive);
+//        led(true);
+//        mci_delay();
         ++stat_full_reinint_count;
         goto retry_with_reinit;
     }
@@ -929,14 +939,14 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
     {
         card_info[drive].initialized = 0;
         
-        panicf("error:%d response:%lu, stop: %d, full: %d, data: %d, retry_all: %d, retry_data: %d, status: %d, total writes: %d", 
-                 ret, response, stat_sd_reinint_count, stat_full_reinint_count, stat_sd_data_errors, retry_all, retry_data, lastStatus, totalWrites);
+        panicf("%serror:%d response:%lu, stop: %d, full: %d, data: %d, retry_all: %d, retry_data: %d, status: %d, total writes: %d", 
+                 drive == INTERNAL_AS3525 ? "INTSD ": "", ret, response, stat_sd_reinint_count, stat_full_reinint_count, stat_sd_data_errors, retry_all, retry_data, lastStatus, totalWrites);
     }
-    if (forceSlow)
-    {
-        forceSlow = false;
-        card_info[drive].initialized = 0;
-    }
+//    if (forceSlow)
+//    {
+//        forceSlow = false;
+//        card_info[drive].initialized = 0;
+//    }
     return ret;
 }
 
