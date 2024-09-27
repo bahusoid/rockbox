@@ -441,6 +441,8 @@ void set_cpu_frequency__unlock(void)
 #if CONFIG_CPU == AS3525
 void set_cpu_frequency(long frequency)
 {
+    return;
+
     if (frequency == cpu_frequency)
     {
         /* avoid redundant activity */
@@ -482,11 +484,7 @@ void set_cpu_frequency(long frequency)
 
 #ifdef HAVE_ADJUSTABLE_CPU_VOLTAGE
         /* Decreasing frequency so reduce voltage after change */
-#if 0
         ascodec_write(AS3514_CVDD_DCDC3, (AS314_CP_DCDC3_SETTING | CVDD_1_10));
-#else
-        ascodec_write(AS3514_CVDD_DCDC3, (AS314_CP_DCDC3_SETTING | CVDD_1_20));
-#endif
 #endif  /*  HAVE_ADJUSTABLE_CPU_VOLTAGE */
 
         cpu_frequency = CPUFREQ_NORMAL;
@@ -523,7 +521,6 @@ void set_cpu_frequency(long frequency)
 
         /* Set CVDD1 power supply */
 #ifdef HAVE_ADJUSTABLE_CPU_VOLTAGE
-#if 0
 #if defined(SANSA_CLIPZIP)
         ascodec_write_pmu(0x17, 1, 0x80 | 20);
 #elif defined(SANSA_CLIPPLUS)
@@ -536,9 +533,6 @@ void set_cpu_frequency(long frequency)
 	ascodec_write_pmu(0x17, 1, 0x80 | 26);
 #else
         ascodec_write_pmu(0x17, 1, 0x80 | 22);
-#endif
-#else /* Higher voltage more stability at cost of runtime */
-        ascodec_write_pmu(0x17, 1, 0x80 | 26);
 #endif
 #endif
     }

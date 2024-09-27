@@ -109,7 +109,9 @@ static void init_pl180_controller(const int drive);
 
 #define BLOCKS_PER_BANK 0x7a7800u
 
-static bool forceSlow = false;
+static int forceSlow = 0;
+#define SLOW_SIMPLE 1
+#define SLOW_WIDE 2
 
 static tCardInfo card_info[NUM_DRIVES];
 
@@ -437,25 +439,27 @@ static int sd_init_card(const int drive)
     if(!send_cmd(drive, SD_SELECT_CARD, card_info[drive].rca, MCI_RESP, &response))
         return -10;
 
-#if 0 /* FIXME : it seems that reading fails on some models */
-    if(sd_wait_for_tran_state(drive) < 0)
-        return -13;
+#if 1 /* FIXME : it seems that reading fails on some models */
+    if (forceSlow == SLOW_WIDE)
+    {
+        if (sd_wait_for_tran_state(drive) < 0)
+            return -13;
 
-    /* ACMD6: set bus width to 4-bit */
-    if(!send_cmd(drive, SD_SET_BUS_WIDTH, 2, MCI_ACMD|MCI_RESP, &response))
-        return -15;
-    /* ACMD42: disconnect the pull-up resistor on CD/DAT3 */
-    if(!send_cmd(drive, SD_SET_CLR_CARD_DETECT, 0, MCI_ACMD|MCI_RESP, &response))
-        return -17;
-    /* Now that card is widebus make controller aware */
-    MCI_CLOCK(drive) |= MCI_CLOCK_WIDEBUS;
-    mci_delay();
+        /* ACMD6: set bus width to 4-bit */
+        if (!send_cmd(drive, SD_SET_BUS_WIDTH, 2, MCI_ACMD | MCI_RESP, &response))
+            return -15;
+        /* ACMD42: disconnect the pull-up resistor on CD/DAT3 */
+        if (!send_cmd(drive, SD_SET_CLR_CARD_DETECT, 0, MCI_ACMD | MCI_RESP, &response))
+            return -17;
+        /* Now that card is widebus make controller aware */
+        MCI_CLOCK(drive) |= MCI_CLOCK_WIDEBUS;
+        mci_delay();
 
-//    /*  CMD7 w/rca: Select card to put it in TRAN state */
-//    if(!send_cmd(drive, SD_SELECT_CARD, card_info[drive].rca, MCI_RESP, &response))
-//        return -19;
+        /*  CMD7 w/rca: Select card to put it in TRAN state */
+        if (!send_cmd(drive, SD_SELECT_CARD, card_info[drive].rca, MCI_RESP, &response))
+            return -19;
+    }
 #endif
-
 
     /*
      * enable bank switching
@@ -519,7 +523,7 @@ static void init_pl180_controller(const int drive)
     VIC_INT_ENABLE = 0;
 #endif
 
-    MCI_POWER(drive) = MCI_POWER_UP | (MCI_VDD_3_5);  /*  OF Setting  */
+    MCI_POWER(drive) = MCI_POWER_UP | (MCI_VDD_3_0);  /*  OF Setting  */
     mci_delay();
 
     MCI_POWER(drive) |= MCI_POWER_ON;
@@ -691,8 +695,8 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
     const int drive = 0;
 #endif
     bool aligned = !((uintptr_t)buf & (CACHEALIGN_SIZE - 1));
-    int retry_all = 1000;
-    int const retry_data_max = 2;
+    int retry_all = 50;
+    int const retry_data_max = 20;
     int retry_data = retry_data_max;
     unsigned int real_numblocks;
 
@@ -707,12 +711,11 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
 
     enable_controller(true, drive);
     led(true);
-    forceSlow = true;
-//    if (forceSlow && !write)
-//    {
-//        forceSlow = false;
-//        goto retry_with_reinit;
-//    }
+    if (forceSlow && !write)
+    {
+        forceSlow = 0;
+        goto retry_with_reinit;
+    }
 
     while (card_info[drive].initialized<=0)
     {
@@ -737,12 +740,6 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
 
     if (sd_wait_for_tran_state(drive) != 0)
     {
-//        led(false);
-//        enable_controller(false, drive);
-//
-//        enable_controller(true, drive);
-//        led(true);
-
         ret = -20;
         ++stat_full_reinint_count;
         goto retry_with_reinit;
@@ -856,35 +853,14 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
 
         last_disk_activity = current_tick;
         lastStatus = MCI_STATUS(drive);
-        
-        if (!send_cmd(drive, SD_STOP_TRANSMISSION, 0, MCI_RESP, &response))
-        {
-            ret = -5*20;
-            break;
-        }
+
+        send_cmd(drive, SD_STOP_TRANSMISSION, 0, MCI_NO_RESP, NULL);
 
         if (sd_wait_for_tran_state(drive) != 0)
         {
-            udelay(4);
-
-//            led(false);
-//            enable_controller(false, drive);
-//
-//            enable_controller(true, drive);
-//            led(true);
-//            mci_delay();
-            if (sd_wait_for_tran_state(drive) != 0 && sd_init_card(drive) < 0)
-            {
-                ret = -6 * 20;
-                break;
-            }
-
-            if (sd_wait_for_tran_state(drive) != 0)
-            {
-                ret = -7 * 20;
-                break;
-            }
+            ret = -7 * 20;
             ++stat_sd_reinint_count;
+            break;
         }
         /*
 * If the write aborted early due to a tx underrun, disable the
@@ -919,7 +895,10 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
     dma_release();
     if (ret != 0) /* if we have error */
     {
-        forceSlow = write ? true: false;
+        forceSlow = write ?
+                    (stat_full_reinint_count % 2 == 0) ?
+                    1 : 2
+                          : 0;
 //        led(false);
 //        enable_controller(false, drive);
 //
@@ -942,11 +921,11 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
         panicf("%serror:%d response:%lu, stop: %d, full: %d, data: %d, retry_all: %d, retry_data: %d, status: %d, total writes: %d", 
                  drive == INTERNAL_AS3525 ? "INTSD ": "", ret, response, stat_sd_reinint_count, stat_full_reinint_count, stat_sd_data_errors, retry_all, retry_data, lastStatus, totalWrites);
     }
-//    if (forceSlow)
-//    {
-//        forceSlow = false;
-//        card_info[drive].initialized = 0;
-//    }
+    if (forceSlow)
+    {
+        forceSlow = false;
+        card_info[drive].initialized = 0;
+    }
     return ret;
 }
 
