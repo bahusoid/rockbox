@@ -441,8 +441,6 @@ void set_cpu_frequency__unlock(void)
 #if CONFIG_CPU == AS3525
 void set_cpu_frequency(long frequency)
 {
-    return;
-
     if (frequency == cpu_frequency)
     {
         /* avoid redundant activity */

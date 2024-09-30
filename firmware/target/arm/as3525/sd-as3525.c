@@ -423,7 +423,7 @@ static int sd_init_card(const int drive)
     sd_parse_csd(&card_info[drive]);
 
 #if defined(HAVE_MULTIDRIVE)
-    hs_card =  !forceSlow && (card_info[drive].speed == 50000000);
+    hs_card = (card_info[drive].speed == 50000000);
 #endif
 
     /* Boost MCICLK to operating speed */
@@ -439,25 +439,28 @@ static int sd_init_card(const int drive)
     if(!send_cmd(drive, SD_SELECT_CARD, card_info[drive].rca, MCI_RESP, &response))
         return -10;
 
-#if 1 /* FIXME : it seems that reading fails on some models */
-    if (forceSlow == SLOW_WIDE)
+#if 0 /* FIXME : it seems that reading fails on some models */
+    if (forceSlow)// == SLOW_WIDE)
     {
-        if (sd_wait_for_tran_state(drive) < 0)
+        /*  Switch to to 4 bit widebus mode  */
+        /*  Switch to to 4 bit widebus mode  */
+
+        /*  CMD7 w/rca: Select card to put it in TRAN state */
+        if(!send_cmd(drive, SD_SELECT_CARD, card_info[drive].rca, MCI_RESP, &response))
+            return -12;
+        if(sd_wait_for_tran_state(drive) < 0)
             return -13;
 
         /* ACMD6: set bus width to 4-bit */
-        if (!send_cmd(drive, SD_SET_BUS_WIDTH, 2, MCI_ACMD | MCI_RESP, &response))
+        if(!send_cmd(drive, SD_SET_BUS_WIDTH, 2, MCI_ACMD|MCI_RESP, &response))
             return -15;
         /* ACMD42: disconnect the pull-up resistor on CD/DAT3 */
-        if (!send_cmd(drive, SD_SET_CLR_CARD_DETECT, 0, MCI_ACMD | MCI_RESP, &response))
+        if(!send_cmd(drive, SD_SET_CLR_CARD_DETECT, 0, MCI_ACMD|MCI_RESP, &response))
             return -17;
+
         /* Now that card is widebus make controller aware */
         MCI_CLOCK(drive) |= MCI_CLOCK_WIDEBUS;
         mci_delay();
-
-        /*  CMD7 w/rca: Select card to put it in TRAN state */
-        if (!send_cmd(drive, SD_SELECT_CARD, card_info[drive].rca, MCI_RESP, &response))
-            return -19;
     }
 #endif
 
@@ -899,12 +902,11 @@ static int sd_transfer_sectors(IF_MD(int drive,) unsigned long start,
                     (stat_full_reinint_count % 2 == 0) ?
                     1 : 2
                           : 0;
-//        led(false);
-//        enable_controller(false, drive);
-//
-//        enable_controller(true, drive);
-//        led(true);
-//        mci_delay();
+        if (write)
+        {
+            cpu_boost(false);
+        }
+
         ++stat_full_reinint_count;
         goto retry_with_reinit;
     }
