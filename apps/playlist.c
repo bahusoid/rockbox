@@ -616,7 +616,11 @@ static ssize_t format_track_path(char *dest, char *src, int buf_length,
 static void new_playlist_unlocked(struct playlist_info* playlist,
                                   const char *dir, const char *file)
 {
-    empty_playlist_unlocked(playlist, false);
+    const char *fileused = file;
+    const char *dirused = dir;
+
+    bool dirPlay = !fileused &&  dirused;
+    empty_playlist_unlocked(playlist, dirPlay && global_settings.resume_from_recent_bookmark && global_settings.usemrb);
 
     /* enable dirplay for the current playlist if there's a DIR but no FILE */
     if (!file && dir && playlist == &current_playlist)
@@ -3655,6 +3659,11 @@ int playlist_set_current(struct playlist_info* playlist)
 {
     int result = -1;
 
+//    if(global_settings.resume_from_recent_bookmark && global_settings.usemrb)
+//    {
+//        return result;
+//    }
+
     if (!playlist || (check_control(playlist) < 0))
         return result;
 
@@ -3823,6 +3832,11 @@ void playlist_sync(struct playlist_info* playlist)
         audio_flush_and_reload_tracks();
 }
 
+bool playlist_resume_from_recent_bookmark(void)
+{
+    return global_settings.resume_from_recent_bookmark && global_settings.usemrb && !playlist_modified(NULL);
+}
+
 /* Update resume info for current playing song.  Returns -1 on error. */
 int playlist_update_resume_info(const struct mp3entry* id3)
 {
@@ -3840,7 +3854,8 @@ int playlist_update_resume_info(const struct mp3entry* id3)
             global_status.resume_crc32 = crc;
             global_status.resume_elapsed = id3->elapsed;
             global_status.resume_offset = id3->offset;
-            status_save();
+            if (!playlist_resume_from_recent_bookmark())
+                status_save();
         }
     }
     else if (global_status.resume_index != -1)
@@ -3849,7 +3864,8 @@ int playlist_update_resume_info(const struct mp3entry* id3)
         global_status.resume_crc32 = -1;
         global_status.resume_elapsed = -1;
         global_status.resume_offset = -1;
-        status_save();
+        if (!playlist_resume_from_recent_bookmark())
+            status_save();
         return -1;
     }
 
