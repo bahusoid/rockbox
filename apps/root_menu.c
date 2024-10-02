@@ -338,7 +338,7 @@ static int wpsscrn(void* param)
                global_status.resume_index,
                (unsigned long)global_status.resume_crc32,
                (unsigned long)global_status.resume_offset);
-        if (playlist_resume() != -1)
+        if (playlist_amount() > 0 || playlist_resume() != -1)
         {
             playlist_resume_track(global_status.resume_index,
                 global_status.resume_crc32,
