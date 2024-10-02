@@ -121,30 +121,19 @@ static char *debug_get_flags(uint32_t flags);
 
 static void debug_available_settings(void);
 
-#ifdef ROCKBOX_NO_TEMP_SETTINGS_FILE /* Overwrites same file each time */
-#define CONFIGFILE_TEMP CONFIGFILE
-#define RESUMEFILE_TEMP RESUMEFILE
-#define rename_temp_file(a,b,c)
-#else /* creates temp files on save, renames next load, saves old file if desired */
-#define CONFIGFILE_TEMP CONFIGFILE".new"
-#define RESUMEFILE_TEMP RESUMEFILE".new"
+#define CONFIGFILE_TEMP CONFIGFILE ".tmp"
+#define RESUMEFILE_TEMP RESUMEFILE ".tmp"
 
-static void rename_temp_file(const char *tempfile,
-                            const char *file,
-                            const char *oldfile)
+#ifdef LOGF_ENABLE
+static char *debug_get_flags(uint32_t flags);
+#endif
+
+static inline void rename_temp_file(const char *tempfile,
+                            const char *file)
 {
-    /* if tempfile does not exist -- Return
-     * if oldfile is supplied     -- Rename file to oldfile
-     * if tempfile does exist     -- Rename tempfile to file
-    */
-    if (file_exists(tempfile))
-    {
-        if (oldfile != NULL && file_exists(file))
-            rename(file, oldfile);
-        rename(tempfile, file);
-    }
+    remove(file);
+    rename(tempfile, file);
 }
-#endif /* ndef ROCKBOX_NO_TEMP_SETTINGS_FILE */
 
 const char* setting_get_cfgvals(const struct settings_list *setting)
 {
@@ -194,10 +183,6 @@ void settings_load(void)
 {
     logf("\r\n%s()\r\n", __func__);
     debug_available_settings();
-
-    /* make temp files current make current files .old */
-    rename_temp_file(RESUMEFILE_TEMP, RESUMEFILE, RESUMEFILE".old");
-    rename_temp_file(CONFIGFILE_TEMP, CONFIGFILE, CONFIGFILE".old");
 
     settings_load_config(CONFIGFILE, false); /* load user_settings items */
     settings_load_config(RESUMEFILE, false); /* load system_status items */
@@ -640,7 +625,10 @@ static void flush_global_status_callback(void)
         DEBUGF("Writing system_status to disk\n");
         logf("Writing system_status to disk");
 
-        settings_write_config(RESUMEFILE_TEMP, SETTINGS_SAVE_RESUMEINFO);
+        if (settings_write_config(RESUMEFILE_TEMP, SETTINGS_SAVE_RESUMEINFO))
+        {
+            rename_temp_file(RESUMEFILE_TEMP, RESUMEFILE);
+        }
     }
 }
 
@@ -656,6 +644,10 @@ static void flush_config_block_callback(void)
             user_settings_crc = 0;
             DEBUGF("Error failed to write settings to disk\n");
             logf("Error failed to write settings to disk");
+        }
+        else
+        {
+            rename_temp_file(CONFIGFILE_TEMP, CONFIGFILE);
         }
     }
 #ifdef LOGF_ENABLE
