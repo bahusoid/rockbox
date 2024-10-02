@@ -103,34 +103,19 @@ struct system_status global_status;
 
 static void debug_available_settings(void);
 
-#ifdef ROCKBOX_NO_TEMP_SETTINGS_FILE /* Overwrites same file each time */
-#define CONFIGFILE_TEMP CONFIGFILE
-#define NVRAM_FILE_TEMP NVRAM_FILE
-#define rename_temp_file(a,b,c)
-#else /* creates temp files on save, renames next load, saves old file if desired */
-#define CONFIGFILE_TEMP CONFIGFILE".new"
-#define NVRAM_FILE_TEMP NVRAM_FILE".new"
+#define CONFIGFILE_TEMP CONFIGFILE ".tmp"
+#define NVRAM_FILE_TEMP NVRAM_FILE ".tmp"
 
 #ifdef LOGF_ENABLE
 static char *debug_get_flags(uint32_t flags);
 #endif
 
-static void rename_temp_file(const char *tempfile,
-                            const char *file,
-                            const char *oldfile)
+static inline void rename_temp_file(const char *tempfile,
+                            const char *file)
 {
-    /* if tempfile does not exist -- Return
-     * if oldfile is supplied     -- Rename file to oldfile
-     * if tempfile does exist     -- Rename tempfile to file
-    */
-    if (file_exists(tempfile))
-    {
-        if (oldfile != NULL && file_exists(file))
-            rename(file, oldfile);
-        rename(tempfile, file);
-    }
+    remove(file);
+    rename(tempfile, file);
 }
-#endif
 
 long lasttime = 0;
 
@@ -152,8 +137,6 @@ static unsigned int nvram_crc(char *buf, int max_len)
 
 static void read_nvram_data(void)
 {
-    rename_temp_file(NVRAM_FILE_TEMP, NVRAM_FILE, NVRAM_FILE".old");
-
     int fd = open(NVRAM_FILE, O_RDONLY);
     if (fd < 0)
         return;
@@ -231,8 +214,9 @@ static void write_nvram_data(void)
     if (fd < 0)
         return;
 
-    write(fd, buf, sizeof(buf));
+    write(fd, buf, sizeof(buf));        
     close(fd);
+    rename_temp_file(NVRAM_FILE_TEMP, NVRAM_FILE );
 }
 /** Reading from a config file **/
 /*
@@ -247,7 +231,6 @@ void settings_load(int which)
         read_nvram_data();
     if (which & SETTINGS_HD)
     {
-        rename_temp_file(CONFIGFILE_TEMP, CONFIGFILE, CONFIGFILE".old");
         settings_load_config(CONFIGFILE, false);
         settings_load_config(FIXEDSETTINGSFILE, false);
     }
@@ -658,7 +641,10 @@ static void flush_global_status_callback(void)
 static void flush_config_block_callback(void)
 {
     write_nvram_data();
-    settings_write_config(CONFIGFILE_TEMP, SETTINGS_SAVE_CHANGED);
+    if (settings_write_config(CONFIGFILE_TEMP, SETTINGS_SAVE_CHANGED))
+    {
+        rename_temp_file(CONFIGFILE_TEMP, CONFIGFILE);
+    }
 }
 
 void reset_runtime(void)
@@ -698,11 +684,6 @@ int settings_save(void)
 
 bool settings_save_config(int options)
 {
-    /* if we have outstanding temp files it would be a good idea to flush
-     them before the user starts saving things */
-    rename_temp_file(NVRAM_FILE_TEMP, NVRAM_FILE, NULL); /* dont overwrite .old */
-    rename_temp_file(CONFIGFILE_TEMP, CONFIGFILE, NULL); /* files from last boot */
-
     char filename[MAX_PATH];
     const char *folder, *namebase;
     switch (options)
