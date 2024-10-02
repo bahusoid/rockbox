@@ -79,6 +79,9 @@ struct playlist_info
                               global_settings.max_files_in_playlist */
     unsigned long *indices; /* array of indices            */
 
+    struct chunk_alloc_header name_chunk_buffer; /* chunk buffer for 
+                                                    in-ram playlist */
+
     int  index;          /* index of current playing track          */
     int  first_index;    /* index of first song in playlist         */
     int  amount;         /* number of tracks in the index           */
@@ -120,6 +123,7 @@ void playlist_init(void) INIT_ATTR;
 void playlist_shutdown(void);
 int playlist_create(const char *dir, const char *file);
 int playlist_resume(void);
+int playlist_add(const char *filename);
 int playlist_shuffle(int random_seed, int start_index);
 unsigned int playlist_get_filename_crc32(struct playlist_info *playlist,
                                          int index);
