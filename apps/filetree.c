@@ -76,54 +76,27 @@ static int strnatcasecmp_n(const char *a, const char *b, size_t n)
 int ft_build_playlist(struct tree_context* c, int start_index)
 {
     int i;
+    int res = 0;
     int start=start_index;
-    int res;
-    struct playlist_info *playlist = playlist_get_current();
 
     tree_lock_cache(c);
     struct entry *entries = tree_get_entries(c);
-    bool exceeds_pl = false;
-    if (c->filesindir > playlist->max_playlist_size)
-    {
-        exceeds_pl = true;
-        start_index = 0;
-    }
-    struct playlist_insert_context pl_context;
 
-    res = playlist_insert_context_create(playlist, &pl_context,
-                                        PLAYLIST_REPLACE, false, false);
-    if (res >= 0)
+    for(i = 0;i < c->filesindir;i++)
     {
-        cpu_boost(true);
-        for(i = 0;i < c->filesindir;i++)
+        if((entries[i].attr & FILE_ATTR_MASK) == FILE_ATTR_AUDIO)
         {
-            int item = i;
-            if (exceeds_pl)
-                item = (i + start) % c->filesindir;
-#if 0 /*only needed if displaying progress */
-            /* user abort */
-            if (action_userabort(TIMEOUT_NOBLOCK))
-            {
+            res = playlist_add(entries[i].name);
+            if (res < 0)
                 break;
-            }
-#endif
-            if((entries[item].attr & FILE_ATTR_MASK) == FILE_ATTR_AUDIO)
-            {
-                res = playlist_insert_context_add(&pl_context, entries[item].name);
-                if (res < 0)
-                    break;
-            }
-            else if (!exceeds_pl)
-            {
-                /* Adjust the start index when se skip non-MP3 entries */
-                if(i < start)
-                    start_index--;
-            }
         }
-        cpu_boost(false);
+        else
+        {
+            /* Adjust the start index when se skip non-MP3 entries */
+            if(i < start)
+                start_index--;
+        }
     }
-    
-    playlist_insert_context_release(&pl_context);
 
     tree_unlock_cache(c);
     return start_index;
