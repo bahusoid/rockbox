@@ -870,7 +870,7 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
         {
             MENUITEM_STRINGLIST(menu_items, ID2P(LANG_BOOKMARK_CONTEXT_MENU),
                 NULL, ID2P(LANG_BOOKMARK_CONTEXT_RESUME),
-                ID2P(LANG_BOOKMARK_CONTEXT_DELETE));
+                ID2P(LANG_DELETE));
             static const int menu_actions[] =
             {
                 ACTION_STD_OK, ACTION_BMS_DELETE
