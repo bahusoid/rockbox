@@ -328,7 +328,7 @@ static int wpsscrn(void* param)
         talk_shutup();
         ret_val = gui_wps_show();
     }
-    else if (global_settings.resume_from_recent_bookmark && global_settings.usemrb && bookmark_mrb_autoload())
+    else if (global_settings.resume_from_recent_bookmark && global_settings.usemrb  && playlist_amount() <= 0 && bookmark_mrb_autoload())
     {
         ret_val = gui_wps_show();
     }
