@@ -795,14 +795,17 @@ int ft_enter(struct tree_context* c)
         }
 
         if ( play ) {
-            /* the resume_index must always be the index in the
-               shuffled list in case shuffle is enabled */
-            global_status.resume_index = start_index;
-            global_status.resume_crc32 =
-                playlist_get_filename_crc32(NULL, start_index);
-            global_status.resume_elapsed = 0;
-            global_status.resume_offset = 0;
-            status_save();
+            if (global_status.resume_index != start_index)
+            {
+                /* the resume_index must always be the index in the
+                   shuffled list in case shuffle is enabled */
+                global_status.resume_index = start_index;
+                global_status.resume_crc32 =
+                        playlist_get_filename_crc32(NULL, start_index);
+                global_status.resume_elapsed = 0;
+                global_status.resume_offset = 0;
+                status_save();
+            }
             rc = GO_TO_WPS;
         }
         else {
