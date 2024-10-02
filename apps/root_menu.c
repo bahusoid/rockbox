@@ -715,8 +715,12 @@ static inline int load_screen(int screen)
         return screen;
     if (screen == old_previous)
         old_previous = GO_TO_ROOT;
-    global_status.last_screen = (char)screen;
-    status_save(false);
+    if (global_status.last_screen != (char)screen)
+    {
+        global_status.last_screen = (char) screen;
+        if (global_settings.start_in_screen == 0)
+            status_save(false);
+    }
 
     if (screen == GO_TO_BROWSEPLUGINS)
         activity = ACTIVITY_PLUGINBROWSER;
