@@ -76,7 +76,7 @@ static const struct button_mapping button_context_wps[]  = {
     { ACTION_WPS_PLAY,        BUTTON_SELECT|BUTTON_REL,     BUTTON_SELECT },
     { ACTION_WPS_MENU,       BUTTON_POWER|BUTTON_REL,  BUTTON_POWER },
 
-    { ACTION_WPS_QUICKSCREEN,   BUTTON_DOWN|BUTTON_REPEAT,    BUTTON_DOWN },
+    { ACTION_WPS_QUICKSCREEN,   BUTTON_UP|BUTTON_REPEAT,    BUTTON_UP },
     //{ ACTION_WPS_MENU,          BUTTON_HOME|BUTTON_REL,      BUTTON_HOME },
 
     { ACTION_WPS_CONTEXT,   BUTTON_SELECT|BUTTON_REPEAT,  BUTTON_SELECT },
@@ -105,8 +105,8 @@ static const struct button_mapping button_context_settings[] = {
 }; /* button_context_settings */
 
 static const struct button_mapping button_context_list[]  = {
-    { ACTION_LISTTREE_PGUP,   BUTTON_REC|BUTTON_UP,   BUTTON_REC },
-    { ACTION_LISTTREE_PGDOWN, BUTTON_REC|BUTTON_DOWN, BUTTON_REC },
+    {ACTION_LISTTREE_PGUP,       BUTTON_UP|BUTTON_REL,                  BUTTON_REC|BUTTON_UP},
+    {ACTION_LISTTREE_PGDOWN,       BUTTON_DOWN|BUTTON_REL,                  BUTTON_REC|BUTTON_DOWN},
 #ifdef HAVE_VOLUME_IN_LIST
     { ACTION_LIST_VOLUP,        BUTTON_SCROLL_FWD|BUTTON_REPEAT,    BUTTON_NONE },
     { ACTION_LIST_VOLUP,        BUTTON_SCROLL_FWD,                  BUTTON_NONE },
@@ -174,6 +174,10 @@ static const struct button_mapping button_context_settings_right_is_inc[]  = {
         { ACTION_SETTINGS_INCREPEAT,BUTTON_RIGHT|BUTTON_REPEAT, BUTTON_NONE },
         { ACTION_SETTINGS_DEC,      BUTTON_LEFT,                BUTTON_NONE },
         { ACTION_SETTINGS_DECREPEAT,BUTTON_LEFT|BUTTON_REPEAT,  BUTTON_NONE },
+        { ACTION_STD_PREV,                  BUTTON_UP,                         BUTTON_NONE },
+        { ACTION_STD_PREVREPEAT,            BUTTON_UP|BUTTON_REPEAT,           BUTTON_NONE },
+        { ACTION_STD_NEXT,                  BUTTON_DOWN,                       BUTTON_NONE },
+        { ACTION_STD_NEXTREPEAT,            BUTTON_DOWN|BUTTON_REPEAT,         BUTTON_NONE },
 
         LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_SETTINGS),
 }; /* button_context_settings_right_is_inc */
@@ -198,19 +202,10 @@ static const struct button_mapping button_context_pitchscreen[]  = {
 /** Recording Screen **/
 static const struct button_mapping button_context_recscreen[]  = {
     { ACTION_REC_PAUSE,          BUTTON_SELECT|BUTTON_REL,             BUTTON_SELECT },
-//    { ACTION_STD_CANCEL,         BUTTON_DOWN,                      BUTTON_NONE },
     { ACTION_REC_NEWFILE,        BUTTON_REC|BUTTON_REL,            BUTTON_REC },
     { ACTION_STD_MENU,           BUTTON_SELECT|BUTTON_REPEAT,      BUTTON_SELECT},
-    { ACTION_SETTINGS_INC,       BUTTON_RIGHT,                     BUTTON_NONE },
-    { ACTION_SETTINGS_INCREPEAT, BUTTON_RIGHT|BUTTON_REPEAT,       BUTTON_NONE },
-    { ACTION_SETTINGS_DEC,       BUTTON_LEFT,                      BUTTON_NONE },
-    { ACTION_SETTINGS_DECREPEAT, BUTTON_LEFT|BUTTON_REPEAT,        BUTTON_NONE },
-    { ACTION_STD_PREV,           BUTTON_SCROLL_BACK,               BUTTON_NONE },
-    { ACTION_STD_PREV,           BUTTON_SCROLL_BACK|BUTTON_REPEAT, BUTTON_NONE },
-    { ACTION_STD_NEXT,           BUTTON_SCROLL_FWD,                BUTTON_NONE },
-    { ACTION_STD_NEXT,           BUTTON_SCROLL_FWD|BUTTON_REPEAT,  BUTTON_NONE },
     { ACTION_STD_CANCEL,         BUTTON_POWER,                     BUTTON_NONE },
-    LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_STD)
+    LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_SETTINGS_RECTRIGGER)
 }; /* button_context_recscreen */
 
 /** FM Radio Screen **/
