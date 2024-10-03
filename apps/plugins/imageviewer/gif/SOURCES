@@ -3,3 +3,4 @@ gifalloc.c
 gif_decoder.c
 gif.c
 gif_err.c
+FILEGETC.c
