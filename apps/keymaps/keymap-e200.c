@@ -76,7 +76,7 @@ static const struct button_mapping button_context_wps[]  = {
     { ACTION_WPS_PLAY,        BUTTON_SELECT|BUTTON_REL,     BUTTON_SELECT },
     { ACTION_WPS_MENU,       BUTTON_POWER|BUTTON_REL,  BUTTON_POWER },
 
-    { ACTION_WPS_QUICKSCREEN,   BUTTON_DOWN|BUTTON_REPEAT,    BUTTON_DOWN },
+    { ACTION_WPS_QUICKSCREEN,   BUTTON_UP|BUTTON_REPEAT,    BUTTON_UP },
     //{ ACTION_WPS_MENU,          BUTTON_HOME|BUTTON_REL,      BUTTON_HOME },
 
     { ACTION_WPS_CONTEXT,   BUTTON_SELECT|BUTTON_REPEAT,  BUTTON_SELECT },
@@ -105,8 +105,8 @@ static const struct button_mapping button_context_settings[] = {
 }; /* button_context_settings */
 
 static const struct button_mapping button_context_list[]  = {
-    { ACTION_LISTTREE_PGUP,   BUTTON_REC|BUTTON_UP,   BUTTON_REC },
-    { ACTION_LISTTREE_PGDOWN, BUTTON_REC|BUTTON_DOWN, BUTTON_REC },
+    {ACTION_LISTTREE_PGUP,       BUTTON_UP|BUTTON_REL,                  BUTTON_REC|BUTTON_UP},
+    {ACTION_LISTTREE_PGDOWN,       BUTTON_DOWN|BUTTON_REL,                  BUTTON_REC|BUTTON_DOWN},
 #ifdef HAVE_VOLUME_IN_LIST
     { ACTION_LIST_VOLUP,        BUTTON_SCROLL_FWD|BUTTON_REPEAT,    BUTTON_NONE },
     { ACTION_LIST_VOLUP,        BUTTON_SCROLL_FWD,                  BUTTON_NONE },
