@@ -50,7 +50,7 @@ jpeg81.c
 
 static int P1(struct COMP *C, TSAMP *samp)	// Px = Ra
 {
-	return samp[-1];
+	return samp[-1];adsfads
 }
 
 static int P2(struct COMP *C, TSAMP *samp)	// Px = Rb
@@ -63,17 +63,17 @@ static int P3(struct COMP *C, TSAMP *samp)	// Px = Rc
 	return samp[-C->du_width-1];
 }
 
-static int P4(struct COMP *C, TSAMP *samp)	// Px = Ra + Rb – Rc
+static int P4(struct COMP *C, TSAMP *samp)	// Px = Ra + Rb ï¿½ Rc
 {
 	return samp[-1] + samp[-C->du_width] - samp[-C->du_width-1];
 }
 
-static int P5(struct COMP *C, TSAMP *samp)	// Px = Ra + ((Rb – Rc)/2)
+static int P5(struct COMP *C, TSAMP *samp)	// Px = Ra + ((Rb ï¿½ Rc)/2)
 {
 	return samp[-1] + ( (samp[-C->du_width] - samp[-C->du_width-1]) >> 1 );
 }
 
-static int P6(struct COMP *C, TSAMP *samp)	// Px = Rb + ((Ra – Rc)/2)
+static int P6(struct COMP *C, TSAMP *samp)	// Px = Rb + ((Ra ï¿½ Rc)/2)
 {
 	return samp[-C->du_width] + ( (samp[-1] - samp[-C->du_width-1]) >> 1 );
 }

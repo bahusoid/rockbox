@@ -33,6 +33,9 @@
 #define fread(ptr, size, nmemb, stream) rb->read(stream, ptr, size*nmemb)
 #define fclose(stream) rb->close(stream)
 #define fdopen(a,b) ((a))
+//#define fopen(a,b) rb->open(a,O_RDONLY)
+//#undef fseek
+#define fseek() rb->ls
 
 #define malloc(a) tlsf_malloc((a))
 #define free(a)   tlsf_free((a))

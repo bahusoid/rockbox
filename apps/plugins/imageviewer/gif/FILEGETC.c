@@ -10,14 +10,15 @@
 
 	Declared in <stdio.h>.
 */
-#include "plugin.h"
+#include "rb_glue.h"
 
+	static int F;
 
-	static FILE *F;
-
-	extern int GETC()		
+	extern int GETC()
 	{
-		return fgetc(F); 
+        char x;
+        rb->read(F, &x, sizeof(x));
+		return x; 
 	}
 
 
@@ -49,17 +50,17 @@
 
 	extern void SEEK(int d)		
 	{
-		fseek(F, d, SEEK_CUR); 
+        rb->lseek(F, d, SEEK_CUR); 
 	}
 
 	extern void POS(int d)		
 	{
-		fseek(F, d, SEEK_SET); 
+        rb->lseek(F, d, SEEK_SET); 
 	}
 
 	extern int TELL()
 	{
-		return ftell(F); 
+		return rb->lseek(F, 0, SEEK_CUR); 
 	}
 
 
@@ -69,14 +70,18 @@
 	{
 		printf("Opening %s\n", f);
 
-		F = fopen( f, "rb" );
+		F = rb->open(f,O_RDONLY);
 		
-		if ( 0 == F ) printf("Error opening %s\n", f);
+		if (  F < 0 )
+        {
+            printf("Error opening %s\n", f);
+            return NULL;
+        }
 		
-		return F;
+		return &F;
 	}
 
 	extern int CLOSE()
 	{
-		return fclose(F);
+		return rb->close(F);
 	}
