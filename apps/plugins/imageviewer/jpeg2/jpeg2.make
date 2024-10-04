@@ -22,7 +22,8 @@ $(JPEG2BUILDDIR)/jpeg2.link: $(PLUGIN_LDS) $(JPEG2BUILDDIR)/jpeg2.refmap
 $(JPEG2BUILDDIR)/jpeg2.ovl: $(JPEG2_OBJ) $(TLSFLIB)
 
 #-Os breaks decoder - dunno why
-JPEG2FLAGS = $(IMGDECFLAGS) -O2
+JPEG2FLAGS = $(IMGDECFLAGS) 
+#-O2
 
 # Compile PNG plugin with extra flags (adapted from ZXBox)
 $(JPEG2BUILDDIR)/%.o: $(JPEG2SRCDIR)/%.c $(JPEG2SRCDIR)/jpeg2.make

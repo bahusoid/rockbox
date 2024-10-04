@@ -1,2 +1,3 @@
 jpeg81.c
+jpeg_decoder.c
 FILEGETC.c

@@ -41,16 +41,16 @@ jpeg81.c
 */
 
 #include "GETC.h" 
+#include "rb_glue.h"
 #include "jpeg81.h"
-#include <malloc.h>		// calloc() called once
-#include <stdio.h>		// debug only
 
+#define printf(...) 
 
 ///////////////////////////////////////// LOSSLESS /////////////////////////////////////////
 
 static int P1(struct COMP *C, TSAMP *samp)	// Px = Ra
 {
-	return samp[-1];adsfads
+	return samp[-1];
 }
 
 static int P2(struct COMP *C, TSAMP *samp)	// Px = Rb

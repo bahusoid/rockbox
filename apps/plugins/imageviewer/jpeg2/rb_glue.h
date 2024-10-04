@@ -20,6 +20,7 @@
 
 #include "plugin.h"
 #include <tlsf.h>
+#undef COMP
 
 #undef  memset
 #define memset(a,b,c)      rb->memset((a),(b),(c))
