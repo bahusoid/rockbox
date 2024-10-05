@@ -25,6 +25,10 @@ jobs:
             arch: a
             platform: 65
 
+          - name: mRobe500
+            arch: a
+            platform: 70
+
     runs-on: ubuntu-latest
     name: ${{matrix.name}}
 
