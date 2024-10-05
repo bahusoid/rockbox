@@ -268,7 +268,7 @@ $(LINKROM): $(ROMLDS)
 # Having the latter first caused crashes on (at least) mini2g.
 $(BUILDDIR)/rockbox.elf : $$(OBJ) $(FIRMLIB) $(VOICESPEEXLIB) $(CORE_LIBS) $$(LINKRAM)
 	$(call PRINTS,LD $(@F))$(CC) $(GCCOPTS) -nostdlib -o $@ $(OBJ) \
-		-L$(BUILDDIR)/firmware \
+		-L$(BUILDDIR)/firmware -lfirmware \
 		-L$(RBCODEC_BLD)/codecs $(call a2lnk, $(VOICESPEEXLIB)) \
 		-L$(BUILDDIR)/lib $(call a2lnk, $(CORE_LIBS)) \
 		-lgcc $(CORE_LDOPTS) -T$(LINKRAM) \
@@ -276,7 +276,7 @@ $(BUILDDIR)/rockbox.elf : $$(OBJ) $(FIRMLIB) $(VOICESPEEXLIB) $(CORE_LIBS) $$(LI
 
 $(BUILDDIR)/rombox.elf : $$(OBJ) $(FIRMLIB) $(VOICESPEEXLIB) $(CORE_LIBS) $$(LINKROM)
 	$(call PRINTS,LD $(@F))$(CC) $(GCCOPTS) -nostdlib -o $@ $(OBJ) \
-		-L$(BUILDDIR)/firmware \
+		-L$(BUILDDIR)/firmware -lfirmware \
 		-L$(RBCODEC_BLD)/codecs $(call a2lnk, $(VOICESPEEXLIB)) \
 		-L$(BUILDDIR)/lib $(call a2lnk, $(CORE_LIBS)) \
 		-lgcc $(CORE_LDOPTS) -T$(LINKROM) \
