@@ -43,8 +43,9 @@ jpeg81.c
 #include "GETC.h" 
 #include "rb_glue.h"
 #include "jpeg81.h"
-
-#define printf(...) 
+#define LOGF_ENABLE
+#include "logf.h"
+#define printf LOGF 
 
 ///////////////////////////////////////// LOSSLESS /////////////////////////////////////////
 

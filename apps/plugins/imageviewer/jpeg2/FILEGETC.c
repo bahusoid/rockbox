@@ -1,45 +1,33 @@
-/* ////////// Example File Stream type Interface implementation for GETC  ////////////////////////
-
-	ANSI C abstracts streams by FILE: 
-
-	- fopen()
-	- fgetc()
-	- fseek()
-	- ftell()
-	- fclose()
-
-	Declared in <stdio.h>.
-*/
-#include "plugin.h"
+#include "rb_glue.h"
 
 	static int F;
 
-	extern int GETC()
+	extern int GETC(void)
 	{
-        char x;
-        rb->read(F, &x, sizeof(x));
+        unsigned char x;
+        rb->read(F, &x, 1);
 		return x; 
 	}
 
 
 	// multibyte readers: host-endian independent - if evaluated in right order (ie. don't optimize)
 
-	extern int GETWbi()		// 16-bit big-endian
+	extern int GETWbi(void)		// 16-bit big-endian
 	{
 		return ( GETC()<<8 ) | GETC();
 	}
 
-	extern int GETDbi()		// 32-bit big-endian
+	extern int GETDbi(void)		// 32-bit big-endian
 	{
 		return ( GETC()<<24 ) | ( GETC()<<16 ) | ( GETC()<<8 ) | GETC();
 	}
 
-	extern int GETWli()		// 16-bit little-endian
+	extern int GETWli(void)		// 16-bit little-endian
 	{
 		return GETC() | ( GETC()<<8 );
 	}
 
-	extern int GETDli()		// 32-bit little-endian
+	extern int GETDli(void)		// 32-bit little-endian
 	{
 		return GETC() | ( GETC()<<8 ) | ( GETC()<<16 ) | ( GETC()<<24 );
 	}
@@ -58,7 +46,7 @@
         rb->lseek(F, d, SEEK_SET); 
 	}
 
-	extern int TELL()
+	extern int TELL(void)
 	{
 		return rb->lseek(F, 0, SEEK_CUR); 
 	}
@@ -81,7 +69,7 @@
 		return &F;
 	}
 
-	extern int CLOSE()
+	extern int CLOSE(void)
 	{
 		return rb->close(F);
 	}

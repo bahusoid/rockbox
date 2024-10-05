@@ -25,7 +25,7 @@
 
 static const char *decoder_names[MAX_IMAGE_TYPES] = {
     "bmp",
-    "jpeg",
+    "jpeg2",//TODO: change back for jpeg for old decoder, jpeg2 for new decoder
     "png",
 #ifdef HAVE_LCD_COLOR
     "ppm",

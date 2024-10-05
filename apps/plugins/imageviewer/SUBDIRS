@@ -1,8 +1,8 @@
 bmp
 jpeg
+jpeg2
 png
 #ifdef HAVE_LCD_COLOR
 ppm
 #endif
 gif
-jpeg2

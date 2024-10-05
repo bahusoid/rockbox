@@ -24,11 +24,12 @@
 * KIND, either express or implied.
 *
 ****************************************************************************/
-
+#include "jpeg81.h"
+#include "GETC.h"
 #include "plugin.h"
+#include "tlsf.h"
 
 #include "../imageviewer.h"
-#include "jpeg_decoder.h"
 
 #ifdef HAVE_LCD_COLOR
 #include "yuv2rgb.h"
@@ -61,11 +62,8 @@ static char print[32]; /* use a common snprintf() buffer */
 static unsigned char* buf_root;
 static int root_size;
 
-/* up to here currently used by image(s) */
-static unsigned char* buf_images;
-static ssize_t buf_images_size;
 
-static struct jpeg jpg; /* too large for stack */
+static struct JPEGD jpg; /* too large for stack */
 
 /************************* Implementation ***************************/
 
@@ -90,20 +88,40 @@ static void draw_image_rect(struct image_info *info,
 #endif
 }
 
+static int get_x_phys()
+{
+    return jpg.X + jpg.P;
+}
+
+static int get_y_phys()
+{
+    return jpg.Y + jpg.P;
+}
+
+//#define x_phys X + p_jpg->P
+//#define y_phys Y + p_jpg->P
 static int img_mem(int ds)
 {
     int size;
-    struct jpeg *p_jpg = &jpg;
-
-    size = (p_jpg->x_phys/ds/p_jpg->subsample_x[0])
-         * (p_jpg->y_phys/ds/p_jpg->subsample_y[0]);
+    struct JPEGD *p_jpg = &jpg;
+    int x_phys = p_jpg->X + p_jpg->P;
+    int y_phys = p_jpg->Y + p_jpg->P;
+    int h0= p_jpg->Hmax / p_jpg->Components[0].Hi;
+    int v0= p_jpg->Vmax / p_jpg->Components[0].Vi;
+    int h1= p_jpg->Hmax / p_jpg->Components[1].Hi;
+    int v1= p_jpg->Vmax / p_jpg->Components[1].Vi;
+    int h2= p_jpg->Hmax / p_jpg->Components[2].Hi;
+    int v2= p_jpg->Vmax / p_jpg->Components[2].Vi;
+    size = (x_phys  /ds/h0)
+         * (y_phys/ds/v0);
 #ifdef HAVE_LCD_COLOR
-    if (p_jpg->blocks > 1) /* colour, add requirements for chroma */
+    //if (p_jpg->blocks > 1) /* colour, add requirements for chroma */
+    if (p_jpg->Nf == 3) //TODO???? 
     {
-        size += (p_jpg->x_phys/ds/p_jpg->subsample_x[1])
-              * (p_jpg->y_phys/ds/p_jpg->subsample_y[1]);
-        size += (p_jpg->x_phys/ds/p_jpg->subsample_x[2])
-              * (p_jpg->y_phys/ds/p_jpg->subsample_y[2]);
+        size += (x_phys/ds/h1)
+              * (y_phys/ds/v1);
+        size += (x_phys/ds/h2)
+              * (y_phys/ds/v2);
     }
 #endif
     return size;
@@ -112,45 +130,34 @@ static int img_mem(int ds)
 static int load_image(char *filename, struct image_info *info,
                       unsigned char *buf, ssize_t *buf_size)
 {
-    int fd;
-    int filesize;
-    unsigned char* buf_jpeg; /* compressed JPEG image */
     int status;
-    struct jpeg *p_jpg = &jpg;
+    struct JPEGD *p_jpg = &jpg;
 
     rb->memset(&disp, 0, sizeof(disp));
     rb->memset(&jpg, 0, sizeof(jpg));
 
-    fd = rb->open(filename, O_RDONLY);
-    if (fd < 0)
+    unsigned char *memory, *memory_max;
+    size_t memory_size, img_size, disp_size;
+
+    /* align buffer */
+    memory = (unsigned char *)((intptr_t)(buf + 3) & ~3);
+    memory_max = (unsigned char *)((intptr_t)(memory + *buf_size) & ~3);
+    memory_size = memory_max - memory;
+    init_memory_pool(memory_size, memory);
+    
+    OPEN(filename);
+    if (!OPEN(filename))
     {
-        rb->splashf(HZ, "err opening %s: %d", filename, fd);
         return PLUGIN_ERROR;
     }
-    filesize = rb->filesize(fd);
 
-    /* allocate JPEG buffer */
-    buf_jpeg = buf;
-
-    /* we can start the decompressed images behind it */
-    buf_images = buf_root = buf + filesize;
-    buf_images_size = root_size = *buf_size - filesize;
-
-    if (buf_images_size <= 0)
-    {
-        rb->close(fd);
-        return PLUGIN_OUTOFMEM;
-    }
 
     if(!iv->running_slideshow)
     {
         rb->lcd_puts(0, 0, rb->strrchr(filename,'/')+1);
-        rb->lcd_putsf(0, 1, "loading %d bytes", filesize);
         rb->lcd_update();
     }
 
-    rb->read(fd, buf_jpeg, filesize);
-    rb->close(fd);
 
     if(!iv->running_slideshow)
     {
@@ -165,126 +172,29 @@ static int load_image(char *filename, struct image_info *info,
     }
 #endif
 
-    /* process markers, unstuffing */
-    status = process_markers(buf_jpeg, filesize, p_jpg);
+    status = JPEGDecode(p_jpg);
 
-    if (status < 0 || (status & (DQT | SOF0)) != (DQT | SOF0))
+    if (status < 0)
     {   /* bad format or minimum components not contained */
         rb->splashf(HZ, "unsupported %d", status);
         return PLUGIN_ERROR;
     }
-
-    if (!(status & DHT)) /* if no Huffman table present: */
-        default_huff_tbl(p_jpg); /* use default */
-    build_lut(p_jpg); /* derive Huffman and other lookup-tables */
-
+    
     if(!iv->running_slideshow)
     {
-        rb->lcd_putsf(0, 2, "image %dx%d", p_jpg->x_size, p_jpg->y_size);
+        rb->lcd_putsf(0, 2, "image %dx%d", p_jpg->X, p_jpg->Y);
         rb->lcd_update();
     }
 
-    info->x_size = p_jpg->x_size;
-    info->y_size = p_jpg->y_size;
-    *buf_size = buf_images_size;
+    info->x_size = p_jpg->X;
+    info->y_size = p_jpg->Y;
     return PLUGIN_OK;
 }
 
 static int get_image(struct image_info *info, int frame, int ds)
 {
-    (void)frame;
-    int w, h; /* used to center output */
-    int size; /* decompressed image size */
-    long time; /* measured ticks */
-    int status;
-    struct jpeg* p_jpg = &jpg;
-    struct t_disp* p_disp = &disp[ds]; /* short cut */
-
-    info->width = p_jpg->x_size / ds;
-    info->height = p_jpg->y_size / ds;
-    info->data = p_disp;
-
-    if (p_disp->bitmap[0] != NULL)
-    {
-        /* we still have it */
-        return PLUGIN_OK;
-    }
-
-    /* assign image buffer */
-
-    /* physical size needed for decoding */
-    size = img_mem(ds);
-    if (buf_images_size <= size)
-    {   /* have to discard the current */
-        int i;
-        for (i=1; i<=8; i++)
-            disp[i].bitmap[0] = NULL; /* invalidate all bitmaps */
-        buf_images = buf_root; /* start again from the beginning of the buffer */
-        buf_images_size = root_size;
-    }
-
-#ifdef HAVE_LCD_COLOR
-    if (p_jpg->blocks > 1) /* colour jpeg */
-    {
-        int i;
-
-        for (i = 1; i < 3; i++)
-        {
-            size = (p_jpg->x_phys / ds / p_jpg->subsample_x[i])
-                 * (p_jpg->y_phys / ds / p_jpg->subsample_y[i]);
-            p_disp->bitmap[i] = buf_images;
-            buf_images += size;
-            buf_images_size -= size;
-        }
-        p_disp->csub_x = p_jpg->subsample_x[1];
-        p_disp->csub_y = p_jpg->subsample_y[1];
-    }
-    else
-    {
-        p_disp->csub_x = p_disp->csub_y = 0;
-        p_disp->bitmap[1] = p_disp->bitmap[2] = buf_images;
-    }
-#endif
-    /* size may be less when decoded (if height is not block aligned) */
-    size = (p_jpg->x_phys/ds) * (p_jpg->y_size/ds);
-    p_disp->bitmap[0] = buf_images;
-    buf_images += size;
-    buf_images_size -= size;
-
-    if(!iv->running_slideshow)
-    {
-        rb->lcd_putsf(0, 3, "decoding %d*%d", info->width, info->height);
-        rb->lcd_update();
-    }
-
-    /* update image properties */
-    p_disp->stride = p_jpg->x_phys / ds; /* use physical size for stride */
-
-    /* the actual decoding */
-    time = *rb->current_tick;
-#ifdef HAVE_ADJUSTABLE_CPU_FREQ
-    rb->cpu_boost(true);
-    status = jpeg_decode(p_jpg, p_disp->bitmap, ds, iv->cb_progress);
-    rb->cpu_boost(false);
-#else
-    status = jpeg_decode(p_jpg, p_disp->bitmap, ds, iv->cb_progress);
-#endif
-    if (status)
-    {
-        rb->splashf(HZ, "decode error %d", status);
-        return PLUGIN_ERROR;
-    }
-    time = *rb->current_tick - time;
-
-    if(!iv->running_slideshow)
-    {
-        rb->snprintf(print, sizeof(print), " %ld.%02ld sec ", time/HZ, time%HZ);
-        rb->lcd_getstringsize(print, &w, &h); /* centered in progress bar */
-        rb->lcd_putsxy((LCD_WIDTH - w)/2, LCD_HEIGHT - h, print);
-        rb->lcd_update();
-    }
-
-    return PLUGIN_OK;
+    //TODO;
+    return 0;
 }
 
 const struct image_decoder image_decoder = {

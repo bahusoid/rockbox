@@ -1,3 +1,7 @@
-jpeg81.c
-jpeg_decoder.c
+jpeg.c
+#ifdef HAVE_LCD_COLOR
+yuv2rgb.c
+#endif
 FILEGETC.c
+jpeg81.c
+idct.c
