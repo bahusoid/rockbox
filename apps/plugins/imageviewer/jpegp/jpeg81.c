@@ -40,12 +40,9 @@ jpeg81.c
 *   SOFTWARE.
 */
 
-#include "GETC.h" 
+#include "GETC.h"
+#include "rb_glue.h"
 #include "jpeg81.h"
-#include <malloc.h>		// calloc() called once
-#include <stdio.h>		// debug only
-
-
 ///////////////////////////////////////// LOSSLESS /////////////////////////////////////////
 
 static int P1(struct COMP *C, TSAMP *samp)	// Px = Ra
@@ -63,17 +60,17 @@ static int P3(struct COMP *C, TSAMP *samp)	// Px = Rc
 	return samp[-C->du_width-1];
 }
 
-static int P4(struct COMP *C, TSAMP *samp)	// Px = Ra + Rb – Rc
+static int P4(struct COMP *C, TSAMP *samp)	// Px = Ra + Rb - Rc
 {
 	return samp[-1] + samp[-C->du_width] - samp[-C->du_width-1];
 }
 
-static int P5(struct COMP *C, TSAMP *samp)	// Px = Ra + ((Rb – Rc)/2)
+static int P5(struct COMP *C, TSAMP *samp)	// Px = Ra + ((Rb - Rc)/2)
 {
 	return samp[-1] + ( (samp[-C->du_width] - samp[-C->du_width-1]) >> 1 );
 }
 
-static int P6(struct COMP *C, TSAMP *samp)	// Px = Rb + ((Ra – Rc)/2)
+static int P6(struct COMP *C, TSAMP *samp)	// Px = Rb + ((Ra - Rc)/2)
 {
 	return samp[-C->du_width] + ( (samp[-1] - samp[-C->du_width-1]) >> 1 );
 }
@@ -832,7 +829,7 @@ extern enum JPEGENUM JPEGDecode(struct JPEGD *j)
 					}
 				}
 
-				printf("  Malloc for %d Data Units (%d bytes)\n\n", TotalDU, sizeof(DU)*TotalDU);				
+				printf("  Malloc for %d Data Units (%lu bytes)\n\n", TotalDU, sizeof(DU)*TotalDU);
 
 				if (j->SOF > 0xC8) {	// DCT Arithmetic
 					j->Reset_decoder= Reset_decoder_arith;
@@ -953,7 +950,7 @@ extern enum JPEGENUM JPEGDecode(struct JPEGD *j)
 
 			for (Lq-=2; Lq; Lq -= 65 + 64*Pq) 
 			{
-				int (*get)();
+				int (*get)(void);
 				int T= GETC(); 
 				int Tq= T&3;
 				int *qt= j->QT[Tq];
