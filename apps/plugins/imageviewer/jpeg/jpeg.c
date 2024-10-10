@@ -170,8 +170,8 @@ static int load_image(char *filename, struct image_info *info,
 
     if (status < 0 || (status & (DQT | SOF0)) != (DQT | SOF0))
     {   /* bad format or minimum components not contained */
-        rb->splashf(HZ, "unsupported %d", status);
-        return PLUGIN_ERROR;
+        //rb->splashf(HZ, "unsupported %d", status);
+        return PLUGIN_JPEG_PROGRESSIVE;
     }
 
     if (!(status & DHT)) /* if no Huffman table present: */

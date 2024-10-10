@@ -855,6 +855,8 @@ static int load_and_show(char* filename, struct image_info *info)
     }
     if (image_type != status) /* type of image is changed, load decoder. */
     {
+        reload_decoder:;
+
         struct loader_info loader_info = {
             status, &iv_api, decoder_buf, decoder_buf_size,
         };
@@ -880,6 +882,13 @@ static int load_and_show(char* filename, struct image_info *info)
         status = PLUGIN_ABORT;
     else
         status = imgdec->load_image(filename, info, buf, &remaining);
+
+    if (status == PLUGIN_JPEG_PROGRESSIVE)
+    {
+        release_decoder();
+        status = IMAGE_JPEG_PROGRESSIVE;
+        goto reload_decoder;
+    }
 
     if (status == PLUGIN_OUTOFMEM)
     {
