@@ -34,7 +34,6 @@
 #define DEBUG_CANCEL       ACTION_STD_CANCEL
 #define DEBUG_NEXT         ACTION_STD_NEXT
 #define DEBUG_LEFT_JUSTIFY ACTION_STD_OK
-#define DEBUG_LEFT_SCROLL  ACTION_STD_MENU
 
 /* if the possiblity exists to divide by zero protect with this macro */
 #define DIV_FINITE(dividend, divisor) ((divisor == 0)? divisor : dividend/divisor)
@@ -286,6 +285,7 @@ static bool dbg_btn(bool *done, int *x)
         int button = get_action(CONTEXT_STD,HZ/10);
         switch(button)
         {
+            case ACTION_STD_MENU:
             case DEBUG_CANCEL:
                 *done = true;
                 /*fallthrough*/
@@ -296,8 +296,11 @@ static bool dbg_btn(bool *done, int *x)
                 (*x) = 0;
                 sleep(HZ/5);
                 break;
-            case DEBUG_LEFT_SCROLL:
+            case ACTION_STD_NEXTREPEAT:
                 (*x)--;
+                break;
+            case ACTION_STD_PREVREPEAT:
+                x++;
                 break;
             default:
                 break;
