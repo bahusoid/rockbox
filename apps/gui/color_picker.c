@@ -481,6 +481,7 @@ bool set_color(struct screen *display, char *title,
                 break;
 
             case ACTION_STD_CANCEL:
+            case ACTION_STD_MENU:
                 exit = 1;
                 break;
 
