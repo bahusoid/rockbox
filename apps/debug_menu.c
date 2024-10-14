@@ -415,6 +415,7 @@ static bool dbg_buffering_thread(void)
                 audio_prev();
                 break;
             case ACTION_STD_CANCEL:
+            case ACTION_STD_MENU:
                 done = true;
                 break;
         }
@@ -823,8 +824,11 @@ static bool dbg_cpufreq(void)
             case ACTION_STD_NEXT:
                 cpu_boost(false);
                 break;
-            case ACTION_STD_MENU:
+            case ACTION_STD_NEXTREPEAT:
                 x--;
+                break;
+            case ACTION_STD_PREVREPEAT:
+                x++;
                 break;
             case ACTION_STD_OK:
                 x = 0;
