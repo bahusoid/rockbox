@@ -387,9 +387,13 @@ enum codec_status codec_run(void)
     ogg_stream_state stack_os;
     ogg_sync_state stack_oy;
 
+    
+    
     header = &stack_header;
     oy = &stack_oy;
     os = &stack_os;
+    /* allocate output buffer */
+    uint16_t output[MAX_FRAME_SIZE];
 
     /* EMAC rounding is disabled because of MULT16_32_Q15, which will be
        inaccurate with rounding in its current incarnation */
@@ -399,15 +403,14 @@ enum codec_status codec_run(void)
     header = _ogg_malloc(sizeof(*header));
     os = _ogg_malloc(sizeof(*os));
     oy = _ogg_malloc(sizeof(*oy));
+    /* allocate output buffer */
+    uint16_t *output = (uint16_t*) _ogg_malloc(MAX_FRAME_SIZE*sizeof(uint16_t));
 #endif
 
     /* pre-init the ogg_sync_state buffer, so it won't need many reallocs */
     ogg_sync_init(oy);
     oy->storage = 64*1024;
     oy->data = _ogg_malloc(oy->storage);
-
-    /* allocate output buffer */
-    uint16_t *output = (uint16_t*) _ogg_malloc(MAX_FRAME_SIZE*sizeof(uint16_t));
 
     ci->seek_buffer(0);
     ci->set_elapsed(0);
