@@ -382,15 +382,24 @@ enum codec_status codec_run(void)
     strtoffset = ci->id3->offset;
 
 #if defined(CPU_COLDFIRE)
+    /* Coldfires have fast IRAM (stack) and lack of dcache. */
+    OpusHeader stack_header;
+    ogg_stream_state stack_os;
+    ogg_sync_state stack_oy;
+
+    header = &stack_header;
+    oy = &stack_oy;
+    os = &stack_os;
+
     /* EMAC rounding is disabled because of MULT16_32_Q15, which will be
        inaccurate with rounding in its current incarnation */
     coldfire_set_macsr(EMAC_FRACTIONAL | EMAC_SATURATE);
-#endif
-
+#else
     /* Allocate some stuff off the heap */
     header = _ogg_malloc(sizeof(*header));
     os = _ogg_malloc(sizeof(*os));
     oy = _ogg_malloc(sizeof(*oy));
+#endif
 
     /* pre-init the ogg_sync_state buffer, so it won't need many reallocs */
     ogg_sync_init(oy);
