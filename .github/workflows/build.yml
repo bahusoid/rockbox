@@ -29,6 +29,10 @@ jobs:
             arch: a
             platform: 70
 
+          - name: IriverH300
+            arch: m
+            platform: 11
+
     runs-on: ubuntu-latest
     name: ${{matrix.name}}
 
