@@ -586,6 +586,7 @@ static void DecodeInterleaved_LL(struct JPEGD *j)
 
 ////////////////////////////// PARSING //////////////////////////////////////////////////////////////////////////////
 
+#if defined(DEBUG) || defined(SIMULATOR)
 static char *SOFSTRING[] = {	// debug
 	// non-differential, Huffman coding 
 	"Baseline DCT", 
@@ -609,6 +610,7 @@ static char *SOFSTRING[] = {	// debug
 	"-Arithmetic Differential lossless sequential",
 
 };
+#endif
 
 static int div_up(int a, int b)		//  ~ciel([a/b])
 {
@@ -766,7 +768,10 @@ extern enum JPEGENUM JPEGDecode(struct JPEGD *j)
 			printf("  P=%d Y=%d X=%d\n", j->P, j->Y, j->X);
 			printf("  Nf=%d\n", j->Nf);
 
-			if (*SOFSTRING[marker&15] == '-') return JPEGENUMERR_UNKNOWN_SOF;
+			//if (*SOFSTRING[marker&15] == '-') return JPEGENUMERR_UNKNOWN_SOF;
+			int sof = marker&15;
+			if (sof > 12 || (sof > 4 && sof < 8)) return JPEGENUMERR_UNKNOWN_SOF;
+
 			if (j->Nf>4) return JPEGENUMERR_COMP4;
 			if (!j->Y) return JPEGENUMERR_ZEROY;		// I have no idea about this DNL stuff
 			j->SOF= marker;
