@@ -921,7 +921,7 @@ bool simplelist_show_list(struct simplelist_info *info)
                 gui_synclist_set_nb_items(&lists,
                         simplelist_line_count*info->selection_size);
         }
-        if (action == ACTION_STD_CANCEL)
+        if (action == ACTION_STD_CANCEL || action == ACTION_STD_MENU)
         {
             info->selection = -1;
             break;
