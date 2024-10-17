@@ -99,6 +99,19 @@ static const struct button_mapping button_context_settings[] = {
     LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_STD),
 }; /* button_context_settings */
 
+static const struct button_mapping button_context_settings_right_is_inc[]  = {
+        { ACTION_SETTINGS_INC,      BUTTON_RIGHT,               BUTTON_NONE },
+        { ACTION_SETTINGS_INCREPEAT,BUTTON_RIGHT|BUTTON_REPEAT, BUTTON_NONE },
+        { ACTION_SETTINGS_DEC,      BUTTON_LEFT,                BUTTON_NONE },
+        { ACTION_SETTINGS_DECREPEAT,BUTTON_LEFT|BUTTON_REPEAT,  BUTTON_NONE },
+        { ACTION_STD_PREV,                  BUTTON_UP,                         BUTTON_NONE },
+        { ACTION_STD_PREVREPEAT,            BUTTON_UP|BUTTON_REPEAT,           BUTTON_NONE },
+        { ACTION_STD_NEXT,                  BUTTON_DOWN,                       BUTTON_NONE },
+        { ACTION_STD_NEXTREPEAT,            BUTTON_DOWN|BUTTON_REPEAT,         BUTTON_NONE },
+
+        LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_SETTINGS),
+}; /* button_context_settings_right_is_inc */
+
 static const struct button_mapping button_context_list[]  = {
 /*    ACTION_LISTTREE_PGUP, optional
  *    ACTION_LISTTREE_PGDOWN, optional
@@ -155,21 +168,6 @@ static const struct button_mapping button_context_quickscreen[]  = {
     LAST_ITEM_IN_LIST
 }; /* button_context_quickscreen */
 
-static const struct button_mapping button_context_settings_time[] = {
-    { ACTION_STD_PREV,           BUTTON_LEFT|BUTTON_REL,     BUTTON_LEFT },
-    { ACTION_STD_PREVREPEAT,     BUTTON_LEFT|BUTTON_REPEAT,  BUTTON_LEFT },
-    { ACTION_STD_NEXT,           BUTTON_RIGHT|BUTTON_REL,    BUTTON_RIGHT },
-    { ACTION_STD_NEXTREPEAT,     BUTTON_RIGHT|BUTTON_REPEAT, BUTTON_RIGHT },
-    { ACTION_STD_CANCEL,         BUTTON_LEFT|BUTTON_REPEAT,  BUTTON_LEFT },
-    { ACTION_STD_OK,             BUTTON_SELECT|BUTTON_REL,   BUTTON_SELECT },
-    { ACTION_SETTINGS_INC,       BUTTON_UP,                  BUTTON_NONE },
-    { ACTION_SETTINGS_INCREPEAT, BUTTON_UP|BUTTON_REPEAT,    BUTTON_NONE },
-    { ACTION_SETTINGS_DEC,       BUTTON_DOWN,                BUTTON_NONE },
-    { ACTION_SETTINGS_DECREPEAT, BUTTON_DOWN|BUTTON_REPEAT,  BUTTON_NONE },
-
-    LAST_ITEM_IN_LIST
-    //LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_SETTINGS)
-}; /* button_context_settings_time */
 
 static const struct button_mapping button_context_pitchscreen[]  = {
     { ACTION_PS_INC_SMALL,      BUTTON_UP,                    BUTTON_NONE },
@@ -254,11 +252,12 @@ const struct button_mapping* get_context_mapping(int context)
             return button_context_list;
 
         case CONTEXT_SETTINGS:
-	case CONTEXT_SETTINGS_EQ:
+        case CONTEXT_SETTINGS_TIME:
             return button_context_settings;
 
-        case CONTEXT_SETTINGS_TIME:
-            return button_context_settings_time;
+        case CONTEXT_SETTINGS_COLOURCHOOSER:
+        case CONTEXT_SETTINGS_EQ:
+            return button_context_settings_right_is_inc;
 
         case CONTEXT_YESNOSCREEN:
             return button_context_yesno;
