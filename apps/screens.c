@@ -815,13 +815,12 @@ refresh_info:
         if(!list_do_action(CONTEXT_LIST,HZ/2, &id3_lists, &key)
            && key!=ACTION_NONE && key!=ACTION_UNKNOWN)
         {
-            if (key == ACTION_STD_OK || key == ACTION_STD_CANCEL)
+            if (key == ACTION_STD_OK || key == ACTION_STD_CANCEL || key == ACTION_STD_MENU)
             {
                 ret = false;
                 break;
             }
-            else if (key == ACTION_STD_MENU ||
-                        default_event_handler(key) == SYS_USB_CONNECTED)
+            else if (default_event_handler(key) == SYS_USB_CONNECTED)
             {
                 ret =  true;
                 break;
