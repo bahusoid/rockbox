@@ -898,18 +898,11 @@ static int decode_coeffs(WMAProDecodeCtx *s, int c)
             vals[3] = (symbol_to_vec4[idx]      ) & 0xF;
         }
 
-        /* Rockbox: To be able to use rockbox' optimized mdct we need to
-         * pre-shift the values by >>(nbits-3). */
-        const int nbits = av_log2(s->subframe_len)+1;
-        const int shift = WMAPRO_FRACT-(nbits-3);
-
         /** decode sign */
         for (i = 0; i < 4; i++) {
             if (vals[i]) {
                 int sign = get_bits1(&s->gb) - 1;
-                /* Rockbox: To be able to use rockbox' optimized mdct we need
-                 * invert the sign. */
-                ci->coeffs[cur_coeff] = (sign == -1)? vals[i]<<shift : -vals[i]<<shift;
+                ci->coeffs[cur_coeff] = (sign == -1)? -vals[i]<<WMAPRO_FRACT : vals[i]<<WMAPRO_FRACT;
                 num_zeros = 0;
             } else {
                 ci->coeffs[cur_coeff] = 0;

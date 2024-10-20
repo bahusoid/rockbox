@@ -20,7 +20,6 @@
  */
 
 #include "wma.h"
-#include "codeclib.h" /* needed for av_log2() */
 
 /**
  *@brief Get the samples per frame for this stream.
@@ -110,20 +109,14 @@ int ff_wma_run_level_decode(GetBitContext* gb,
 {
     int32_t code, level, sign;
     const unsigned int coef_mask = block_len - 1;
-    /* Rockbox: To be able to use rockbox' optimized mdct we need to pre-shift
-     * the values by >>(nbits-3). */
-    const int nbits = av_log2(block_len)+1;
-    const int shift = WMAPRO_FRACT-(nbits-3);
     for (; offset < num_coefs; offset++) {
         code = get_vlc2(gb, vlc->table, VLCBITS, VLCMAX);
         if (code > 1) {
             /** normal code */
             offset += run_table[code];
             sign = !get_bits1(gb);
-            /* Rockbox: To be able to use rockbox' optimized mdct we need
-             * invert the sign. */
-            ptr[offset & coef_mask] = sign ? level_table[code] : -level_table[code];
-            ptr[offset & coef_mask] <<= shift;
+            ptr[offset & coef_mask] = sign ? -level_table[code] : level_table[code];
+            ptr[offset & coef_mask] <<= WMAPRO_FRACT;
         } else if (code == 1) {
             /** EOB */
             break;
@@ -150,8 +143,8 @@ int ff_wma_run_level_decode(GetBitContext* gb,
                 }
             }
             sign = !get_bits1(gb);
-            ptr[offset & coef_mask] = sign ? level : -level;
-            ptr[offset & coef_mask] <<= shift;
+            ptr[offset & coef_mask] = sign ? -level : level;
+            ptr[offset & coef_mask] <<= WMAPRO_FRACT;
         }
     }
     /** NOTE: EOB can be omitted */
