@@ -364,10 +364,6 @@ int decode_init(asf_waveformatex_t *wfx)
     }
     s->samples_per_frame = 1 << bits;
 
-    /** init previous block len */
-    for (i = 0; i < wfx->channels; i++)
-        s->channel[i].prev_block_len = s->samples_per_frame;
-
     /** subframe info */
     log2_max_num_subframes       = ((s->decode_flags & 0x38) >> 3);
     s->max_num_subframes         = 1 << log2_max_num_subframes;
@@ -393,6 +389,18 @@ int decode_init(asf_waveformatex_t *wfx)
 
     s->num_channels = wfx->channels;
 
+    if (s->num_channels < 0) {
+        av_log(avctx, AV_LOG_ERROR, "invalid number of channels %d\n", s->num_channels);
+        return AVERROR_INVALIDDATA;
+    } else if (s->num_channels > WMAPRO_MAX_CHANNELS) {
+        av_log_ask_for_sample(avctx, "unsupported number of channels\n");
+        return AVERROR_PATCHWELCOME;
+    }
+
+    /** init previous block len */
+    for (i = 0; i < s->num_channels; i++)
+        s->channel[i].prev_block_len = s->samples_per_frame;
+
     /** extract lfe channel position */
     s->lfe_channel = -1;
 
@@ -402,14 +410,6 @@ int decode_init(asf_waveformatex_t *wfx)
             if (channel_mask & mask)
                 ++s->lfe_channel;
         }
-    }
-
-    if (s->num_channels < 0) {
-        DEBUGF("invalid number of channels %d\n", s->num_channels);
-        return AVERROR_INVALIDDATA;
-    } else if (s->num_channels > WMAPRO_MAX_CHANNELS) {
-        DEBUGF("unsupported number of channels\n");
-        return AVERROR_PATCHWELCOME;
     }
 
     INIT_VLC_STATIC(&sf_vlc, SCALEVLCBITS, HUFF_SCALE_SIZE,
