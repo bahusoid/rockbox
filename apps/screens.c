@@ -841,13 +841,12 @@ refresh_info:
                 gui_synclist_draw(&id3_lists);
                 continue;
             }
-            if (key == ACTION_STD_CANCEL)
+            if (key == ACTION_STD_MENU || key == ACTION_STD_CANCEL)
             {
                 ret = false;
                 break;
             }
-            else if (key == ACTION_STD_MENU ||
-                        default_event_handler(key) == SYS_USB_CONNECTED)
+            else if (default_event_handler(key) == SYS_USB_CONNECTED)
             {
                 ret =  true;
                 break;
