@@ -1452,16 +1452,21 @@ static int decode_frame(WMAProDecodeCtx *s)
     } else
         s->samples += s->num_channels * s->samples_per_frame;
 
-    if (len != (get_bits_count(gb) - s->frame_offset) + 2) {
-        /** FIXME: not sure if this is always an error */
-        DEBUGF("frame[%i] would have to skip %i bits\n",
-               (int)s->frame_num, len - (get_bits_count(gb) - s->frame_offset) - 1);
-        s->packet_loss = 1;
-        return 0;
+    if (s->len_prefix) {
+        if (len != (get_bits_count(gb) - s->frame_offset) + 2) {
+            /** FIXME: not sure if this is always an error */
+            DEBUGF("frame[%i] would have to skip %i bits\n",
+                   (int)s->frame_num, len - (get_bits_count(gb) - s->frame_offset) - 1);
+            s->packet_loss = 1;
+            return 0;
+        }
+    
+        /** skip the rest of the frame data */
+        skip_bits_long(gb, len - (get_bits_count(gb) - s->frame_offset) - 1);
+    } else {
+        while (get_bits_count(gb) < s->num_saved_bits && get_bits1(gb) == 0) {
+        }
     }
-
-    /** skip the rest of the frame data */
-    skip_bits_long(gb, len - (get_bits_count(gb) - s->frame_offset) - 1);
 
     /** decode trailer bit */
     more_frames = get_bits1(gb);
@@ -1638,13 +1643,24 @@ int decode_packet(asf_waveformatex_t *wfx, int32_t *dec[2], int *data_size,
         s->buf_bit_size = size << 3;
         init_get_bits(gb, pktdata, s->buf_bit_size);
         skip_bits(gb, s->packet_offset);
-        if (remaining_bits(s, gb) > s->log2_frame_size &&
+        if (s->len_prefix && remaining_bits(s, gb) > s->log2_frame_size &&
             (frame_size = show_bits(gb, s->log2_frame_size)) &&
             frame_size <= remaining_bits(s, gb)) {
             save_bits(s, gb, frame_size, 0);
             if (!s->packet_loss)
                 s->packet_done = !decode_frame(s);
-        } else
+        } else if (!s->len_prefix
+                 && s->num_saved_bits > get_bits_count(&s->gb)) {
+            /** when the frames do not have a length prefix, we don't know
+                the compressed length of the individual frames
+                however, we know what part of a new packet belongs to the
+                previous frame
+                therefore we save the incoming packet first, then we append
+                the "previous frame" data from the next packet so that
+                we get a buffer that only contains full frames */
+            s->packet_done = !decode_frame(s);
+        }
+        else
             s->packet_done = 1;
     }
 
