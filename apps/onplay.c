@@ -217,7 +217,7 @@ static void playing_time(void)
 #ifdef HAVE_ALBUMART
 static void view_album_art(void)
 {
-    plugin_load(VIEWERS_DIR"/imageviewer.rock", NULL);
+    plugin_load(VIEWERS_DIR"/imageviewer.rock", selected_file.path);
 }
 #endif
 
@@ -759,10 +759,6 @@ static int pitch_callback(int action,
 }
 #endif /*def HAVE_PITCHCONTROL*/
 
-#ifdef HAVE_ALBUMART
-MENUITEM_FUNCTION(view_album_art_item, 0, ID2P(LANG_VIEW_ALBUMART),
-                  view_album_art, NULL, Icon_NOICON);
-#endif
 
 static int clipboard_delete_selected_fileobject(void)
 {
@@ -910,6 +906,11 @@ MENUITEM_FUNCTION_W_PARAM(pictureflow_item, 0, ID2P(LANG_ONPLAY_PICTUREFLOW),
                   onplay_load_plugin, (void *)"pictureflow",
                   clipboard_callback, Icon_NOICON);
 #endif
+#ifdef HAVE_ALBUMART
+MENUITEM_FUNCTION(view_album_art_item, 0, ID2P(LANG_VIEW_ALBUMART),
+        view_album_art, clipboard_callback, Icon_NOICON);
+#endif
+
 static bool onplay_add_to_shortcuts(void)
 {
     shortcuts_add(SHORTCUT_BROWSER, selected_file.path);
@@ -1058,7 +1059,11 @@ static int clipboard_callback(int action,
                         return action;
                 }
                 else if (this_item == &rename_file_item ||
-                    (this_item == &track_info_item &&
+                ((this_item == &track_info_item
+#ifdef HAVE_ALBUMART
+                    || this_item == &view_album_art_item
+#endif
+                    ) &&
                         (selected_file.attr & FILE_ATTR_MASK) == FILE_ATTR_AUDIO) ||
                     (this_item == &properties_item &&
                         (selected_file.attr & FILE_ATTR_MASK) != FILE_ATTR_AUDIO) ||
@@ -1169,6 +1174,9 @@ MAKE_ONPLAYMENU( tree_onplay_menu, ID2P(LANG_ONPLAY_MENU_TITLE),
            &set_backdrop_item,
 #endif
            &add_to_faves_item, &set_as_dir_menu, &file_menu, &sort_playlists,
+#ifdef HAVE_ALBUMART
+        &view_album_art_item,
+#endif
          );
 static int onplaymenu_callback(int action,
                                const struct menu_item_ex *this_item,
