@@ -365,7 +365,6 @@ static int ask_and_get_audio_buffer(const char *filename)
 #if defined(IMGVIEW_ZOOM_PRE) || defined(IMGVIEW_QUIT_PRE)
     int lastbutton = BUTTON_NONE;
 #endif
-    rb->lcd_setfont(FONT_SYSFIXED);
     rb->lcd_clear_display();
     rb->lcd_puts(0, 0, rb->strrchr(filename,'/')+1);
     rb->lcd_puts(0, 1, "Not enough plugin memory!");
@@ -374,7 +373,6 @@ static int ask_and_get_audio_buffer(const char *filename)
         rb->lcd_puts(0, 3, "Left/Right: Skip File.");
     rb->lcd_puts(0, 4, "Show Menu: Quit.");
     rb->lcd_update();
-    rb->lcd_setfont(FONT_UI);
 
     rb->button_clear_queue();
 
