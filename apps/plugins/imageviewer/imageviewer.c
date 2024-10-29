@@ -1050,19 +1050,18 @@ reload_decoder:
     return status;
 }
 
-static bool find_album_art(int *offset, int *filesize, int *status)
+static bool find_album_art(char *path, int *offset, int *filesize, int *status)
 {
 #ifndef HAVE_ALBUMART
     (void)offset;(void)filesize;(void)status;
     return false;
 #else
-    struct mp3entry *current_track = rb->audio_current_track();
-
-    if (current_track == NULL)
+    struct mp3entry track;
+    if(!rb->get_metadata(&track,-1, path))
     {
         return false;
     }
-
+    struct mp3entry *current_track = &track;
     switch (current_track->albumart.type)
     {
         case AA_TYPE_BMP:
@@ -1111,21 +1110,20 @@ enum plugin_status plugin_start(const void* parameter)
     bool is_album_art = false;
     if (!parameter)
     {
-        if (!find_album_art(&offset, &filesize, &status))
-        {
             rb->splash(HZ * 2, "No file");
             return PLUGIN_ERROR;
-        }
-
-        is_album_art = true;
     }
     else
     {
         rb->strcpy(np_file, parameter);
         if ((status = get_image_type(np_file, false)) == IMAGE_UNKNOWN)
         {
-            rb->splash(HZ * 2, "Unsupported file");
-            return PLUGIN_ERROR;
+            if (!find_album_art(np_file, &offset, &filesize, &status))
+            {
+                rb->splash(HZ * 2, "Unsupported file");
+                return PLUGIN_ERROR;
+            }
+            is_album_art = true;
         }
     }
 
