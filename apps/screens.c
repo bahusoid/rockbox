@@ -517,7 +517,7 @@ static const char * id3_get_or_speak_info(int selected_item, void* data,
         switch(id3_headers[info->info_id[info_no]])
         {
             case LANG_TAGNAVI_ALL_TRACKS:
-                if (info->track_ct <= 1)
+                if (info->track_ct <= 1 || buffer == NULL)
                     return NULL;
                 snprintf(buffer, buffer_len, "%d", info->track_ct);
                 val = buffer;
@@ -573,6 +573,8 @@ static const char * id3_get_or_speak_info(int selected_item, void* data,
                 }
                 else if (id3->tracknum)
                 {
+                    if(buffer == NULL)
+                        return NULL;
                     snprintf(buffer, buffer_len, "%d", id3->tracknum);
                     val = buffer;
                     if(say_it)
@@ -580,8 +582,8 @@ static const char * id3_get_or_speak_info(int selected_item, void* data,
                 }
                 break;
             case LANG_ID3_COMMENT:
-                if (!id3->comment)
-                    return NULL;
+                if (!id3->comment || !buffer)
+                    return id3->comment;
 
 
                 val = id3->comment;
@@ -602,6 +604,8 @@ static const char * id3_get_or_speak_info(int selected_item, void* data,
                 }
                 else if (id3->year)
                 {
+                    if(buffer == NULL)
+                        return NULL;
                     snprintf(buffer, buffer_len, "%d", id3->year);
                     val = buffer;
                     if(say_it)
@@ -609,6 +613,8 @@ static const char * id3_get_or_speak_info(int selected_item, void* data,
                 }
                 break;
             case LANG_ID3_LENGTH:
+                if(buffer == NULL)
+                    return NULL;
                 length = info->track_ct > 1 ? id3->length : id3->length / 1000;
 
                 format_time_auto(buffer, buffer_len,
@@ -618,7 +624,7 @@ static const char * id3_get_or_speak_info(int selected_item, void* data,
                     talk_value(length, UNIT_TIME, true);
                 break;
             case LANG_ID3_PLAYLIST:
-                if (info->playlist_display_index == 0 || info->playlist_amount == 0 )
+                if (info->playlist_display_index == 0 || info->playlist_amount == 0  || buffer == NULL)
                     return NULL;
 
                 pl_modified = playlist_modified(info->playlist);
@@ -656,7 +662,7 @@ static const char * id3_get_or_speak_info(int selected_item, void* data,
                 }
                 break;
             case LANG_FORMAT:
-                if (id3->codectype == AFMT_UNKNOWN && info->track_ct > 1)
+                if (id3->codectype == AFMT_UNKNOWN && info->track_ct > 1 )
                     return NULL;
 
                 val = (char*) get_codec_string(id3->codectype);
@@ -664,7 +670,7 @@ static const char * id3_get_or_speak_info(int selected_item, void* data,
                     talk_spell(val, true);
                 break;
             case LANG_ID3_BITRATE:
-                if (!id3->bitrate)
+                if (!id3->bitrate || buffer == NULL)
                     return NULL;
                 snprintf(buffer, buffer_len, "%d kbps%s", id3->bitrate,
             id3->vbr ? str(LANG_ID3_VBR) : (const unsigned char*) "");
@@ -677,7 +683,7 @@ static const char * id3_get_or_speak_info(int selected_item, void* data,
                 }
                 break;
             case LANG_ID3_FREQUENCY:
-                if (!id3->frequency)
+                if (!id3->frequency || buffer == NULL)
                     return NULL;
                 snprintf(buffer, buffer_len, "%ld Hz", id3->frequency);
                 val=buffer;
@@ -685,12 +691,16 @@ static const char * id3_get_or_speak_info(int selected_item, void* data,
                     talk_value(id3->frequency, UNIT_HERTZ, true);
                 break;
             case LANG_ID3_TRACK_GAIN:
+                if(buffer == NULL)
+                    return NULL;
                 replaygain_itoa(buffer, buffer_len, id3->track_level);
                 val=(id3->track_level) ? buffer : NULL; /* only show level!=0 */
                 if(say_it && val)
                     say_gain(val);
                 break;
             case LANG_ALBUM_GAIN:
+                if (!buffer)
+                    return NULL;
                 replaygain_itoa(buffer, buffer_len, id3->album_level);
                 val=(id3->album_level) ? buffer : NULL; /* only show level!=0 */
                 if(say_it && val)
@@ -707,7 +717,7 @@ static const char * id3_get_or_speak_info(int selected_item, void* data,
                     talk_spell(val, true);
                 break;
             case LANG_FILESIZE: /* not LANG_ID3_FILESIZE because the string is shared */
-                if (!id3->filesize)
+                if (!id3->filesize || !buffer)
                     return NULL;
                 if (info->track_ct > 1)
                 {
@@ -725,7 +735,7 @@ static const char * id3_get_or_speak_info(int selected_item, void* data,
                     output_dyn_value(NULL, 0, id3->filesize, unit, unit_ct, true);
                 break;
             case LANG_DATE:
-                if (!tm)
+                if (!tm || !buffer)
                     return NULL;
 
                 snprintf(buffer, buffer_len, "%04d/%02d/%02d",
@@ -736,7 +746,7 @@ static const char * id3_get_or_speak_info(int selected_item, void* data,
                     talk_date(tm, true);
                 break;
             case LANG_TIME:
-                if (!tm)
+                if (!tm || buffer == NULL)
                     return NULL;
 
                 snprintf(buffer, buffer_len, "%02d:%02d:%02d",
