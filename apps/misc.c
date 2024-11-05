@@ -1848,7 +1848,7 @@ void pop_current_activity_without_refresh(void)
 
 enum current_activity get_current_activity(void)
 {
-    return current_activity[current_activity_top?current_activity_top-1:0];
+    return current_activity[current_activity_top > 0 ?current_activity_top-1:0];
 }
 
 /* core_load_bmp opens bitmp filename and allocates space for it
