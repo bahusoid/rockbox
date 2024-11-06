@@ -18,8 +18,10 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
+#include <stdbool.h>
 
 char* id3_get_num_genre(unsigned int genre_num);
+int id3_unsynchronize(char* tag, int len, bool *ff_found);
 int getid3v1len(int fd);
 int getid3v2len(int fd);
 bool setid3v1title(int fd, struct mp3entry *entry);

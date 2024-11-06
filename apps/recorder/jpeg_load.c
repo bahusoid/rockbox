@@ -26,7 +26,7 @@
 * KIND, either express or implied.
 *
 ****************************************************************************/
-
+#include "metadata_parsers.h"
 #include "plugin.h"
 #include "debug.h"
 #include "jpeg_load.h"
@@ -872,11 +872,24 @@ INLINE void jpeg_putc(struct jpeg* p_jpeg)
     p_jpeg->data--;
 }
 #else
+
+static int read_buf(int fildes, unsigned char *buf, size_t count)
+{
+    return read(fildes, buf, count);
+}
+
+static int read_buf_id3_unsync(int fildes, unsigned char *buf, size_t count)
+{
+    static bool global_ff_found = false;
+    count = read(fildes, buf, count);
+    return id3_unsynchronize(buf, count, &global_ff_found);
+}
+
+static int (*read_buf_ptr)(int fildes, unsigned char *buf, size_t count);
+
 INLINE void fill_buf(struct jpeg* p_jpeg)
 {
-        p_jpeg->buf_left = read(p_jpeg->fd, p_jpeg->buf,
-                                (p_jpeg->len >= JPEG_READ_BUF_SIZE)?
-                                     JPEG_READ_BUF_SIZE : p_jpeg->len);
+        p_jpeg->buf_left = (*read_buf_ptr)(p_jpeg->fd, p_jpeg->buf, MIN(JPEG_READ_BUF_SIZE, p_jpeg->len));
         p_jpeg->buf_index = 0;
         if (p_jpeg->buf_left > 0)
             p_jpeg->len -= p_jpeg->buf_left;
@@ -1958,7 +1971,7 @@ int clip_jpeg_file(const char* filename,
         return fd * 10 - 1;
     }
     lseek(fd, offset, SEEK_SET);
-    ret = clip_jpeg_fd(fd, jpeg_size, bm, maxsize, format, cformat);
+    ret = clip_jpeg_fd(fd, false, jpeg_size, bm, maxsize, format, cformat);
     close(fd);
     return ret;
 }
@@ -2007,7 +2020,7 @@ int get_jpeg_dim_mem(unsigned char *data, unsigned long len,
 
 int decode_jpeg_mem(unsigned char *data,
 #else
-int clip_jpeg_fd(int fd,
+int clip_jpeg_fd(int fd, bool unsync,
 #endif
                  unsigned long len,
                  struct bitmap *bm,
@@ -2023,6 +2036,7 @@ int clip_jpeg_fd(int fd,
 #ifdef JPEG_FROM_MEM
     struct jpeg *p_jpeg = &jpeg;
 #else
+    read_buf_ptr = unsync ? read_buf_id3_unsync : read_buf;
     struct jpeg *p_jpeg = (struct jpeg*)bm->data;
     int tmp_size = maxsize;
     ALIGN_BUFFER(p_jpeg, tmp_size, sizeof(long));
@@ -2225,7 +2239,7 @@ int read_jpeg_fd(int fd,
                  int format,
                  const struct custom_format *cformat)
 {
-    return clip_jpeg_fd(fd, 0, bm, maxsize, format, cformat);
+    return clip_jpeg_fd(fd, false, 0, bm, maxsize, format, cformat);
 }
 #endif
 

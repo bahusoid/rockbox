@@ -199,11 +199,12 @@ enum {
 
 #ifdef HAVE_ALBUMART
 enum mp3_aa_type {
-    AA_TYPE_UNSYNC = -1,
     AA_TYPE_UNKNOWN,
     AA_TYPE_BMP,
     AA_TYPE_PNG,
     AA_TYPE_JPG,
+
+    AA_TYPE_UNSYNC = 0x100, //it's a flag
 };
 
 struct mp3_albumart {
