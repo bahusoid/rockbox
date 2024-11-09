@@ -1795,7 +1795,8 @@ static int audio_load_albumart(struct track_info *infop,
             hid < 0 && hid != ERR_BUFFER_FULL &&
             track_id3->has_embedded_albumart && 
             (track_id3->albumart.type == AA_TYPE_JPG ||
-             track_id3->albumart.type == (AA_TYPE_JPG | AA_TYPE_UNSYNC)))
+             track_id3->albumart.type == (AA_TYPE_JPG | AA_TYPE_UNSYNC) ||
+             track_id3->albumart.type == (AA_TYPE_JPG | AA_FLAG_BASE64)))
         {
             if (is_current_track)
                 clear_last_folder_album_art();

@@ -27,25 +27,18 @@
 #include "metadata.h"
 #include "metadata_common.h"
 #include "metadata_parsers.h"
+#include "embedded_metadata.h"
 
 /* Define LOGF_ENABLE to enable logf output in this file */
-/*#define LOGF_ENABLE*/
+#define LOGF_ENABLE
 #include "logf.h"
-
-struct file
-{
-    int fd;
-    bool packet_ended;
-    long packet_remaining;
-};
-
 
 /* Read an Ogg page header. file->packet_remaining is set to the size of the
  * first packet on the page; file->packet_ended is set to true if the packet
  * ended on the current page. Returns true if the page header was
  * successfully read.
  */
-static bool file_read_page_header(struct file* file)
+bool file_read_page_header(struct file* file)
 {
     unsigned char buffer[64];
     ssize_t table_left;
@@ -110,7 +103,7 @@ static bool file_read_page_header(struct file* file)
  * 0 if there is no more data to read (in the packet or the file), < 0 if a
  * read error occurred.
  */
-static ssize_t file_read(struct file* file, void* buffer, size_t buffer_size)
+ssize_t file_read(struct file* file, void* buffer, size_t buffer_size)
 {
     ssize_t done = 0;
     ssize_t count = -1;
@@ -244,7 +237,7 @@ static long file_read_string(struct file* file, char* buffer,
  * max amount to read if codec type is FLAC; it is ignored otherwise.
  * Returns true if the file was successfully initialized.
  */
-static bool file_init(struct file* file, int fd, int type, int remaining)
+bool file_init(struct file* file, int fd, int type, int remaining)
 {
     memset(file, 0, sizeof(*file));
     file->fd = fd;
@@ -300,6 +293,94 @@ static bool file_init(struct file* file, int fd, int type, int remaining)
     return true;
 }
 
+//const char b64chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+int b64invs[] = { 62, -1, -1, -1, 63, 52, 53, 54, 55, 56, 57, 58,
+                  59, 60, 61, -1, -1, -1, -1, -1, -1, -1, 0, 1, 2, 3, 4, 5,
+                  6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+                  21, 22, 23, 24, 25, -1, -1, -1, -1, -1, -1, 26, 27, 28,
+                  29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42,
+                  43, 44, 45, 46, 47, 48, 49, 50, 51 };
+
+//void b64_generate_decode_table()
+//{
+//    int    inv[80];
+//    size_t i;
+//
+//    memset(inv, -1, sizeof(inv));
+//    for (i=0; i<sizeof(b64chars)-1; i++) {
+//        inv[b64chars[i]-43] = i;
+//    }
+//}
+
+size_t b64_decoded_size(const char *in, size_t len)
+{
+    size_t ret;
+    size_t i;
+
+    if (in == NULL)
+        return 0;
+
+    ret = len / 4 * 3;
+
+    for (i=len; i-->0; ) {
+        if (in[i] == '=') {
+            ret--;
+        } else {
+            break;
+        }
+    }
+
+    return ret;
+}
+
+int b64_decode(const char *in, size_t in_len, unsigned char *out,  size_t *outlen)
+{
+    size_t i;
+    int    v;
+//
+//    if (in == NULL || out == NULL)
+//        return 0;
+
+//    len = strlen(in);
+//    if (outlen < b64_decoded_size(in, in_len))
+//        return 0;
+
+//    for (i=0; i<len; i++) {
+//        if (!b64_isvalidchar(in[i])) {
+//            return 0;
+//        }
+//    }
+    *outlen = 0;
+    for (i=0; i < in_len; i+=4) {
+        v = b64invs[in[i]-43];
+        v = (v << 6) | b64invs[in[i+1]-43];
+        v = in[i+2]=='=' ? v << 6 : (v << 6) | b64invs[in[i+2]-43];
+        v = in[i+3]=='=' ? v << 6 : (v << 6) | b64invs[in[i+3]-43];
+
+        out[*outlen] = (v >> 16) & 0xFF;
+        if (in[i+2] != '=')
+            out[++*outlen] = (v >> 8) & 0xFF;
+        if (in[i+3] != '=')
+            out[++*outlen] = v & 0xFF;
+        ++*outlen;
+    }
+
+    return 1;
+}
+
+size_t b64_encoded_size(size_t inlen)
+{
+    size_t ret;
+
+    ret = inlen;
+    if (inlen % 3 != 0)
+        ret += 3 - (inlen % 3);
+    ret /= 3;
+    ret *= 4;
+
+    return ret;
+}
 
 /* Read the items in a Vorbis comment packet. For Ogg files, the file must
  * be located on a page start, for other files, the beginning of the comment
@@ -355,6 +436,7 @@ long read_vorbis_tags(int fd, struct mp3entry *id3,
         }
 
         len -= read_len;
+        int before_block_pos = lseek(fd, 0, SEEK_CUR);
         read_len = file_read_string(&file, id3->path, sizeof(id3->path), -1, len);
 
         if (read_len < 0)
@@ -364,8 +446,87 @@ long read_vorbis_tags(int fd, struct mp3entry *id3,
 
         logf("Vorbis comment %d: %s=%s", i, name, id3->path);
 
+        if (!strcasecmp(name, "METADATA_BLOCK_PICTURE"))
+        {
+            int after_block_pos =lseek(fd, 0, SEEK_CUR);
+            int block_pos = before_block_pos;
+
+            size_t outlen;
+            b64_decode(id3->path, MIN(read_len, sizeof(id3->path)), id3->path, &outlen);
+            char* buf = id3->path;
+            {
+                if(!id3->has_embedded_albumart) /* only use the first PICTURE */
+                {
+                    unsigned int buf_size = sizeof(id3->path);
+                    int picframe_pos = 4; /* skip picture type */
+                    int mime_length, description_length;
+
+                    int bytes_read = outlen;
+                    // buf[buf_size-1] = '\0';
+                    
+                    if (bytes_read <= picframe_pos + 4) /* get_long_be expects 4 chars */
+                    {
+                        logf("flac picture length invalid!");
+                        return false;
+                    }
+
+                    mime_length = get_long_be(&buf[picframe_pos]);
+
+                    char *mime = buf + picframe_pos + 4;
+                    picframe_pos +=  4 + mime_length;
+
+                    if (bytes_read < picframe_pos)
+                    {
+                        logf("flac picture length invalid!");
+                        return false;
+                    }
+
+                    id3->albumart.type = AA_TYPE_UNKNOWN;
+                    if (memcmp(mime, "image/", 6) == 0)
+                    {
+                        mime += 6;
+                        if (strcmp(mime, "jpeg") == 0 || strcmp(mime, "jpg") == 0){
+                            id3->albumart.type = AA_TYPE_JPG;
+                        }else if (strcmp(mime, "png") == 0)
+                            id3->albumart.type = AA_TYPE_PNG;
+                    }
+
+                    description_length  = get_long_be(&buf[picframe_pos]);
+
+                    /* 16 = skip picture width,height,color-depth,color-used */
+                    picframe_pos += 4 + description_length + 16;
+
+                    //NOTE: This is not exact location due to padding!! But it's OK with our jpeg decoder
+                    // if we add or miss few bytes in jpeg header
+                    int picframe_pos_b64 = b64_encoded_size(picframe_pos + 4);
+                    /* if we support the format and image length is in the buffer */
+                    if(id3->albumart.type != AA_TYPE_UNKNOWN)
+                    {
+                        id3->has_embedded_albumart = true;
+                        id3->albumart.type |= AA_FLAG_BASE64;
+                        id3->albumart.pos = picframe_pos_b64 + block_pos;
+                        id3->albumart.size = after_block_pos - id3->albumart.pos;
+                    }
+                }
+//
+//                lseek(fd, id3->albumart.pos, SEEK_SET);
+//                unsigned char xbuf[256];
+//                int nbuf = read(fd,xbuf, 256);
+//                size_t outlen;
+//                b64_decode(xbuf,nbuf, xbuf, &outlen );
+
+
+
+
+//                if (lseek(fd, i, SEEK_CUR) < 0)
+//                {
+//                    return false;
+//                }
+            }
+
+        }
         /* Is it an embedded cuesheet? */
-        if (!strcasecmp(name, "CUESHEET"))
+        else if (!strcasecmp(name, "CUESHEET"))
         {
             id3->has_embedded_cuesheet = true;
             id3->embedded_cuesheet.pos = lseek(file.fd, 0, SEEK_CUR) - read_len;

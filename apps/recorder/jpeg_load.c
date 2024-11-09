@@ -26,7 +26,7 @@
 * KIND, either express or implied.
 *
 ****************************************************************************/
-#include "metadata_parsers.h"
+#include "embedded_metadata.h"
 #include "plugin.h"
 #include "debug.h"
 #include "jpeg_load.h"
@@ -878,6 +878,46 @@ static int read_buf(int fildes, unsigned char *buf, size_t count)
     return read(fildes, buf, count);
 }
 
+static struct file ogg;
+static int read_buf_base64(int fd, unsigned char *buf, size_t count)
+{
+//    count = read(fildes, buf, count);
+//    b64_decode(buf, count, buf, &count);
+//    return count;
+    size_t nbuf;
+    if (ogg.packet_remaining < count)
+    {
+        nbuf = read(fd,buf, ogg.packet_remaining);
+        //base64 requires size to be multiple of four,
+        // so combine data from two packets with proper size if required 
+        int num_to_add = 4 - nbuf % 4;
+        if (!file_read_page_header(&ogg))
+        {
+            //looks like we lost in file...
+            return 0;
+        }
+        nbuf += read(fd, buf + (count - num_to_add), num_to_add);
+        ogg.packet_remaining -= num_to_add;
+    }
+    else
+    {
+        nbuf = read(fd, buf, count);
+        ogg.packet_remaining -= nbuf;
+    }
+
+    bool exit = false;
+    while (nbuf > 0 && buf[nbuf - 1] < 2)
+    {
+        exit = true;
+        --nbuf;
+    }
+
+    size_t outlen;
+
+    b64_decode(buf,nbuf, buf, &outlen );
+    return outlen;
+}
+
 static int read_buf_id3_unsync(int fildes, unsigned char *buf, size_t count)
 {
     static bool global_ff_found = false;
@@ -905,15 +945,23 @@ static unsigned char *jpeg_getc(struct jpeg* p_jpeg)
     return (p_jpeg->buf_index++) + p_jpeg->buf;
 }
 
-INLINE bool skip_bytes_seek(struct jpeg* p_jpeg)
+bool skip_bytes(struct jpeg* p_jpeg, int count);
+
+bool skip_bytes_seek(struct jpeg* p_jpeg)
 {
-    if (UNLIKELY(lseek(p_jpeg->fd, -p_jpeg->buf_left, SEEK_CUR) < 0))
-        return false;
-    p_jpeg->buf_left = 0;
+    do
+    {
+        int count = -p_jpeg->buf_left;
+        fill_buf(p_jpeg);
+        if (p_jpeg->buf_left < 0)
+            return false;
+        p_jpeg->buf_left -= count;
+        p_jpeg->buf_index += count;
+    } while (p_jpeg->buf_left < 0);
     return true;
 }
 
-static bool skip_bytes(struct jpeg* p_jpeg, int count)
+bool skip_bytes(struct jpeg* p_jpeg, int count)
 {
     p_jpeg->buf_left -= count;
     p_jpeg->buf_index += count;
@@ -2020,7 +2068,7 @@ int get_jpeg_dim_mem(unsigned char *data, unsigned long len,
 
 int decode_jpeg_mem(unsigned char *data,
 #else
-int clip_jpeg_fd(int fd, bool unsync,
+int clip_jpeg_fd(int fd, int flags,
 #endif
                  unsigned long len,
                  struct bitmap *bm,
@@ -2036,7 +2084,28 @@ int clip_jpeg_fd(int fd, bool unsync,
 #ifdef JPEG_FROM_MEM
     struct jpeg *p_jpeg = &jpeg;
 #else
-    read_buf_ptr = unsync ? read_buf_id3_unsync : read_buf;
+    if(flags & AA_TYPE_UNSYNC)
+        read_buf_ptr = read_buf_id3_unsync;
+    else if( flags & AA_FLAG_BASE64)
+    {
+        off_t pos = lseek(fd, 0, SEEK_CUR);
+
+        lseek(fd, 0, SEEK_SET);
+        unsigned char buf_format[92];
+        int type = get_ogg_format_and_move_to_comments(fd, buf_format);
+
+        file_init(&ogg,fd, type, 0 );
+        int packet_start_pos = lseek(fd, 0, SEEK_CUR);
+
+        int x_pos = pos - packet_start_pos;
+        ogg.packet_remaining -= x_pos;
+        lseek(fd, pos, SEEK_SET);
+
+        read_buf_ptr = read_buf_base64;
+    }
+    else
+        read_buf_ptr = read_buf;
+
     struct jpeg *p_jpeg = (struct jpeg*)bm->data;
     int tmp_size = maxsize;
     ALIGN_BUFFER(p_jpeg, tmp_size, sizeof(long));
