@@ -410,7 +410,8 @@ void __attribute__((weak)) panicf( const char *fmt, ... )
 {
   /* Do nothing */
   (void)fmt;
-  do { } while (1);
+  do { } 
+  while (0);
 }
 #else
 static __inline__ void corrupt(const char *msg) {
