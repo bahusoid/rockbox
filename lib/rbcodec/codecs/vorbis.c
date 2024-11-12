@@ -145,7 +145,7 @@ enum codec_status codec_run(void)
 
     /* Create a decoder instance */
     callbacks.read_func = read_handler;
-    callbacks.seek_func = initial_seek_handler;
+    callbacks.seek_func = seek_handler;
     callbacks.tell_func = tell_handler;
     callbacks.close_func = close_handler;
 

@@ -6,7 +6,11 @@
 extern jmp_buf rb_jump_buf;
 #define LONGJMP(x)  longjmp(rb_jump_buf, x)
 #elif defined(SIMULATOR)
-#define LONGJMP(x)  do { DEBUGF("Vorbis: allocation failed!\n"); return NULL; } while (false)
+void* LONGJMP(int x)  
+{
+    do { DEBUGF("Vorbis: allocation failed %d!\n", x); return NULL; }
+     while (false);
+}
 #else
 #define LONGJMP(x)  return NULL
 #endif
