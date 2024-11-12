@@ -786,6 +786,14 @@ int ogg_sync_pageout(ogg_sync_state *oy, ogg_page *og){
 int ogg_stream_pagein(ogg_stream_state *os, ogg_page *og, bool copy_body){
   unsigned char *header=og->header;
   unsigned char *body=og->body;
+  
+  if (!copy_body)
+  {
+      og->body_len = 0;
+      os->body_returned = 0;
+      os->lacing_returned = 0;
+      return 0;
+  }
   long           bodysize=og->body_len;
   int            segptr=0;
 
