@@ -139,6 +139,10 @@ static int ogg_stream_discard_packet(OggVorbis_File *vf,ogg_page *og,
   while((ret = ogg_stream_packetout(&vf->os, NULL)) == 0) {
     if(_get_next_page(vf, og, boundary)<0)
       break;
+    
+    if(!ogg_page_continued(og))
+      break;
+
     ogg_stream_pagein(&vf->os,og,false);
   }
   if (ret < 0)
@@ -149,7 +153,7 @@ static int ogg_stream_discard_packet(OggVorbis_File *vf,ogg_page *og,
   if (vf->os.body_fill < og->body_len || vf->os.body_storage < vf->os.body_fill)
     if(_os_body_expand(&vf->os, vf->os.body_fill - vf->os.body_storage + og->body_len))
       return -1;
-  memcpy(vf->os.body_data+vf->os.body_fill-og->body_len, og->body, og->body_len);
+  //memcpy(vf->os.body_data+vf->os.body_fill-og->body_len, og->body, og->body_len);
   return 1;
 }
 
@@ -295,7 +299,7 @@ static ogg_int64_t _get_prev_page_serial(OggVorbis_File *vf,
    non-streaming input sources */
 static int _fetch_headers(OggVorbis_File *vf,vorbis_info *vi,
                           ogg_uint32_t **serialno_list, int *serialno_n,
-                          ogg_page *og_ptr){
+                          ogg_page *og_ptr, bool skip_comments){
   ogg_page og;
   ogg_packet op;
   int i,ret;
@@ -361,7 +365,17 @@ static int _fetch_headers(OggVorbis_File *vf,vorbis_info *vi,
       /* if this page also belongs to our vorbis stream, submit it and break */
       if(vf->ready_state==STREAMSET &&
          vf->os.serialno == ogg_page_serialno(og_ptr)){
-        ogg_stream_pagein(&vf->os,og_ptr,true);
+        ogg_stream_pagein(&vf->os,og_ptr,!skip_comments);
+        if(skip_comments)
+        {
+            ogg_stream_discard_packet(vf, og_ptr, CHUNKSIZE);
+            while ((ret = ogg_stream_packetout(&vf->os, NULL)) == 0)
+            {
+                if (_get_next_page(vf, &og, CHUNKSIZE) < 0)
+                    break;
+                ogg_stream_pagein(&vf->os, &og, true);
+            }
+        }
         break;
       }
     }
@@ -375,13 +389,10 @@ static int _fetch_headers(OggVorbis_File *vf,vorbis_info *vi,
   while(1){
 
     i=0;
-    /* discard comment packet */
-    if(ogg_stream_discard_packet(vf,og_ptr,CHUNKSIZE) < 0){
-      ret=OV_EBADHEADER;
-      goto bail_header;
+    if(skip_comments)
+    {
+        i++;
     }
-    i++;
-
     while(i<2){ /* get a page loop */
 
       while(i<2){ /* get a packet loop */
@@ -586,7 +597,7 @@ static int _bisect_forward_serialno(OggVorbis_File *vf,
       if(ret)return(ret);
     }
 
-    ret=_fetch_headers(vf,&vi,&next_serialno_list,&next_serialnos,NULL);
+    ret=_fetch_headers(vf,&vi,&next_serialno_list,&next_serialnos,NULL,false);
     if(ret)return(ret);
     serialno = vf->os.serialno;
     dataoffset = vf->offset;
@@ -869,7 +880,7 @@ static int _fetch_and_process_packet(OggVorbis_File *vf,
           /* we're streaming */
           /* fetch the three header packets, build the info struct */
 
-          int ret=_fetch_headers(vf,vf->vi,NULL,NULL,&og);
+          int ret=_fetch_headers(vf,vf->vi,NULL,NULL,&og, false);
           if(ret)return(ret);
           vf->current_serialno=vf->os.serialno;
           vf->current_link++;
@@ -919,9 +930,18 @@ static int _ov_open1(void *f,OggVorbis_File *vf,const char *initial,
 /*  vf->vc=_ogg_calloc(vf->links,sizeof(*vf->vc)); */
   ogg_stream_init(&vf->os,-1); /* fill in the serialno later */
 
+  ogg_page op;
+    _get_next_page(vf, &op, CHUNKSIZE);
+    _get_next_page(vf, &op, CHUNKSIZE);
+    _get_next_page(vf, &op, CHUNKSIZE);
+
+    bool skip_comments = ogg_page_continued(&op);
+    ogg_sync_reset(&vf->oy);
+    ogg_stream_reset(&vf->os);
+    _seek_helper(vf,0);
   /* Fetch all BOS pages, store the vorbis header and all seen serial
      numbers, load subsequent vorbis setup headers */
-  if((ret=_fetch_headers(vf,vf->vi,&serialno_list,&serialno_list_size,NULL))<0){
+  if((ret=_fetch_headers(vf,vf->vi,&serialno_list,&serialno_list_size,NULL, skip_comments))<0){
     vf->datasource=NULL;
     ov_clear(vf);
   }else{
