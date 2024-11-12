@@ -62,14 +62,12 @@ ogg_uint32_t ogg_page_serialno(const ogg_page *og){
          (og->header[17]<<24));
 }
  
-static long ogg_page_pageno(const ogg_page *og){
+long ogg_page_pageno(const ogg_page *og){
   return(og->header[18] |
          (og->header[19]<<8) |
          (og->header[20]<<16) |
          (og->header[21]<<24));
 }
-
-
 
 /* returns the number of packets that are completed on this page (if
    the leading packet is begun on a previous page, but ends on this
@@ -87,14 +85,12 @@ more page packet), the return will be:
   ogg_page_packets(page)   ==0, 
   ogg_page_continued(page) !=0
 */
-/*
 int ogg_page_packets(const ogg_page *og){
   int i,n=og->header[26],count=0;
   for(i=0;i<n;i++)
     if(og->header[27+i]<255)count++;
   return(count);
 }
-*/
 
 #if 0
 /* helper to initialize lookup for direct-table CRC (illustrative; we
@@ -783,7 +779,7 @@ int ogg_sync_pageout(ogg_sync_state *oy, ogg_page *og){
 /* add the incoming page to the stream state; we decompose the page
    into packet segments here as well. */
 
-int ogg_stream_pagein(ogg_stream_state *os, ogg_page *og, bool copy_body){
+int ogg_stream_pagein(ogg_stream_state *os, ogg_page *og){
   unsigned char *header=og->header;
   unsigned char *body=og->body;
   long           bodysize=og->body_len;
@@ -868,10 +864,8 @@ int ogg_stream_pagein(ogg_stream_state *os, ogg_page *og, bool copy_body){
   }
   
   if(bodysize){
-    if(copy_body){
-      if(_os_body_expand(os,bodysize)) return -1;
-      memcpy(os->body_data+os->body_fill,body,bodysize);
-    }
+    if(_os_body_expand(os,bodysize)) return -1;
+    memcpy(os->body_data+os->body_fill,body,bodysize);
     os->body_fill+=bodysize;
   }
 

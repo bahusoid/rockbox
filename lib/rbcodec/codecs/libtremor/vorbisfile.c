@@ -131,26 +131,63 @@ static ogg_int64_t _get_next_page(OggVorbis_File *vf,ogg_page *og,
   }
 }
 
-/* This is a nasty hack to work around the huge allocations we get from
-   huge comment packets, usually due to embedded album art */
+/* This is a nasty (but necessary) hack to work around the huge
+   allocations we would otherwise get from huge comment packets,
+   usually caused by embedded album art. This build of Tremor never
+   looks at the comment packet's contents at all (see the
+   packtype==0x03 case in vorbis_synthesis_headerin(), which just
+   returns success without reading anything) so there is no reason to
+   ever hold the whole packet in body/lacing storage - we only need
+   to find out where it ends.
+
+   If the packet isn't already complete in what's currently buffered
+   in vf->os (the common case - comments are usually tiny) then
+   everything buffered for it so far can only be part of this one,
+   about-to-be-discarded packet, so we throw it away and scan forward
+   using nothing but the raw page headers returned by _get_next_page()
+   (which live in the small ogg_sync buffer, not in vf->os, and get
+   trimmed away again as soon as we look at the next page) until we
+   find the page that completes it. That page is then fed into vf->os
+   normally: ogg_stream_pagein()'s existing 'continued packet'
+   handling transparently discards whatever tail of the oversized
+   packet remains on it while keeping any following packet (e.g. the
+   setup header) that starts later on the same page intact. This
+   keeps memory use bounded by a single page, no matter how large the
+   packet being skipped is. */
 static int ogg_stream_discard_packet(OggVorbis_File *vf,ogg_page *og,
                                      ogg_int64_t boundary){
-  int ret;
-  while((ret = ogg_stream_packetout(&vf->os, NULL)) == 0) {
+  int ret = ogg_stream_packetout(&vf->os, NULL);
+  if(ret)
+    return ret; /* already fully buffered: discarded above, or a bitstream error */
+
+  /* Not complete yet. Drop whatever partial packet data is currently
+     buffered (it all belongs to the packet we're discarding) and
+     start scanning forward with a clean slate. */
+  vf->os.body_fill=0;
+  vf->os.body_returned=0;
+  vf->os.lacing_fill=0;
+  vf->os.lacing_packet=0;
+  vf->os.lacing_returned=0;
+  vf->os.packetno++; /* account for the packet we're about to discard */
+
+  for(;;){
     if(_get_next_page(vf, og, boundary)<0)
-      break;
-    ogg_stream_pagein(&vf->os,og,false);
-  }
-  if (ret < 0)
-    return -1;
-  /* We might be pretending to have filled in more of the buffer than there is
-     actual space, in this case the body storage must be expanded before we
-     start writing to it */
-  if (vf->os.body_fill < og->body_len || vf->os.body_storage < vf->os.body_fill)
-    if(_os_body_expand(&vf->os, vf->os.body_fill - vf->os.body_storage + og->body_len))
       return -1;
-  memcpy(vf->os.body_data+vf->os.body_fill-og->body_len, og->body, og->body_len);
-  return 1;
+
+    if(ogg_page_serialno(og) != vf->os.serialno)
+      continue; /* stray page from another logical stream; ignore it */
+
+    if(!ogg_page_packets(og))
+      continue; /* page is entirely more of the same packet; skip it */
+
+    /* This page finishes the packet being discarded, and may also
+       hold the start of the packet that follows it (e.g. the setup
+       header). Resync the page-sequence counter first so
+       ogg_stream_pagein() doesn't mistake the run of pages we just
+       skipped for lost/corrupt data. */
+    vf->os.pageno = ogg_page_pageno(og);
+    return ogg_stream_pagein(&vf->os,og);
+  }
 }
 
 /* find the latest page beginning before the current stream cursor
@@ -333,7 +370,7 @@ static int _fetch_headers(OggVorbis_File *vf,vorbis_info *vi,
       /* we don't have a vorbis stream in this link yet, so begin
          prospective stream setup. We need a stream to get packets */
       ogg_stream_reset_serialno(&vf->os,ogg_page_serialno(og_ptr));
-      ogg_stream_pagein(&vf->os,og_ptr,true);
+      ogg_stream_pagein(&vf->os,og_ptr);
 
       if(ogg_stream_packetout(&vf->os,&op) > 0 &&
          vorbis_synthesis_idheader(&op)){
@@ -361,7 +398,7 @@ static int _fetch_headers(OggVorbis_File *vf,vorbis_info *vi,
       /* if this page also belongs to our vorbis stream, submit it and break */
       if(vf->ready_state==STREAMSET &&
          vf->os.serialno == ogg_page_serialno(og_ptr)){
-        ogg_stream_pagein(&vf->os,og_ptr,true);
+        ogg_stream_pagein(&vf->os,og_ptr);
         break;
       }
     }
@@ -406,7 +443,7 @@ static int _fetch_headers(OggVorbis_File *vf,vorbis_info *vi,
 
         /* if this page belongs to the correct stream, go parse it */
         if(vf->os.serialno == ogg_page_serialno(og_ptr)){
-          ogg_stream_pagein(&vf->os,og_ptr,true);
+          ogg_stream_pagein(&vf->os,og_ptr);
           break;
         }
 
@@ -455,7 +492,7 @@ static ogg_int64_t _initial_pcmoffset(OggVorbis_File *vf, vorbis_info *vi){
     if(ogg_page_serialno(&og)!= serialno) continue;
 
     /* count blocksizes of all frames in the page */
-    ogg_stream_pagein(&vf->os,&og,true);
+    ogg_stream_pagein(&vf->os,&og);
     while((result=ogg_stream_packetout(&vf->os,&op))){
       if(result>0){ /* ignore holes */
         long thisblock=vorbis_packet_blocksize(vi,&op);
@@ -880,7 +917,7 @@ static int _fetch_and_process_packet(OggVorbis_File *vf,
 
     /* the buffered page is the data we want, and we're ready for it;
        add it to the stream state */
-    ogg_stream_pagein(&vf->os,&og,true);
+    ogg_stream_pagein(&vf->os,&og);
 
   }
 }
@@ -1207,8 +1244,8 @@ int ov_raw_seek(OggVorbis_File *vf,ogg_int64_t pos){
         firstflag=(pagepos<=vf->dataoffsets[link]);
       }
 
-      ogg_stream_pagein(&vf->os,&og,true);
-      ogg_stream_pagein(&work_os,&og,true);
+      ogg_stream_pagein(&vf->os,&og);
+      ogg_stream_pagein(&work_os,&og);
       lastflag=ogg_page_eos(&og);
 
     }
@@ -1390,7 +1427,7 @@ int ov_pcm_seek_page(OggVorbis_File *vf,ogg_int64_t pos){
       }
 
       ogg_stream_reset_serialno(&vf->os,vf->current_serialno);
-      ogg_stream_pagein(&vf->os,&og,true);
+      ogg_stream_pagein(&vf->os,&og);
 
       /* pull out all but last packet; the one with granulepos */
       while(1){
@@ -1519,7 +1556,7 @@ int ov_pcm_seek(OggVorbis_File *vf,ogg_int64_t pos){
         lastblock=0;
       }
 
-      ogg_stream_pagein(&vf->os,&og,true);
+      ogg_stream_pagein(&vf->os,&og);
     }
   }
 

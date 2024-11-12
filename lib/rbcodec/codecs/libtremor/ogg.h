@@ -243,7 +243,7 @@ extern long     ogg_sync_pageseek(ogg_sync_state *oy,ogg_page *og);
 /*
 extern int      ogg_sync_pageout(ogg_sync_state *oy, ogg_page *og);
 */
-extern int      ogg_stream_pagein(ogg_stream_state *os, ogg_page *og, bool copy_body);
+extern int      ogg_stream_pagein(ogg_stream_state *os, ogg_page *og);
 extern int      ogg_stream_packetout(ogg_stream_state *os,ogg_packet *op);
 extern int      ogg_stream_packetpeek(ogg_stream_state *os,ogg_packet *op);
 
@@ -268,10 +268,9 @@ extern int      ogg_page_bos(const ogg_page *og);
 extern int      ogg_page_eos(const ogg_page *og);
 extern ogg_int64_t  ogg_page_granulepos(const ogg_page *og);
 extern ogg_uint32_t ogg_page_serialno(const ogg_page *og);
-/*
 extern long     ogg_page_pageno(const ogg_page *og);
 extern int      ogg_page_packets(const ogg_page *og);
-
+/*
 extern void     ogg_packet_clear(ogg_packet *op);
 */
 
