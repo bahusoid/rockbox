@@ -91,7 +91,9 @@
 #if defined(VAR_ARRAYS)
 
 #define VARDECL(type, var)
-#define ALLOC(var, size, type) type var[size]
+#define ALLOCH(var, size, type) type* var = _ogg_malloc((size)*sizeof(type));
+#define ALLOC(var, size, type) type var[size]; \
+if((size)*sizeof(type) > 1000) {DEBUGF("Name: %s, size: %ld type: %s \n", #var, (size)*sizeof(type), #type);}                                       
 #define SAVE_STACK
 #define RESTORE_STACK
 #define ALLOC_STACK

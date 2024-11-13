@@ -56,6 +56,7 @@ void silk_decode_core(
     silk_assert( psDec->prev_gain_Q16 != 0 );
 
     ALLOC( sLTP, psDec->ltp_mem_length, opus_int16 );
+    //ALLOCH( sLTP_Q15, psDec->ltp_mem_length + psDec->frame_length, opus_int32 );
     ALLOC( sLTP_Q15, psDec->ltp_mem_length + psDec->frame_length, opus_int32 );
     ALLOC( res_Q14, psDec->subfr_length, opus_int32 );
     ALLOC( sLPC_Q14, psDec->subfr_length + MAX_LPC_ORDER, opus_int32 );
@@ -233,5 +234,6 @@ void silk_decode_core(
 
     /* Save LPC state */
     silk_memcpy( psDec->sLPC_Q14_buf, sLPC_Q14, MAX_LPC_ORDER * sizeof( opus_int32 ) );
+    //_ogg_free(sLTP_Q15);
     RESTORE_STACK;
 }
