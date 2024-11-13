@@ -278,7 +278,7 @@ void deemphasis(celt_sig *in[], opus_val16 *pcm, int N, int C, int downsample, c
    (void)accum;
    celt_assert(accum==0);
 #endif
-   ALLOC(scratch, N, celt_sig);
+   ALLOCH(scratch, N, celt_sig);
    coef0 = coef[0];
    Nd = N/downsample;
    c=0; do {
@@ -354,6 +354,7 @@ void deemphasis(celt_sig *in[], opus_val16 *pcm, int N, int C, int downsample, c
          }
       }
    } while (++c<C);
+    _ogg_free(scratch);
    RESTORE_STACK;
 }
 
@@ -379,7 +380,7 @@ void celt_synthesis(const CELTMode *mode, celt_norm *X, celt_sig * out_syn[],
    overlap = mode->overlap;
    nbEBands = mode->nbEBands;
    N = mode->shortMdctSize<<LM;
-   ALLOC(freq, N, celt_sig); /**< Interleaved signal MDCTs */
+   ALLOCH(freq, N, celt_sig); /**< Interleaved signal MDCTs */
    M = 1<<LM;
 
    if (isTransient)
@@ -435,6 +436,7 @@ void celt_synthesis(const CELTMode *mode, celt_norm *X, celt_sig * out_syn[],
       for (i=0;i<N;i++)
          out_syn[c][i] = SATURATE(out_syn[c][i], SIG_SAT);
    } while (++c<CC);
+    _ogg_free(freq);
    RESTORE_STACK;
 }
 
@@ -609,8 +611,8 @@ static void celt_decode_lost(CELTDecoder * OPUS_RESTRICT st, int N, int LM)
       exc_length = IMIN(2*pitch_index, MAX_PERIOD);
 
       ALLOC(etmp, overlap, opus_val32);
-      ALLOC(_exc, MAX_PERIOD+LPC_ORDER, opus_val16);
-      ALLOC(fir_tmp, exc_length, opus_val16);
+      ALLOCH(_exc, MAX_PERIOD+LPC_ORDER, opus_val16);
+      ALLOCH(fir_tmp, exc_length, opus_val16);
       exc = _exc+LPC_ORDER;
       window = mode->window;
       c=0; do {
@@ -804,10 +806,11 @@ static void celt_decode_lost(CELTDecoder * OPUS_RESTRICT st, int N, int LM)
                + MULT16_32_Q15(window[overlap-i-1], etmp[i]);
          }
       } while (++c<C);
+       _ogg_free(fir_tmp);
+       _ogg_free(_exc);
    }
 
    st->loss_count = loss_count+1;
-
    RESTORE_STACK;
 }
 

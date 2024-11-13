@@ -21,27 +21,27 @@ static inline void ogg_malloc_destroy(void)
 static inline void *_ogg_malloc(size_t size)
 {
     void* x = tlsf_malloc(size);
-    DEBUGF("ogg_malloc %zu = %p\n", size, x);
+   // DEBUGF("ogg_malloc %zu = %p\n", size, x);
     return x;
 }
 
 static inline void *_ogg_calloc(size_t nmemb, size_t size)
 {
     void *x = tlsf_calloc(nmemb, size);
-    DEBUGF("ogg_calloc %zu %zu\n", nmemb, size);
+    //DEBUGF("ogg_calloc %zu %zu\n", nmemb, size);
     return x;
 }
 
 static inline void *_ogg_realloc(void *ptr, size_t size)
 {
     void *x = tlsf_realloc(ptr, size);
-    DEBUGF("ogg_realloc %p %zu = %p\n", ptr, size, x);
+    //DEBUGF("ogg_realloc %p %zu = %p\n", ptr, size, x);
     return x;
 }
 
 static inline void _ogg_free(void* ptr)
 {
-    DEBUGF("ogg_free %p\n", ptr);
+    //DEBUGF("ogg_free %p\n", ptr);
     tlsf_free(ptr);
 }
 
