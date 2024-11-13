@@ -686,7 +686,7 @@ extern "C" {
 
 /** Gets the sampling rate the encoder or decoder was initialized with.
   * This simply returns the <code>Fs</code> value passed to opus_encoder_init()
-  * or opus_decoder_init().
+  * or opus_decoder_init_rockbox().
   * @param[out] x <tt>opus_int32 *</tt>: Sampling rate of encoder or decoder.
   * @hideinitializer
   */

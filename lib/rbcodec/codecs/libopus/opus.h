@@ -338,7 +338,7 @@ OPUS_EXPORT int opus_encoder_ctl(OpusEncoder *st, int request, ...) OPUS_ARG_NON
   * @code
   * int          error;
   * OpusDecoder *dec;
-  * dec = opus_decoder_create(Fs, channels, &error);
+  * dec = opus_decoder_create_rockbox(Fs, channels, &error);
   * @endcode
   * where
   * @li Fs is the sampling rate and must be 8000, 12000, 16000, 24000, or 48000
@@ -346,7 +346,7 @@ OPUS_EXPORT int opus_encoder_ctl(OpusEncoder *st, int request, ...) OPUS_ARG_NON
   * @li error will hold the error code in case of failure (or #OPUS_OK on success)
   * @li the return value is a newly created decoder state to be used for decoding
   *
-  * While opus_decoder_create() allocates memory for the state, it's also possible
+  * While opus_decoder_create_rockbox() allocates memory for the state, it's also possible
   * to initialize pre-allocated memory:
   * @code
   * int          size;
@@ -354,7 +354,7 @@ OPUS_EXPORT int opus_encoder_ctl(OpusEncoder *st, int request, ...) OPUS_ARG_NON
   * OpusDecoder *dec;
   * size = opus_decoder_get_size(channels);
   * dec = malloc(size);
-  * error = opus_decoder_init(dec, Fs, channels);
+  * error = opus_decoder_init_rockbox(dec, Fs, channels);
   * @endcode
   * where opus_decoder_get_size() returns the required size for the decoder state. Note that
   * future versions of this code may change the size, so no assuptions should be made about it.
@@ -362,9 +362,9 @@ OPUS_EXPORT int opus_encoder_ctl(OpusEncoder *st, int request, ...) OPUS_ARG_NON
   * The decoder state is always continuous in memory and only a shallow copy is sufficient
   * to copy it (e.g. memcpy())
   *
-  * To decode a frame, opus_decode() or opus_decode_float() must be called with a packet of compressed audio data:
+  * To decode a frame, opus_decode_rockbox() or opus_decode_float() must be called with a packet of compressed audio data:
   * @code
-  * frame_size = opus_decode(dec, packet, len, decoded, max_size, 0);
+  * frame_size = opus_decode_rockbox(dec, packet, len, decoded, max_size, 0);
   * @endcode
   * where
   *
@@ -373,7 +373,7 @@ OPUS_EXPORT int opus_encoder_ctl(OpusEncoder *st, int request, ...) OPUS_ARG_NON
   * @li decoded is the decoded audio data in opus_int16 (or float for opus_decode_float())
   * @li max_size is the max duration of the frame in samples (per channel) that can fit into the decoded_frame array
   *
-  * opus_decode() and opus_decode_float() return the number of samples (per channel) decoded from the packet.
+  * opus_decode_rockbox() and opus_decode_float() return the number of samples (per channel) decoded from the packet.
   * If that value is negative, then an error has occurred. This can occur if the packet is corrupted or if the audio
   * buffer is too small to hold the decoded audio.
   *
@@ -394,7 +394,7 @@ OPUS_EXPORT int opus_encoder_ctl(OpusEncoder *st, int request, ...) OPUS_ARG_NON
 /** Opus decoder state.
   * This contains the complete state of an Opus decoder.
   * It is position independent and can be freely copied.
-  * @see opus_decoder_create,opus_decoder_init
+  * @see opus_decoder_create_rockbox,opus_decoder_init_rockbox
   */
 typedef struct OpusDecoder OpusDecoder;
 
@@ -420,7 +420,7 @@ OPUS_EXPORT OPUS_WARN_UNUSED_RESULT int opus_decoder_get_size(int channels);
   * rate. Likewise, the decoder is capable of filling in either mono or
   * interleaved stereo pcm buffers, at the caller's request.
   */
-OPUS_EXPORT OPUS_WARN_UNUSED_RESULT OpusDecoder *opus_decoder_create(
+OPUS_EXPORT OPUS_WARN_UNUSED_RESULT OpusDecoder *opus_decoder_create_rockbox(
     opus_int32 Fs,
     int channels,
     int *error
@@ -428,7 +428,7 @@ OPUS_EXPORT OPUS_WARN_UNUSED_RESULT OpusDecoder *opus_decoder_create(
 
 /** Initializes a previously allocated decoder state.
   * The state must be at least the size returned by opus_decoder_get_size().
-  * This is intended for applications which use their own allocator instead of malloc. @see opus_decoder_create,opus_decoder_get_size
+  * This is intended for applications which use their own allocator instead of malloc. @see opus_decoder_create_rockbox,opus_decoder_get_size
   * To reset a previously initialized state, use the #OPUS_RESET_STATE CTL.
   * @param [in] st <tt>OpusDecoder*</tt>: Decoder state.
   * @param [in] Fs <tt>opus_int32</tt>: Sampling rate to decode to (Hz).
@@ -437,7 +437,7 @@ OPUS_EXPORT OPUS_WARN_UNUSED_RESULT OpusDecoder *opus_decoder_create(
   * @param [in] channels <tt>int</tt>: Number of channels (1 or 2) to decode
   * @retval #OPUS_OK Success or @ref opus_errorcodes
   */
-OPUS_EXPORT int opus_decoder_init(
+OPUS_EXPORT int opus_decoder_init_rockbox(
     OpusDecoder *st,
     opus_int32 Fs,
     int channels
@@ -459,7 +459,7 @@ OPUS_EXPORT int opus_decoder_init(
   *  decoded. If no such data is available, the frame is decoded as if it were lost.
   * @returns Number of decoded samples or @ref opus_errorcodes
   */
-OPUS_EXPORT OPUS_WARN_UNUSED_RESULT int opus_decode(
+OPUS_EXPORT OPUS_WARN_UNUSED_RESULT int opus_decode_rockbox(
     OpusDecoder *st,
     const unsigned char *data,
     opus_int32 len,
@@ -506,7 +506,7 @@ OPUS_EXPORT OPUS_WARN_UNUSED_RESULT int opus_decode_float(
   */
 OPUS_EXPORT int opus_decoder_ctl(OpusDecoder *st, int request, ...) OPUS_ARG_NONNULL(1);
 
-/** Frees an <code>OpusDecoder</code> allocated by opus_decoder_create().
+/** Frees an <code>OpusDecoder</code> allocated by opus_decoder_create_rockbox().
   * @param[in] st <tt>OpusDecoder*</tt>: State to be freed.
   */
 OPUS_EXPORT void opus_decoder_destroy(OpusDecoder *st);
