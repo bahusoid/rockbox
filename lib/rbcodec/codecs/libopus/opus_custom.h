@@ -75,7 +75,7 @@ extern "C" {
   * Libopus only supports custom modes if they are enabled at compile time.
   *
   * The Opus Custom API is similar to the regular API but the
-  * @ref opus_encoder_create and @ref opus_decoder_create calls take
+  * @ref opus_encoder_create and @ref opus_decoder_create_rockbox calls take
   * an additional mode parameter which is a structure produced by
   * a call to @ref opus_custom_mode_create. Both the encoder and decoder
   * must create a mode using the same sample rate (fs) and frame size

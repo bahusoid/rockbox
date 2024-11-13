@@ -317,6 +317,7 @@ opus_int silk_Decode(                                   /* O    Returns error co
     *nSamplesOut = silk_DIV32( nSamplesOutDec * decControl->API_sampleRate, silk_SMULBB( channel_state[ 0 ].fs_kHz, 1000 ) );
 
     /* Set up pointers to temp buffers */
+    //ALLOCH( samplesOut2_tmp,
     ALLOC( samplesOut2_tmp,
            decControl->nChannelsAPI == 2 ? *nSamplesOut : ALLOC_NONE, opus_int16 );
     if( decControl->nChannelsAPI == 2 ) {
@@ -325,6 +326,7 @@ opus_int silk_Decode(                                   /* O    Returns error co
         resample_out_ptr = samplesOut;
     }
 
+    //ALLOCH( samplesOut1_tmp_storage2, delay_stack_alloc
     ALLOC( samplesOut1_tmp_storage2, delay_stack_alloc
            ? decControl->nChannelsInternal*(channel_state[ 0 ].frame_length + 2 )
            : ALLOC_NONE,
@@ -380,6 +382,8 @@ opus_int silk_Decode(                                   /* O    Returns error co
     } else {
        psDec->prev_decode_only_middle = decode_only_middle;
     }
+//    _ogg_free(samplesOut1_tmp_storage2);
+//    _ogg_free(samplesOut2_tmp);
     RESTORE_STACK;
     return ret;
 }
