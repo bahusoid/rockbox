@@ -303,9 +303,9 @@ static int opus_seek_page_granule(int64_t pos, int64_t curpos,
     /* which way do we want to seek? */
     if (pos == 0) {  /* start */
         *curbyteoffset = 0;
-        ci->seek_buffer(*curbyteoffset);
         ogg_sync_reset(oy);
         ogg_stream_reset(os);
+        seek_ogg_page(0);
         return 0;
     } else if (curpos > pos) {  /* backwards */
         offset = seek_backwards(oy,&og,pos);
