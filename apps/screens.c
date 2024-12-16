@@ -850,7 +850,7 @@ refresh_info:
                 gui_synclist_draw(&id3_lists);
                 continue;
             }
-            if (key == ACTION_STD_OK || key == ACTION_STD_CANCEL)
+            if (key == ACTION_STD_MENU || key == ACTION_STD_CANCEL)
             {
                 ret = false;
                 break;
