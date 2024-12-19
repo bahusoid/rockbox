@@ -581,6 +581,8 @@ static void unicode_munge(unsigned char* string, unsigned char* utf8buf, int *le
             str++;
             bool le;
             int i = 0;
+            unsigned char* prev_utf8 = utf8buf;
+
             /* Handle frames with more than one string
                (needed for TXXX frames).*/
             do {
@@ -598,11 +600,16 @@ static void unicode_munge(unsigned char* string, unsigned char* utf8buf, int *le
 
                 utf8 = utf16decode(string, utf8, (str-string)>>1 /*(str-string)/2*/, utf8buf_size, le);
                 *utf8++ = 0; /* Terminate the string */
-                utf8buf_size -= utf8 - utf8buf;
+                const long string_size = utf8 - prev_utf8;
+                utf8buf_size -= string_size;
+                if (string_size == 1 || utf8buf_size <= 0)
+                    break;
+
+                prev_utf8 = utf8;
                 str += 2;
                 i += 2;
-            } while(i < *len && utf8buf_size > 0);
-            *len = utf8 - utf8buf  - 1;
+            } while(i < *len);
+            *len = utf8 - utf8buf - 1;
             break;
 
         /* case 0x03:  UTF-8 encoded string handled by parse_as_utf8 */
@@ -613,7 +620,6 @@ static void unicode_munge(unsigned char* string, unsigned char* utf8buf, int *le
         //fallthrough
         default: /* Plain old string */
             utf8 = iso_decode_ex(str, utf8, -1, *len, utf8buf_size);
-            *utf8 = 0;
             *len = utf8 - utf8buf;
             break;
     }
@@ -976,8 +982,8 @@ retry_with_limit:
         /* Limit the maximum length of an id3 data item to ID3V2_MAX_ITEM_SIZE
            bytes. This reduces the chance that the available buffer is filled
            by single metadata items like large comments. */
-        if (limit_tag_size && ID3V2_MAX_ITEM_SIZE < framelen)
-            framelen = ID3V2_MAX_ITEM_SIZE;
+        // if (limit_tag_size && ID3V2_MAX_ITEM_SIZE < framelen)
+        //     framelen = ID3V2_MAX_ITEM_SIZE;
 
         logf("id3v2 frame: %.4s", header);
 
