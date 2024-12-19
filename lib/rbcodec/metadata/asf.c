@@ -194,27 +194,29 @@ static void asf_utf16LEdecode(int fd,
     const int reserve_bytes = 6;
     int n;
     unsigned char utf16buf[258];
-    unsigned char* newutf8 = *utf8;
-    const int utf8bytes_initial = *utf8bytes;
+    unsigned char* prev_utf8 = *utf8;
+    int utf8bytes_left = *utf8bytes - reserve_bytes;
 
-    while ((n = read(fd, utf16buf, MIN(sizeof(utf16buf) - 2, utf16bytes))) >= 2)
+    while (utf8bytes_left > 0 && (n = read(fd, utf16buf, MIN(sizeof(utf16buf) - 2, utf16bytes))) >= 2)
     {
         // If the UTF-16 string ends with an incomplete surrogate pair, try to complete it.
         if (!is_valid_utf16(utf16buf, n))
         {
             n += read(fd, utf16buf + n, 2);
         }
-        newutf8 = utf16decode(utf16buf, newutf8, n>>1, *utf8bytes - reserve_bytes, true);
-        *utf8bytes = utf8bytes_initial - (newutf8 - *utf8);
-        utf16bytes -= n;
 
-        if (*utf8bytes <= reserve_bytes)
+        *utf8 = utf16decode(utf16buf, *utf8, n>>1, utf8bytes_left, true);
+        utf16bytes -= n;
+        const long string_size = *utf8 - prev_utf8;
+        if (string_size == 0)
             break;
+
+        utf8bytes_left -= string_size;
+        prev_utf8 = *utf8;
     }
 
-    *newutf8 = 0;
-    --*utf8bytes;
-    *utf8 = newutf8;
+    *utf8[0] = 0;
+    *utf8bytes = utf8bytes_left + reserve_bytes - 1;
 
     if (utf16bytes > 0) {
         /* Skip any remaining bytes */
