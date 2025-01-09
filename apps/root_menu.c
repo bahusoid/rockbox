@@ -332,7 +332,7 @@ static int wpsscrn(void* param)
     {
         ret_val = gui_wps_show();
     }
-    else if ( global_status.resume_index != -1 )
+    else if (global_status.resume_index != -1)
     {
         DEBUGF("Resume index %d crc32 %lX offset %lX\n",
                global_status.resume_index,
@@ -347,9 +347,13 @@ static int wpsscrn(void* param)
             ret_val = gui_wps_show();
         }
     }
-    else
-    {
+    else if (!file_exists(PLAYLIST_CONTROL_FILE))
         splash(HZ*2, ID2P(LANG_NOTHING_TO_RESUME));
+    else if (yesno_pop(ID2P(LANG_REPLAY_FINISHED_PLAYLIST)) &&
+             playlist_resume() != -1)
+    {
+        playlist_start(0, 0, 0);
+        ret_val = gui_wps_show();
     }
 
     if (ret_val == GO_TO_PLAYLIST_VIEWER
@@ -1039,7 +1043,7 @@ void root_menu(void)
                         next_screen = GO_TO_FILEBROWSER;
                         shortcut_origin = GO_TO_ROOT;
                         /* note in some cases there is a screen to return to
-                        but the history is rewritten as if you browsed here 
+                        but the history is rewritten as if you browsed here
                         from the root so return there when finished */
                     }
                     else if (shortcut_origin != GO_TO_ROOT)
