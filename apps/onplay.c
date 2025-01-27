@@ -971,8 +971,11 @@ static int clipboard_callback(int action,
                 if (this_item == &rename_file_item ||
                     this_item == &clipboard_cut_item ||
                     this_item == &clipboard_copy_item ||
-                    ((this_item == &track_info_item ||
-                      this_item == &view_album_art_item)
+                    ((this_item == &track_info_item
+#ifdef HAVE_ALBUMART
+                        || this_item == &view_album_art_item
+#endif
+                        )
                      && (selected_file.attr & FILE_ATTR_MASK) == FILE_ATTR_AUDIO) ||
                     (this_item == &properties_item &&
                         (selected_file.attr & FILE_ATTR_MASK) != FILE_ATTR_AUDIO) ||
