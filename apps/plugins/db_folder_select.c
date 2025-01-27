@@ -586,7 +586,7 @@ static uint32_t save_folders(struct folder *root, char* dst, size_t maxlen)
     return hashed.val;
 }
 
-bool folder_select(char * header_text, char* setting, int setting_len)
+bool folder_select(char * header_text, char* setting, int setting_len, int accept_not_modified)
 {
     struct folder *root;
     struct simplelist_info info;
@@ -620,7 +620,8 @@ bool folder_select(char * header_text, char* setting, int setting_len)
             return true;
         }
     }
-    return false;
+
+    return accept_not_modified ? setting[0] != 0 : false;
 }
 
 /* plugin entry point */
@@ -634,8 +635,8 @@ enum plugin_status plugin_start(const void* parameter)
         if (rb->strcmp(parameter, rb->str(LANG_AUTORESUME)) == 0)
         {
             if (folder_select(rb->str(LANG_AUTORESUME),
-                              rb->global_settings->autoresume_paths,
-                              MAX_PATHNAME+1))
+                rb->global_settings->autoresume_paths,
+                MAX_PATHNAME +1, true))
             {
                 return 1;
             }
@@ -643,16 +644,16 @@ enum plugin_status plugin_start(const void* parameter)
         else if (rb->strcmp(parameter, rb->str(LANG_ALT_SETTINGS)) == 0)
         {
             if (folder_select(rb->str(LANG_ALT_SETTINGS),
-                    rb->global_settings->altmenu_paths,
-                    MAX_PATHNAME+1))
+                rb->global_settings->altmenu_paths,
+                MAX_PATHNAME +1, true))
             {
                 return 1;
             }
         }
     }
     else if (folder_select(rb->str(LANG_SELECT_FOLDER),
-                           rb->global_settings->tagcache_scan_paths,
-                           sizeof(rb->global_settings->tagcache_scan_paths)))
+        rb->global_settings->tagcache_scan_paths,
+        sizeof(rb->global_settings->tagcache_scan_paths), false))
     {
         return 1;
     }
