@@ -1938,6 +1938,8 @@ static int load_album_art_from_path(char *path, struct bufopen_bitmap_data *user
     return hid;
 }
 
+#define MAX_AA_SIZE 2 * 1024 * 1024 // 2Mb
+
 /* Load any album art for the file - returns false if the buffer is full */
 static int audio_load_albumart(struct track_info *infop,
                                 struct mp3entry *track_id3, bool is_current_track)
@@ -1947,7 +1949,6 @@ static int audio_load_albumart(struct track_info *infop,
         struct bufopen_bitmap_data user_data;
         int *aa_hid = &infop->aa_hid[i];
         int hid = ERR_UNSUPPORTED_TYPE;
-        bool checked_image_file = false;
 
         /* albumart_slots may change during a yield of bufopen,
          * but that's no problem */
@@ -1959,14 +1960,19 @@ static int audio_load_albumart(struct track_info *infop,
         user_data.dim = &albumart_slots[i].dim;
 
         char path[MAX_PATH];
-        if(global_settings.album_art == AA_PREFER_IMAGE_FILE)
+        const bool prefer_image_file = global_settings.album_art == AA_PREFER_IMAGE_FILE;
+
+        if (prefer_image_file
+            && find_albumart(track_id3, path, sizeof(path), &albumart_slots[i].dim))
         {
-            if (find_albumart(track_id3, path, sizeof(path),
-                          &albumart_slots[i].dim))
-            {
-                hid = load_album_art_from_path(path, &user_data, is_current_track, i);
-            }
-            checked_image_file = true;
+            int fd = open(path, O_RDONLY);
+            long fs = filesize(fd);
+            close(fd);
+
+            hid = fs > MAX_AA_SIZE
+                      // Skip loading album art to avoid large delay
+                      ? ERR_BITMAP_TOO_LARGE
+                      : load_album_art_from_path(path, &user_data, is_current_track, i);
         }
 
         /* We can only decode jpeg for embedded AA */
@@ -1977,17 +1983,28 @@ static int audio_load_albumart(struct track_info *infop,
             if (is_current_track)
                 clear_last_folder_album_art();
             user_data.embedded_albumart = &track_id3->albumart;
-            hid = bufopen(track_id3->path, 0, TYPE_BITMAP, &user_data);
+
+            hid = track_id3->albumart.size > MAX_AA_SIZE
+                      // Skip loading album art to avoid large delay
+                      ? ERR_BITMAP_TOO_LARGE
+                      : bufopen(track_id3->path, 0, TYPE_BITMAP, &user_data);
         }
 
-        if (global_settings.album_art != AA_OFF && !checked_image_file &&
+        if (global_settings.album_art != AA_OFF && !prefer_image_file &&
             hid < 0 && hid != ERR_BUFFER_FULL)
         {
             /* No embedded AA or it couldn't be loaded - try other sources */
             if (find_albumart(track_id3, path, sizeof(path),
                               &albumart_slots[i].dim))
             {
-                hid = load_album_art_from_path(path, &user_data, is_current_track, i);
+                int fd = open(path, O_RDONLY);
+                long fs = filesize(fd);
+                close(fd);
+
+                hid = fs > MAX_AA_SIZE
+                          // Skip loading album art to avoid large delay
+                          ? ERR_BITMAP_TOO_LARGE
+                          : load_album_art_from_path(path, &user_data, is_current_track, i);
             }
         }
 
