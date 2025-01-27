@@ -3102,6 +3102,19 @@ static void audio_start_playback(const struct audio_resume_info *resume_info,
         /* This is the currently playing track - get metadata, stat */
         struct track_info info;
         track_list_current(0, &info);
+#ifdef HAVE_PITCHCONTROL
+        if (global_settings.alt_reset_pitch)
+        {
+            struct mp3entry * entry = bufgetid3(info.id3_hid);
+            init_alt_settings(entry);
+            if (entry->altsettings == ALTSETTINGS_FALSE)
+            {
+                sound_set_pitch(PITCH_SPEED_100);
+                dsp_set_timestretch(PITCH_SPEED_100);
+            }
+        }
+#endif
+
         playing_id3_sync(&info, &resume, skip_resume_adjustments);
 
         if (valid_mp3entry(id3_get(PLAYING_ID3)))
