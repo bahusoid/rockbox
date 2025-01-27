@@ -1651,6 +1651,8 @@ const struct settings_list settings[] = {
 #endif
 
         OFFON_SETTING(0, alt_settings_enable, LANG_ALT_SETTINGS, false,
+                "alt reset pitch", NULL),
+           OFFON_SETTING(0, alt_reset_pitch, LANG_ALT_RESET_PITCH, false,
                 "alt settings enable", NULL),
 //        CHOICE_SETTING(0, altmenu_enable, LANG_ALT_SETTINGS,
 //                AUTORESUME_NEXTTRACK_NEVER,

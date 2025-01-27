@@ -703,9 +703,11 @@ MENUITEM_SETTING(altmenu_enable, &global_settings.alt_settings_enable,
 MENUITEM_SETTING(alt_skip_length, &global_settings.alt_skip_length, NULL);
 MENUITEM_SETTING(alt_autocreatebookmark,
         &global_settings.alt_autocreatebookmark, NULL);
+MENUITEM_SETTING(alt_reset_pitch,
+        &global_settings.alt_reset_pitch, NULL);
 MAKE_MENU(altmenu_menu, ID2P(LANG_ALT_SETTINGS),
           0, Icon_NOICON,
-          &altmenu_enable, &alt_skip_length, &alt_autocreatebookmark);
+          &altmenu_enable, &alt_skip_length, &alt_autocreatebookmark, &alt_reset_pitch);
 
 /*    ALT SETTINGS              */
 /***********************************/
