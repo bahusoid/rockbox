@@ -1763,6 +1763,8 @@ const struct settings_list settings[] = {
 
         OFFON_SETTING(0, alt_settings_enable, LANG_ALT_SETTINGS, false,
                 "alt settings enable", NULL),
+           OFFON_SETTING(0, alt_reset_pitch, LANG_ALT_RESET_PITCH, false,
+                "alt reset pitch", NULL),
 //        CHOICE_SETTING(0, altmenu_enable, LANG_ALT_SETTINGS,
 //                AUTORESUME_NEXTTRACK_NEVER,
 //                "autoresume next track", "no,custom",
