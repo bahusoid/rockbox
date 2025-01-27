@@ -17111,3 +17111,17 @@
     *: "Alt Skip Length"
   </voice>
 </phrase>
+<phrase>
+  id: LANG_ALT_RESET_PITCH
+  desc: alt settings menu
+  user: core
+  <source>
+    *: "Reset Pitch"
+  </source>
+  <dest>
+    *: "Reset Pitch"
+  </dest>
+  <voice>
+    *: "Reset Pitch"
+  </voice>
+</phrase>
