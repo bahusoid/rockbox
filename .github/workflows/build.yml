@@ -33,12 +33,16 @@ jobs:
             arch: m
             platform: 11
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     name: ${{matrix.name}}
 
     steps:
     - uses: actions/checkout@v3
-    
+
+    - name: Add /tmp/local/bin to PATH
+      run: |
+        echo "/tmp/local/bin" >> $GITHUB_PATH
+
     - name: make it all
       run: |
         sudo apt-get update
