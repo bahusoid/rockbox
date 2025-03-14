@@ -978,7 +978,7 @@ static void handle_sleep_timer(void)
 {
     if (TIME_AFTER(current_tick, sleeptimer_endtick)) {
         if (usb_inserted()
-#if CONFIG_CHARGING && !defined(HAVE_POWEROFF_WHILE_CHARGING)
+#if CONFIG_CHARGING
             || charger_input_state != NO_CHARGER
 #endif
         ) {
