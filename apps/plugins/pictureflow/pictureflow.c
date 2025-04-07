@@ -2101,7 +2101,7 @@ bool retrieve_id3(struct mp3entry *id3, const char* file)
   find_albumart to find the filename.
  */
 static bool get_albumart_for_index_from_db(const int slide_index, char *buf,
-                                    int buflen)
+    int buflen, int *file_offset)
 {
     bool ret;
     char tcs_buf[TAGCACHE_BUFSZ];
@@ -2117,9 +2117,20 @@ static bool get_albumart_for_index_from_db(const int slide_index, char *buf,
                                    pf_idx.album_index[slide_index].artist_seek);
 
     ret = rb->tagcache_get_next(&tcs, tcs_buf, tcs_bufsz) &&
-          retrieve_id3(&id3, tcs.result) &&
-          search_albumart_files(&id3, ":", buf, buflen);
-
+          retrieve_id3(&id3, tcs.result);
+    if (ret && !search_albumart_files(&id3, ":", buf, buflen))
+    {
+        if (id3.has_embedded_albumart && id3.albumart.type == AA_TYPE_JPG)
+        {
+            strncpy(buf, id3.path, buflen);
+            *file_offset = id3.albumart.pos;
+            ret = true;
+        }
+        else
+        {
+            ret = false;
+        }
+    }
     rb->tagcache_search_finish(&tcs);
     return ret;
 }
@@ -2285,7 +2296,8 @@ static bool incremental_albumart_cache(bool verbose)
         goto aa_success;
     }
 
-    if (!get_albumart_for_index_from_db(idx, aa_cache.file, sizeof(aa_cache.file)))
+    int file_offset = 0;
+    if (!get_albumart_for_index_from_db(idx, aa_cache.file, sizeof(aa_cache.file), &file_offset))
         goto aa_failure; //rb->strcpy(aa_cache.file, EMPTY_SLIDE_BMP);
 
 
@@ -2293,8 +2305,23 @@ static bool incremental_albumart_cache(bool verbose)
     aa_cache.input_bmp.width = DISPLAY_WIDTH;
     aa_cache.input_bmp.height = DISPLAY_HEIGHT;
 
-    ret = read_image_file(aa_cache.file, &aa_cache.input_bmp,
-                          aa_cache.buf_sz, format, &format_transposed);
+    if (file_offset)
+    {
+        ret = -1;
+        int fd = rb->open(aa_cache.file, O_RDONLY);
+        if (fd >= 0)
+        {
+            rb->lseek(fd, file_offset, SEEK_SET);
+            ret = read_jpeg_fd(fd, &aa_cache.input_bmp,
+                              aa_cache.buf_sz, format, &format_transposed);
+            rb->close(fd);
+        }
+    }
+    else
+    {
+        ret = read_image_file(aa_cache.file, &aa_cache.input_bmp,
+                              aa_cache.buf_sz, format, &format_transposed);
+    }
     if (ret <= 0) {
         if (verbose) {
             rb->splashf(HZ, "Album art is bad: %s", get_album_name(idx));
