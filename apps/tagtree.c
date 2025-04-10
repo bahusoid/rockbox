@@ -1961,7 +1961,7 @@ entry_skip_formatter:
     if (strip)
     {
         dptr = get_entries(c);
-        for (i = c->special_entry_count; i < current_entry_count; i++, dptr++)
+        for (i = c->special_entry_count; i < total_count; i++, dptr++)
         {
             int len = strlen(dptr->name);
 
