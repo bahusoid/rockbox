@@ -1525,11 +1525,9 @@ static int retrieve_entries(struct tree_context *c, int offset, bool init)
     int special_entry_count = 0;
     int level = c->currextra;
     int tag;
-    bool sort = false;
-    bool sort_inverse;
+
     bool is_basename = false;
-    int sort_limit;
-    int strip;
+    bool sort = false;
 
     /* Show search progress straight away if the disk needs to spin up,
        otherwise show it after the normal 1/2 second delay */
@@ -1605,26 +1603,8 @@ static int retrieve_entries(struct tree_context *c, int offset, bool init)
     current_entry_count = 0;
     c->dirfull = false;
 
+    int fmt_use_cnt = 0;
     fmt = NULL;
-    for (i = 0; i < format_count; i++)
-    {
-        if (formats[i]->group_id == csi->format_id[level])
-            fmt = formats[i];
-    }
-
-    if (fmt)
-    {
-        sort_inverse = fmt->sort_inverse;
-        sort_limit = fmt->limit;
-        strip = fmt->strip;
-        sort = true;
-    }
-    else
-    {
-        sort_inverse = false;
-        sort_limit = 0;
-        strip = 0;
-    }
 
     /* lock buflib out due to possible yields */
     tree_lock_cache(c);
@@ -1670,7 +1650,6 @@ static int retrieve_entries(struct tree_context *c, int offset, bool init)
             dptr->extraseek = tcs.result_seek;
         dptr->customaction = ONPLAY_NO_CUSTOMACTION;
 
-        fmt = NULL;
         /* Check the format */
         for (i = 0; i < format_count; i++)
         {
@@ -1680,10 +1659,16 @@ static int retrieve_entries(struct tree_context *c, int offset, bool init)
             if (tagcache_check_clauses(&tcs, formats[i]->clause,
                                        formats[i]->clause_count))
             {
-                fmt = formats[i];
+                if (formats[i] != fmt)
+                {
+                    fmt = formats[i];
+                    ++fmt_use_cnt;
+                }
                 break;
             }
         }
+        if (i == format_count) //format not found?
+            fmt = NULL;
 
         if (strcmp(tcs.result, UNTAGGED) == 0)
         {
@@ -1777,6 +1762,22 @@ entry_skip_formatter:
                 return current_entry_count;
             }
         }
+    }
+
+    bool sort_inverse;
+    int sort_limit;
+    int strip;
+    if (fmt && fmt_use_cnt == 1)
+    {
+        sort_inverse = fmt->sort_inverse;
+        sort_limit = fmt->limit;
+        strip = fmt->strip;
+    }
+    else
+    {
+        sort_inverse = false;
+        sort_limit = 0;
+        strip = 0;
     }
 
     if (sort)
