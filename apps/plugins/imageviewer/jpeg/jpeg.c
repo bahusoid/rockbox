@@ -109,12 +109,60 @@ static int img_mem(int ds)
     return size;
 }
 
+
+static int read_buf(struct jpeg* p_jpeg, size_t count)
+{
+    return rb->read(p_jpeg->fd, p_jpeg->buf, count);
+}
+
+static bool skip_bytes_seek(struct jpeg* p_jpeg)
+{
+    if (UNLIKELY(rb->lseek(p_jpeg->fd, -p_jpeg->buf_left, SEEK_CUR) < 0))
+        return false;
+    p_jpeg->buf_left = 0;
+    return true;
+}
+//
+// #ifdef HAVE_ALBUMART
+// static int read_buf_id3_unsync(struct jpeg* p_jpeg, size_t count)
+// {
+//     count = read(p_jpeg->fd, p_jpeg->buf, count);
+//     return id3_unsynchronize(p_jpeg->buf, count, (bool*) &p_jpeg->custom_param);
+// }
+//
+// static int read_buf_vorbis_base64(struct jpeg* p_jpeg, size_t count)
+// {
+//     struct ogg_file* ogg = p_jpeg->custom_param;
+//     unsigned char* buf = p_jpeg->buf;
+//     count = ogg_file_read(ogg, buf, count);
+//     if (count == (size_t) -1)
+//         return 0;
+//
+//     return base64_decode(buf, count, buf);
+// }
+//
+// /* when pjpeg->read_buf involves additional data processing (like base64 decoding)
+//  * we can't use lseek and have to call pjpeg->read_buf for proper seek */
+// static bool skip_bytes_read_buf(struct jpeg* p_jpeg)
+// {
+//     do
+//     {
+//         int count = -p_jpeg->buf_left;
+//         fill_buf(p_jpeg);
+//         if (p_jpeg->buf_left < 0)
+//             return false;
+//         p_jpeg->buf_left -= count;
+//         p_jpeg->buf_index += count;
+//     } while (p_jpeg->buf_left < 0);
+//     return true;
+// }
+//
+// #endif /* HAVE_ALBUMART */
 static int load_image(char *filename, struct image_info *info,
                       unsigned char *buf, ssize_t *buf_size,
                       int offset, int filesize)
 {
     int fd;
-    unsigned char* buf_jpeg; /* compressed JPEG image */
     int status;
     struct jpeg *p_jpg = &jpg;
 
@@ -136,13 +184,14 @@ static int load_image(char *filename, struct image_info *info,
     {
         filesize = rb->filesize(fd);
     }
-
-    /* allocate JPEG buffer */
-    buf_jpeg = buf;
+    p_jpg->fd = fd;
+    p_jpg->len = filesize;
+    p_jpg->read_buf = read_buf;
+    p_jpg->skip_bytes_seek = skip_bytes_seek;
 
     /* we can start the decompressed images behind it */
-    buf_images = buf_root = buf + filesize;
-    buf_images_size = root_size = *buf_size - filesize;
+    buf_images = buf_root = buf;
+    buf_images_size = root_size = *buf_size;
 
     if (buf_images_size <= 0)
     {
@@ -157,9 +206,6 @@ static int load_image(char *filename, struct image_info *info,
         rb->lcd_update();
     }
 
-    rb->read(fd, buf_jpeg, filesize);
-    rb->close(fd);
-
     if(!iv->running_slideshow)
     {
         rb->lcd_puts(0, 2, "decoding markers");
@@ -173,8 +219,9 @@ static int load_image(char *filename, struct image_info *info,
     }
 #endif
 
+
     /* process markers, unstuffing */
-    status = process_markers(buf_jpeg, filesize, p_jpg);
+    status = process_markers(p_jpg);
 
     if (status < 0 || (status & (DQT | SOF0)) != (DQT | SOF0))
     {   /* bad format or minimum components not contained */

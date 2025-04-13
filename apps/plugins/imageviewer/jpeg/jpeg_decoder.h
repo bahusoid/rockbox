@@ -31,6 +31,22 @@
 
 struct jpeg
 {
+    int fd;
+    int buf_left;
+    int buf_index;
+
+    int (*read_buf)(struct jpeg* p_jpeg, size_t count);
+    bool (*skip_bytes_seek)(struct jpeg* p_jpeg);
+    void* custom_param;
+    unsigned char buf[JPEG_READ_BUF_SIZE];
+    unsigned long len;
+
+    unsigned long int bitbuf;
+    int bitbuf_bits;
+    int marker_ind;
+    int marker_val;
+    unsigned char marker;
+
     int x_size, y_size; /* size of image (can be less than block boundary) */
     int x_phys, y_phys; /* physical size, block aligned */
     int x_mbl; /* x dimension of MBL */
@@ -38,9 +54,6 @@ struct jpeg
     int blocks; /* blocks per MB */
     int restart_interval; /* number of MCUs between RSTm markers */
     int store_pos[4]; /* for Y block ordering */
-
-    unsigned char* p_entropy_data;
-    unsigned char* p_entropy_end;
 
     int quanttable[4][QUANT_TABLE_LENGTH]; /* raw quantization tables 0-3 */
     int qt_idct[2][QUANT_TABLE_LENGTH]; /* quantization tables for IDCT */
@@ -61,7 +74,7 @@ struct jpeg
 /* various helper functions */
 void default_huff_tbl(struct jpeg* p_jpeg);
 void build_lut(struct jpeg* p_jpeg);
-int process_markers(unsigned char* p_src, long size, struct jpeg* p_jpeg);
+int process_markers(struct jpeg* p_jpeg);
 
 /* the main decode function */
 #ifdef HAVE_LCD_COLOR
