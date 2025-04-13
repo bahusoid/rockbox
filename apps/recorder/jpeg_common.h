@@ -127,14 +127,6 @@ struct scan_component
     int AC_select;
 };
 
-struct bitstream
-{
-    unsigned long get_buffer; /* current bit-extraction buffer */
-    int bits_left; /* # of unused bits in it */
-    unsigned char* next_input_byte;
-    unsigned char* input_end; /* upper limit +1 */
-};
-
 /* possible return flags for process_markers() */
 #define HUFFTAB   0x0001 /* with huffman table */
 #define QUANTTAB  0x0002 /* with quantization table */
