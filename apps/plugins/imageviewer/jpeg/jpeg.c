@@ -123,25 +123,25 @@ static bool skip_bytes_seek(struct jpeg* p_jpeg)
     return true;
 }
 
-// #ifdef HAVE_ALBUMART
-// static int read_buf_id3_unsync(struct jpeg* p_jpeg, size_t count)
-// {
-//     count = rb->read(p_jpeg->fd, p_jpeg->buf, count);
-//     return id3_unsynchronize(p_jpeg->buf, count, (bool*) &p_jpeg->custom_param);
-// }
-//
-// static int read_buf_vorbis_base64(struct jpeg* p_jpeg, size_t count)
-// {
-//     struct ogg_file* ogg = p_jpeg->custom_param;
-//     unsigned char* buf = p_jpeg->buf;
-//     count = ogg_file_read(ogg, buf, count);
-//     if (count == (size_t) -1)
-//         return 0;
-//
-//     return base64_decode(buf, count, buf);
-// }
-//
-//  #endif /* HAVE_ALBUMART */
+#ifdef HAVE_ALBUMART
+static int read_buf_id3_unsync(struct jpeg* p_jpeg, size_t count)
+{
+    count = rb->read(p_jpeg->fd, p_jpeg->buf, count);
+    return id3_unsynchronize(p_jpeg->buf, count, (bool*) &p_jpeg->custom_param);
+}
+
+static int read_buf_vorbis_base64(struct jpeg* p_jpeg, size_t count)
+{
+    struct ogg_file* ogg = p_jpeg->custom_param;
+    unsigned char* buf = p_jpeg->buf;
+    count = ogg_file_read(ogg, buf, count);
+    if (count == (size_t) -1)
+        return 0;
+
+    return base64_decode(buf, count, buf);
+}
+
+ #endif /* HAVE_ALBUMART */
 
 static char* filepath;
 static int load_image(char *filename, struct image_info *info,
