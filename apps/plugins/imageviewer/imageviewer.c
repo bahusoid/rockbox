@@ -452,7 +452,7 @@ static bool cb_progress(int current, int total)
     if(!TIME_AFTER(now, next_progress_tick))
         return true;
 
-    /* limit to 20fps */
+    /* limit to 1/3 sec */
     next_progress_tick = now + HZ/3;
     if (rb->action_userabort(TIMEOUT_NOBLOCK))
     {
