@@ -1504,7 +1504,8 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
             }
         } /* for x */
         if (pf_progress != NULL)
-            pf_progress(y, p_jpeg->y_mbl-1); /* notify about decoding progress */
+            if (!pf_progress(y, p_jpeg->y_mbl-1)) /* notify about decoding progress */
+                return -1;
     } /* for y */
 
     return 0; /* success */
