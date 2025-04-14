@@ -62,6 +62,8 @@
 #include "usbstack/usb_hid.h"
 #endif
 
+#include "metadata_common.h"  // Added for album art functions
+
 #define WRAPPER(_x_) _x_ ## _wrapper
 
 #if (CONFIG_PLATFORM & PLATFORM_HOSTED)
@@ -839,8 +841,14 @@ static const struct plugin_api rockbox_api = {
     path_strip_volume,
 #endif
 
-    /* new stuff at the end, sort into place next time
-       the API gets incompatible */
+    /* Album Art functions */
+    id3_unsynchronize,
+    base64_decode,
+    parse_flac_album_art,
+    get_ogg_format_and_move_to_comments,
+    ogg_file_init,
+    ogg_file_read
+    /* new stuff at the end, sort into place next time the API gets incompatible */
 };
 
 static int plugin_buffer_handle;
@@ -1131,3 +1139,4 @@ char *plugin_get_current_filename(void)
 {
     return current_plugin;
 }
+

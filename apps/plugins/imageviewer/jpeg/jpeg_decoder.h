@@ -42,8 +42,10 @@ struct jpeg
     int (*read_buf)(struct jpeg* p_jpeg, size_t count);
     bool (*skip_bytes_seek)(struct jpeg* p_jpeg);
     void* custom_param;
+    int custom_param_size;
 
 
+    void* entropy_custom_param;
     unsigned long entropy_len;
     int entropy_buf_left;
     unsigned long entropy_buf_index;
@@ -84,6 +86,7 @@ struct jpeg
 void default_huff_tbl(struct jpeg* p_jpeg);
 void build_lut(struct jpeg* p_jpeg);
 int process_markers(struct jpeg* p_jpeg);
+bool skip_bytes_read_buf(struct jpeg* p_jpeg);
 
 /* the main decode function */
 #ifdef HAVE_LCD_COLOR

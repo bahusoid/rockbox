@@ -38,8 +38,6 @@
 #include "string-extra.h"
 #include "gcc_extensions.h"
 
-
-
 /* on some platforms strcmp() seems to be a tricky define which
  * breaks if we write down strcmp's prototype */
 #undef strcmp
@@ -62,6 +60,9 @@ char* strncpy(char *, const char *, size_t);
 void* plugin_get_buffer(size_t *buffer_size);
 size_t plugin_reserve_buffer(size_t buffer_size);
 int plugin_open(const char *plugin, const char *parameter);
+
+// Add the following line to forward-declare struct ogg_file:
+struct ogg_file;
 
 #ifndef __PCTOOL__
 #include "config.h"
@@ -990,6 +991,15 @@ struct plugin_api {
 #endif
     /* new stuff at the end, sort into place next time
        the API gets incompatible */
+    
+    /* Album Art functions */
+    int (*id3_unsynchronize)(char* tag, int len, bool *ff_found);
+    size_t (*base64_decode)(const char *in, size_t in_len, unsigned char *out);
+    bool (*parse_flac_album_art)(unsigned char *buf, int bytes_read,
+                                 enum mp3_aa_type *type, int *picframe_pos);
+    int (*get_ogg_format_and_move_to_comments)(int fd, unsigned char *buf);
+    bool (*ogg_file_init)(struct ogg_file* file, int fd, int type, int remaining);
+    ssize_t (*ogg_file_read)(struct ogg_file* file, void* buffer, size_t buffer_size);
 };
 
 /* plugin header */
@@ -1038,3 +1048,5 @@ enum plugin_status plugin__start(const void* parameter)
 
 #endif /* __PCTOOL__ */
 #endif
+
+

@@ -500,7 +500,7 @@ INLINE void fill_buf(struct jpeg* p_jpeg)
 
 /* when pjpeg->read_buf involves additional data processing (like base64 decoding)
  * we can't use lseek and have to call pjpeg->read_buf for proper seek */
-static bool skip_bytes_read_buf(struct jpeg* p_jpeg)
+bool skip_bytes_read_buf(struct jpeg* p_jpeg)
 {
     do
     {
@@ -842,6 +842,11 @@ int process_markers(struct jpeg* p_jpeg)
         p_jpeg->entropy_len = p_jpeg->len;
         p_jpeg->entropy_buf_left = p_jpeg->buf_left;
         p_jpeg->entropy_buf_index = p_jpeg->buf_index;
+        if (p_jpeg->custom_param_size)
+            memcpy(p_jpeg->entropy_custom_param, p_jpeg->custom_param, p_jpeg->custom_param_size);
+        else
+            p_jpeg->entropy_custom_param = p_jpeg->custom_param;
+
         memcpy(p_jpeg->entropy_buf, p_jpeg->buf, sizeof(p_jpeg->buf));
     }
     return (ret); /* return flags with seen markers */
