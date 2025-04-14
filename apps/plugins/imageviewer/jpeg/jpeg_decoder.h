@@ -88,10 +88,10 @@ int process_markers(struct jpeg* p_jpeg);
 /* the main decode function */
 #ifdef HAVE_LCD_COLOR
 int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
-                int downscale, void (*pf_progress)(int current, int total));
+                int downscale, bool (*pf_progress)(int current, int total));
 #else
 int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
-                void (*pf_progress)(int current, int total));
+                bool (*pf_progress)(int current, int total));
 #endif
 
 
