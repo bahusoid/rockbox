@@ -122,11 +122,11 @@ static bool skip_bytes_seek(struct jpeg* p_jpeg)
     p_jpeg->buf_left = 0;
     return true;
 }
-//
+
 // #ifdef HAVE_ALBUMART
 // static int read_buf_id3_unsync(struct jpeg* p_jpeg, size_t count)
 // {
-//     count = read(p_jpeg->fd, p_jpeg->buf, count);
+//     count = rb->read(p_jpeg->fd, p_jpeg->buf, count);
 //     return id3_unsynchronize(p_jpeg->buf, count, (bool*) &p_jpeg->custom_param);
 // }
 //
@@ -141,27 +141,14 @@ static bool skip_bytes_seek(struct jpeg* p_jpeg)
 //     return base64_decode(buf, count, buf);
 // }
 //
-// /* when pjpeg->read_buf involves additional data processing (like base64 decoding)
-//  * we can't use lseek and have to call pjpeg->read_buf for proper seek */
-// static bool skip_bytes_read_buf(struct jpeg* p_jpeg)
-// {
-//     do
-//     {
-//         int count = -p_jpeg->buf_left;
-//         fill_buf(p_jpeg);
-//         if (p_jpeg->buf_left < 0)
-//             return false;
-//         p_jpeg->buf_left -= count;
-//         p_jpeg->buf_index += count;
-//     } while (p_jpeg->buf_left < 0);
-//     return true;
-// }
-//
-// #endif /* HAVE_ALBUMART */
+//  #endif /* HAVE_ALBUMART */
+
+static char* filepath;
 static int load_image(char *filename, struct image_info *info,
                       unsigned char *buf, ssize_t *buf_size,
                       int offset, int filesize)
 {
+    filepath = filename;
     int fd;
     int status;
     struct jpeg *p_jpg = &jpg;
@@ -222,6 +209,9 @@ static int load_image(char *filename, struct image_info *info,
 
     /* process markers, unstuffing */
     status = process_markers(p_jpg);
+
+    rb->close(fd);
+     p_jpg->fd = -1;
 
     if (status < 0 || (status & (DQT | SOF0)) != (DQT | SOF0))
     {   /* bad format or minimum components not contained */
@@ -321,6 +311,20 @@ static int get_image(struct image_info *info, int frame, int ds)
 
     /* the actual decoding */
     time = *rb->current_tick;
+
+    if (p_jpg->fd < 0)
+    {
+        p_jpg->fd = rb->open(filepath, O_RDONLY);
+        rb->lseek(p_jpg->fd, p_jpg->entropy_pos, SEEK_SET);
+        p_jpg->len = p_jpg->entropy_len;
+        p_jpg->buf_index = p_jpg->entropy_buf_index;
+        memcpy(p_jpg->buf, p_jpg->entropy_buf, sizeof(p_jpg->buf));
+        p_jpg->buf_left = p_jpg->entropy_buf_left;
+
+        p_jpg->bitbuf_bits = 0;
+        p_jpg->marker = 0;
+        p_jpg->marker_val = 0;
+    }
 #ifdef HAVE_ADJUSTABLE_CPU_FREQ
     rb->cpu_boost(true);
     status = jpeg_decode(p_jpg, p_disp->bitmap, ds, iv->cb_progress);
@@ -328,6 +332,9 @@ static int get_image(struct image_info *info, int frame, int ds)
 #else
     status = jpeg_decode(p_jpg, p_disp->bitmap, ds, iv->cb_progress);
 #endif
+
+    rb->close(p_jpg->fd);
+    p_jpg->fd = -1;
     if (status)
     {
         rb->splashf(HZ, "decode error %d", status);

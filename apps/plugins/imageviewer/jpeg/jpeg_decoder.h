@@ -28,19 +28,28 @@
 #ifndef _JPEG_JPEG_DECODER_H
 #define _JPEG_JPEG_DECODER_H
 #include "jpeg_common.h"
+// #undef JPEG_READ_BUF_SIZE
+// #define JPEG_READ_BUF_SIZE 256
 
 struct jpeg
 {
     int fd;
     int buf_left;
     int buf_index;
+    unsigned char buf[JPEG_READ_BUF_SIZE];
+    unsigned long len;
 
     int (*read_buf)(struct jpeg* p_jpeg, size_t count);
     bool (*skip_bytes_seek)(struct jpeg* p_jpeg);
     void* custom_param;
-    unsigned char buf[JPEG_READ_BUF_SIZE];
-    unsigned long len;
 
+
+    unsigned long entropy_len;
+    int entropy_buf_left;
+    unsigned long entropy_buf_index;
+    off_t entropy_pos;
+    unsigned char entropy_buf[JPEG_READ_BUF_SIZE];
+    
     unsigned long int bitbuf;
     int bitbuf_bits;
     int marker_ind;

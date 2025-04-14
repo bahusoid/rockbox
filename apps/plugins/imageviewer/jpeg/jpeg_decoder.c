@@ -498,6 +498,22 @@ INLINE void fill_buf(struct jpeg* p_jpeg)
         p_jpeg->len -= p_jpeg->buf_left;
 }
 
+/* when pjpeg->read_buf involves additional data processing (like base64 decoding)
+ * we can't use lseek and have to call pjpeg->read_buf for proper seek */
+static bool skip_bytes_read_buf(struct jpeg* p_jpeg)
+{
+    do
+    {
+        int count = -p_jpeg->buf_left;
+        fill_buf(p_jpeg);
+        if (p_jpeg->buf_left < 0)
+            return false;
+        p_jpeg->buf_left -= count;
+        p_jpeg->buf_index += count;
+    } while (p_jpeg->buf_left < 0);
+    return true;
+}
+
 static unsigned char *jpeg_getc(struct jpeg* p_jpeg)
 {
     if (UNLIKELY(p_jpeg->buf_left < 1))
@@ -820,6 +836,14 @@ int process_markers(struct jpeg* p_jpeg)
         } /* switch */
     } /* while */
 
+    if (ret >=0)
+    {
+        p_jpeg->entropy_pos = rb->lseek(p_jpeg->fd, 0, SEEK_CUR);
+        p_jpeg->entropy_len = p_jpeg->len;
+        p_jpeg->entropy_buf_left = p_jpeg->buf_left;
+        p_jpeg->entropy_buf_index = p_jpeg->buf_index;
+        memcpy(p_jpeg->entropy_buf, p_jpeg->buf, sizeof(p_jpeg->buf));
+    }
     return (ret); /* return flags with seen markers */
 }
 
@@ -1335,7 +1359,7 @@ static void search_restart(struct jpeg *p_jpeg)
 /* JPEG decoder variant for YUV decoding, into 3 different planes */
 /*  Note: it keeps the original color subsampling, even if resized. */
 int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
-                int downscale, void (*pf_progress)(int current, int total))
+                int downscale, bool (*pf_progress)(int current, int total))
 {
     int block[64]; /* decoded DCT coefficients */
 
@@ -1383,12 +1407,6 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
     }
     else return -1; /* not supported */
 
-    /* init bitstream, fake a restart to make it start */
-    // bs.get_buffer = 0;
-    // bs.next_input_byte = p_jpeg->p_entropy_data;
-    // bs.bits_left = 0;
-    // bs.input_end = p_jpeg->p_entropy_end;
-
     width  = p_jpeg->x_phys / downscale;
     height = p_jpeg->y_phys / downscale;
     for (i=0; i<3; i++) /* calculate some strides */
@@ -1405,7 +1423,6 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
     store_offs[p_jpeg->store_pos[2]] = width * 8 / downscale; /* below */
     store_offs[p_jpeg->store_pos[3]] = store_offs[1] + store_offs[2]; /* r+b */
 
-    
     for(y=0; y<p_jpeg->y_mbl && p_jpeg->len > 0; y++)
     {
         for (i=0; i<3; i++) /* scan line init */
@@ -1429,6 +1446,7 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
 
                 /* Section F.2.2.1: decode the DC coefficient difference */
                 huff_decode_dc(p_jpeg, dctbl, s, r);
+                s = HUFF_EXTEND(r, s);
 
                 last_dc_val[ci] += s;
                 block[0] = last_dc_val[ci]; /* output it (assumes zag[0] = 0) */
