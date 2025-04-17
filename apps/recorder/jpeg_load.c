@@ -1448,8 +1448,40 @@ INLINE void fix_headers(struct jpeg* p_jpeg)
     for (i=0; i<4; i++)
         p_jpeg->store_pos[i] = i; /* default ordering */
 
+    if (p_jpeg->blocks == 3 &&
+            p_jpeg->frameheader[0].horizontal_sampling == 1 && p_jpeg->frameheader[0].vertical_sampling == 2 &&
+            p_jpeg->frameheader[1].horizontal_sampling == 1 && p_jpeg->frameheader[1].vertical_sampling == 2 &&
+            p_jpeg->frameheader[2].horizontal_sampling == 1 && p_jpeg->frameheader[2].vertical_sampling == 2
+        )
+    {
+        /* Set up MCU for 1x2 for all components: each component contributes 2 blocks */
+        p_jpeg->blocks = 6;
+
+        p_jpeg->store_pos[1] = 2; /* block positions are mirrored */
+        p_jpeg->store_pos[2] = 1;
+        p_jpeg->x_mbl = (p_jpeg->x_size+7) / 8;
+        p_jpeg->x_phys = p_jpeg->x_mbl * 8;
+        p_jpeg->y_mbl = (p_jpeg->y_size+15) / 16;
+        p_jpeg->y_phys = p_jpeg->y_mbl * 16;
+
+        p_jpeg->mcu_membership[0] = 0;
+        p_jpeg->mcu_membership[1] = 0;
+        p_jpeg->mcu_membership[2] = 1;
+        p_jpeg->mcu_membership[3] = 1;
+        p_jpeg->mcu_membership[4] = 2;
+        p_jpeg->mcu_membership[5] = 2;
+        p_jpeg->tab_membership[0] = 0;
+        p_jpeg->tab_membership[1] = 0;
+        p_jpeg->tab_membership[2] = 1;
+        p_jpeg->tab_membership[3] = 1;
+        p_jpeg->tab_membership[4] = 1;
+        p_jpeg->tab_membership[5] = 1;
+        p_jpeg->subsample_x[0] = 1; p_jpeg->subsample_y[0] = 2;
+        p_jpeg->subsample_x[1] = 1; p_jpeg->subsample_y[1] = 2;
+        p_jpeg->subsample_x[2] = 1; p_jpeg->subsample_y[2] = 2;
+    }
     /* assignments for the decoding of blocks */
-    if (p_jpeg->frameheader[0].horizontal_sampling == 2
+    else if (p_jpeg->frameheader[0].horizontal_sampling == 2
         && p_jpeg->frameheader[0].vertical_sampling == 1)
     {   /* 4:2:2 */
         p_jpeg->blocks = 4;
@@ -1481,32 +1513,6 @@ INLINE void fix_headers(struct jpeg* p_jpeg)
         p_jpeg->x_phys = p_jpeg->x_mbl * 8;
         p_jpeg->y_mbl = (p_jpeg->y_size+15) / 16;
         p_jpeg->y_phys = p_jpeg->y_mbl * 16;
-        
-        /* Handle 1x2,1x2,1x2 chroma sampling factor (non-standard case) */
-        if (p_jpeg->blocks == 3 &&
-            p_jpeg->frameheader[1].horizontal_sampling == 1 && p_jpeg->frameheader[1].vertical_sampling == 2 &&
-            p_jpeg->frameheader[2].horizontal_sampling == 1 && p_jpeg->frameheader[2].vertical_sampling == 2)
-        {
-            /* Set up MCU for 1x2 for all components: each component contributes 2 blocks */
-            p_jpeg->blocks = 6;
-
-            p_jpeg->mcu_membership[0] = 0;
-            p_jpeg->mcu_membership[1] = 0;
-            p_jpeg->mcu_membership[2] = 1;
-            p_jpeg->mcu_membership[3] = 1;
-            p_jpeg->mcu_membership[4] = 2;
-            p_jpeg->mcu_membership[5] = 2;
-            p_jpeg->tab_membership[0] = 0;
-            p_jpeg->tab_membership[1] = 0;
-            p_jpeg->tab_membership[2] = 1;
-            p_jpeg->tab_membership[3] = 1;
-            p_jpeg->tab_membership[4] = 1;
-            p_jpeg->tab_membership[5] = 1;
-            p_jpeg->subsample_x[0] = 1; p_jpeg->subsample_y[0] = 2;
-            p_jpeg->subsample_x[1] = 1; p_jpeg->subsample_y[1] = 2;
-            p_jpeg->subsample_x[2] = 1; p_jpeg->subsample_y[2] = 2;
-            return;
-        }
 
         /* 4:2:2 vertically subsampled */
         p_jpeg->blocks = 4;
