@@ -1130,8 +1130,10 @@ static bool find_album_art(char *path, int *offset, int *filesize, int *status, 
 #endif
 }
 
-/******************** Plugin entry point *********************/
+//We already reported error with splash, so no need in additional "Plugin returned error" system splash
+#define PLUGIN_SILENT_ERROR PLUGIN_OK
 
+/******************** Plugin entry point *********************/
 enum plugin_status plugin_start(const void* parameter)
 {
     int condition;
@@ -1145,7 +1147,7 @@ enum plugin_status plugin_start(const void* parameter)
     if (!parameter)
     {
             rb->splash(HZ * 2, "No file");
-            return PLUGIN_ERROR;
+            return PLUGIN_SILENT_ERROR;
     }
     else
     {
@@ -1156,6 +1158,7 @@ enum plugin_status plugin_start(const void* parameter)
             {
                 rb->splash(HZ * 2, "Unsupported file");
                 return PLUGIN_ERROR;
+                return PLUGIN_SILENT_ERROR;
             }
             is_album_art = true;
         }
@@ -1174,7 +1177,7 @@ enum plugin_status plugin_start(const void* parameter)
                    LCD_WIDTH, LCD_HEIGHT, &greysize))
     {
         rb->splash(HZ, "grey buf error");
-        return PLUGIN_ERROR;
+        return PLUGIN_SILENT_ERROR;
     }
     buf += greysize;
     buf_size -= greysize;
