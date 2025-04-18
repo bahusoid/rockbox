@@ -962,7 +962,7 @@ struct plugin_api {
 #ifdef HAVE_JPEG
     int (*read_jpeg_file)(const char* filename, struct bitmap *bm, int maxsize,
                           int format, const struct custom_format *cformat);
-    int (*read_jpeg_fd)(int fd, struct bitmap *bm, int maxsize,
+    int (*read_jpeg_fd)(int fd, int flags, struct bitmap *bm, int maxsize,
                         int format, const struct custom_format *cformat);
 #endif
     void (*screen_dump_set_hook)(void (*hook)(int fh));

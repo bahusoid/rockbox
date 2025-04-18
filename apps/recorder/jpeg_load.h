@@ -46,6 +46,7 @@ int read_jpeg_file(const char* filename,
                    const struct custom_format *cformat);
 
 int read_jpeg_fd(int fd,
+                 int flags,
                  struct bitmap *bm,
                  int maxsize,
                  int format,
