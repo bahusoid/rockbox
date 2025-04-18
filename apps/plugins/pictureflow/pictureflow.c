@@ -2068,7 +2068,7 @@ bool retrieve_id3(struct mp3entry *id3, const char* file)
   find_albumart to find the filename.
  */
 static bool get_albumart_for_index_from_db(const int slide_index, char *buf,
-    int buflen, int *file_offset)
+    int buflen, int *file_offset, int *flags)
 {
     bool ret;
     char tcs_buf[TAGCACHE_BUFSZ];
@@ -2092,6 +2092,7 @@ static bool get_albumart_for_index_from_db(const int slide_index, char *buf,
         {
             strncpy(buf, id3.path, buflen);
             *file_offset = id3.albumart.pos;
+            *flags = id3.albumart.type;
             ret = true;
         }
         else
@@ -2266,7 +2267,8 @@ static bool incremental_albumart_cache(bool verbose)
     }
 
     int file_offset = 0;
-    if (!get_albumart_for_index_from_db(idx, aa_cache.file, sizeof(aa_cache.file), &file_offset))
+    int flags = 0;
+    if (!get_albumart_for_index_from_db(idx, aa_cache.file, sizeof(aa_cache.file), &file_offset, &flags))
         goto aa_failure; //rb->strcpy(aa_cache.file, EMPTY_SLIDE_BMP);
 
 
@@ -2281,7 +2283,7 @@ static bool incremental_albumart_cache(bool verbose)
         if (fd >= 0)
         {
             rb->lseek(fd, file_offset, SEEK_SET);
-            ret = read_jpeg_fd(fd, &aa_cache.input_bmp,
+            ret = read_jpeg_fd(fd, flags, &aa_cache.input_bmp,
                               aa_cache.buf_sz, format, &format_transposed);
             rb->close(fd);
         }
