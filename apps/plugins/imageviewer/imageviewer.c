@@ -122,7 +122,7 @@ static struct image_info image_info;
 
 /* the current full file name */
 static char np_file[MAX_PATH];
-static int curfile = -1, direction = DIR_NEXT, entries = 0;
+static int curtype = -1, curfile = -1, direction = DIR_NEXT, entries = 0;
 
 /* list of the supported image files */
 static char **file_pt;
@@ -183,6 +183,7 @@ static int change_filename(int direct)
     curfile += (direct == DIR_PREV? entries - 1: 1);
     if (curfile >= entries)
         curfile -= entries;
+    curtype = -1;
 
     if (file_erased)
     {
@@ -211,6 +212,26 @@ static int change_filename(int direct)
     rb->snprintf(rb->strrchr(np_file, '/')+1, avail_length, "%s", file_pt[curfile]);
 
     return PLUGIN_OTHER;
+}
+
+static int change_picture(int direct)
+{
+    int status;
+    do
+    {
+        status = change_filename(direct);
+        if (status > 0)
+        {
+            curtype = get_image_type(np_file, iv_api.running_slideshow);
+
+            if (curtype < 0)
+            {
+                status = curtype;
+                file_pt[curfile] = NULL;
+            }
+        }
+    } while (curtype < 0 && entries > 1);
+    return status;
 }
 
 /* switch off overlay, for handling SYS_ events */
@@ -639,7 +660,7 @@ static int scroll_bmp(struct image_info *info, bool initial_frame)
             if (entries > 1 && info->width <= LCD_WIDTH
                             && info->height <= LCD_HEIGHT)
             {
-                int result = change_filename(DIR_PREV);
+                int result = change_picture(DIR_PREV);
                 if (entries > 1)
                     return result;
             }
@@ -652,7 +673,7 @@ static int scroll_bmp(struct image_info *info, bool initial_frame)
             if (entries > 1 && info->width <= LCD_WIDTH
                             && info->height <= LCD_HEIGHT)
             {
-                int result = change_filename(DIR_NEXT);
+                int result = change_picture(DIR_NEXT);
                 if (entries > 1)
                     return result;
             }
@@ -724,7 +745,11 @@ static int scroll_bmp(struct image_info *info, bool initial_frame)
 #endif
         case IMGVIEW_NEXT:
             if (entries > 1)
-                return change_filename(DIR_NEXT);
+            {
+                int result = change_picture(DIR_NEXT);
+                if (entries > 1)
+                    return result;
+            }
             break;
 
 #ifdef IMGVIEW_PREVIOUS_REPEAT
@@ -732,7 +757,11 @@ static int scroll_bmp(struct image_info *info, bool initial_frame)
 #endif
         case IMGVIEW_PREVIOUS:
             if (entries > 1)
-                return change_filename(DIR_PREV);
+            {
+                    int result = change_picture(DIR_PREV);
+                    if (entries > 1)
+                        return result;
+            }
             break;
 
         case IMGVIEW_ZOOM_IN:
@@ -1115,7 +1144,7 @@ enum plugin_status plugin_start(const void* parameter)
     long greysize; /* helper */
 #endif
 
-    int offset = 0, filesize = 0, flags = 0, status;
+    int offset = 0, filesize = 0, flags = 0;
 
     bool is_album_art = false;
     if (!parameter)
@@ -1126,9 +1155,9 @@ enum plugin_status plugin_start(const void* parameter)
     else
     {
         rb->strcpy(np_file, parameter);
-        if ((status = get_image_type(np_file, false)) == IMAGE_UNKNOWN)
+        if ((curtype = get_image_type(np_file, false)) == IMAGE_UNKNOWN)
         {
-            if (!find_album_art(np_file, &offset, &filesize, &status, &flags))
+            if (!find_album_art(np_file, &offset, &filesize, &curtype, &flags))
             {
                 rb->splash(HZ * 2, "Unsupported file");
                 return PLUGIN_ERROR;
@@ -1183,13 +1212,13 @@ enum plugin_status plugin_start(const void* parameter)
 
     do
     {
-        condition = load_and_show(np_file, &image_info, offset, filesize, status, flags);
+        condition = load_and_show(np_file, &image_info, offset, filesize, curtype, flags);
         if (condition >= PLUGIN_OTHER)
         {
-            if(!is_album_art)
+            if (curtype < 0)
             {
                 /* suppress warning while running slideshow */
-                status = get_image_type(np_file, iv_api.running_slideshow);
+                curtype = get_image_type(np_file, iv_api.running_slideshow);
             }
             continue;
         }
