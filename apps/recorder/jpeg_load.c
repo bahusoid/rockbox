@@ -2359,13 +2359,13 @@ int clip_jpeg_fd(int fd, int flags,
 }
 
 #ifndef JPEG_FROM_MEM
-int read_jpeg_fd(int fd,
+int read_jpeg_fd(int fd, int flags,
                  struct bitmap *bm,
                  int maxsize,
                  int format,
                  const struct custom_format *cformat)
 {
-    return clip_jpeg_fd(fd, 0, 0, bm, maxsize, format, cformat);
+    return clip_jpeg_fd(fd, flags, 0, bm, maxsize, format, cformat);
 }
 #endif
 
