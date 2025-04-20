@@ -557,6 +557,7 @@ int read_bmp_fd(int fd,
         dither = true;
     }
 #endif
+    off_t offset = lseek(fd, 0, SEEK_CUR);
     /* read fileheader */
     ret = read(fd, &bmph, sizeof(struct bmp_header));
     if (ret < 0) {
@@ -681,7 +682,7 @@ int read_bmp_fd(int fd,
         if (numcolors == 0)
             numcolors = BIT_N(depth);
         /* forward to the color table */
-        lseek(fd, 14+hdr_size, SEEK_SET);
+        lseek(fd, offset + 14+hdr_size, SEEK_SET);
     } else {
         numcolors = 0;
         if (compression == 3) {
@@ -759,7 +760,7 @@ int read_bmp_fd(int fd,
 #endif
 
     /* Search to the beginning of the image data */
-    lseek(fd, (off_t)letoh32(bmph.off_bits), SEEK_SET);
+    lseek(fd, offset + (off_t)letoh32(bmph.off_bits), SEEK_SET);
 
     memset(bitmap, 0, totalsize);
 
