@@ -312,30 +312,34 @@ static int parsealbumart( struct mp3entry* entry, char* tag, int bufferpos )
     char *start = tag;
     /* skip text encoding */
     tag += 1;
-    static const char *img_options[] = {"jpeg", "jpg", "png", NULL};
 
     if (memcmp(tag, "image/", 6) == 0)
     {
         /* ID3 v2.3+ */
         tag += 6;
-        int tg_op = string_option(tag, img_options, false);
+        static const char *img_options[] = {"jpeg", "jpg", "png", "bmp", NULL};
+        const enum                         {JPEG,   JPG,    PNG,  BMP}
+            tg_op = string_option(tag, img_options, false);
+        tag += 4;
 
-        if (tg_op == 0) /*jpeg*/
+        if (tg_op == JPEG)
         {
             entry->albumart.type = AA_TYPE_JPG;
-            tag += 5;
+            ++tag;
         }
-        else if (tg_op == 1) /*jpg*/
+        else if (tg_op == JPG)
         {
             /* image/jpg is technically invalid, but it does occur in
              * the wild */
             entry->albumart.type = AA_TYPE_JPG;
-            tag += 4;
         }
-        else if (tg_op == 2) /*png*/
+        else if (tg_op == PNG)
         {
             entry->albumart.type = AA_TYPE_PNG;
-            tag += 4;
+        }
+        else if (tg_op == BMP)
+        {
+            entry->albumart.type = AA_TYPE_BMP;
         }
     }
     else
