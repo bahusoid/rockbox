@@ -159,7 +159,7 @@ static int load_image(char *filename, struct image_info *info,
             ds *= 2;
             bmp.width /= 2;
             bmp.height /= 2;
-            rb->lseek(fd, 0, SEEK_SET);
+            rb->lseek(fd, offset, SEEK_SET);
             size = scaled_read_bmp_fd(fd, &bmp, 0, format | FORMAT_RETURN_SIZE, cformat);
         }
     }
@@ -189,7 +189,7 @@ static int load_image(char *filename, struct image_info *info,
 
     /* actual loading */
     time = *rb->current_tick;
-    rb->lseek(fd, 0, SEEK_SET);
+    rb->lseek(fd, offset, SEEK_SET);
 #ifdef HAVE_ADJUSTABLE_CPU_FREQ
     rb->cpu_boost(true);
     size = scaled_read_bmp_fd(fd, &bmp, *buf_size, format, cformat);
