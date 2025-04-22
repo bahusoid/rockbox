@@ -47,8 +47,13 @@ struct t_disp
 
 /************************* Globals ***************************/
 
+#define MAX_DS 9
+
 /* decompressed image in the possible sizes (1,2,4,8), wasting the other */
-static struct t_disp disp[9];
+static struct t_disp disp[MAX_DS];
+
+static int ds_map[MAX_DS];
+static int dsd_map[MAX_DS];
 
 /* my memory pool (from the mp3 buffer) */
 static char print[32]; /* use a common snprintf() buffer */
@@ -89,14 +94,24 @@ static void draw_image_rect(struct image_info *info,
         width, height);
 #endif
 }
+static int get_width(int ds)
+{
+    return (bmp.width * dsd_map[ds] / ds_map[ds]);
+}
+
+static int get_height(int ds)
+{
+    return (bmp.height * dsd_map[ds] / ds_map[ds]);
+}
 
 static int img_mem(int ds)
 {
-#ifndef USEGSLIB
-    return (bmp.width/ds) * (bmp.height/ds) * sizeof (fb_data);
-#else
-    return (bmp.width/ds) * (bmp.height/ds);
+
+    return get_width(ds) * get_height(ds)
+#ifndef USEGSLIB 
+            * sizeof (fb_data)
 #endif
+    ;
 }
 
 static int load_image(char *filename, struct image_info *info,
@@ -104,6 +119,13 @@ static int load_image(char *filename, struct image_info *info,
     int offset, int filesize, int flags)
 {
     (void)filesize;(void)flags;
+
+    for (int i = 0; i < MAX_DS; ++i)
+    {
+        ds_map[i] = i;
+        dsd_map[i] = 1;
+    }
+
     int w, h; /* used to center output */
     long time; /* measured ticks */
     int fd;
@@ -145,21 +167,48 @@ static int load_image(char *filename, struct image_info *info,
     // Try to show it in fullscreen
     if (bmp.width > LCD_WIDTH || bmp.height > LCD_HEIGHT)
     {
+        resize = true;
+
         int dsw = bmp.width/LCD_WIDTH;
         int dsx = bmp.height/LCD_HEIGHT;
         int scale = MAX(dsw, dsx);
         scale = MIN(scale, 4);
-        //iv->settings->jpeg_dither_mode
+        if(scale == 3)
+        {
+            //adjust scale to display image in full-screen
+            ds_map[4] = 3;
+        }
+        int dscale = 1;
+        if (scale == 1)
+        {
+            int height_dscale = LCD_HEIGHT/(bmp.height % LCD_HEIGHT);
+            int width_dscale = LCD_WIDTH/(bmp.width % LCD_WIDTH);
+            dscale = MAX(height_dscale, width_dscale);
+            scale = dscale + 1;
+        }
         format |= FORMAT_RESIZE|FORMAT_KEEP_ASPECT|FORMAT_DITHER;
         do 
         {
-            bmp.width = LCD_WIDTH*scale;
-            bmp.height = LCD_HEIGHT*scale;
-    
+            bmp.width = LCD_WIDTH*scale/dscale;
+            bmp.height = LCD_HEIGHT*scale/dscale;
+
             size = read_jpeg_fd(fd, flags, &bmp, *buf_size, format | FORMAT_RETURN_SIZE, cformat);
             rb->lseek(fd, offset, SEEK_SET);
-            scale/= 2;
-            resize = true;
+
+            if (dscale == 1)
+            {
+                scale/= 2;
+            }
+            else
+            {
+                if (size <= *buf_size)
+                {
+                    dsd_map[2] = dscale;
+                    ds_map[2] = scale;
+                }
+                dscale = 1;
+                scale = 1;
+            }
         } while (size > *buf_size && scale>0);
     }
 
@@ -272,8 +321,8 @@ static int get_image(struct image_info *info, int frame, int ds)
     (void)frame;
     struct t_disp* p_disp = &disp[ds]; /* short cut */
 
-    info->width = bmp.width/ds;
-    info->height = bmp.height/ds;
+    info->width = get_width(ds);
+    info->height = get_height(ds);
     info->data = p_disp;
 
     if (p_disp->bitmap != NULL)
