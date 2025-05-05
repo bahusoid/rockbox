@@ -770,12 +770,25 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
                     action = ACTION_REDRAW;
             }
         }
-        else if ((click_loc & TITLE) && gevent.id == GESTURE_TAP)
+        else if (click_loc & TITLE)
         {
-            if (click_loc & TITLE_TEXT)
-                action = ACTION_STD_CANCEL;
-            else if (click_loc & TITLE_ICON)
-                action = ACTION_STD_MENU;
+            struct viewport *title_vp = &title_text[screen];
+            int rel_x = gevent.x - title_vp->x;
+            if ((!VP_IS_RTL(title_vp) && rel_x > title_vp->width/2) ||
+                ( VP_IS_RTL(title_vp) && rel_x < title_vp->width/2))
+            {
+                if (gevent.id == GESTURE_TAP)
+                    action = ACTION_STD_QUICKSCREEN;
+                else if (gevent.id == GESTURE_LONG_PRESS)
+                    action = ACTION_TREE_WPS;
+            }
+            else
+            {
+                if (gevent.id == GESTURE_TAP)
+                    action = ACTION_STD_CANCEL;
+                else if (gevent.id == GESTURE_LONG_PRESS)
+                    action = ACTION_STD_MENU;
+            }
         }
         else if (gevent.id != GESTURE_NONE && (click_loc & SCROLLBAR))
         {
