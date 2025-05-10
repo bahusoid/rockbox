@@ -39,24 +39,82 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Add /tmp/local/bin to PATH
-      run: |
-        echo "/tmp/local/bin" >> $GITHUB_PATH
+    - name: root suid tar
+      # workaround for caching system files
+      run: sudo chown root /bin/tar && sudo chmod u+s /bin/tar
 
-    - name: make it all
+    - name: Restore toolchain dependencies
+      id: cache-before
+      uses: actions/cache/restore@v3
+      with:
+        path: |
+          /tmp/rbdev-dl
+          /tmp/local
+          /tmp/rbdev-build
+          /tmp/rockboxdev_path_modifications
+        key: ${{ runner.os }}-toolchain-${{ matrix.arch }}-${{ hashFiles('tools/rockboxdev.sh') }}
+        restore-keys: |
+          ${{ runner.os }}-toolchain-${{ matrix.arch }}-
+          ${{ runner.os }}-toolchain-
+
+    - name: Restore PATH from cached modifications
+      if: steps.cache-before.outputs.cache-hit == 'true'
+      run: |
+        # Append the cached PATH modifications to GITHUB_PATH
+        # cat /tmp/rockboxdev_path_modifications >> $GITHUB_PATH
+
+    - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install automake bison build-essential ccache flex libc6-dev libgmp3-dev libmpfr-dev libsdl1.2-dev libtool-bin texinfo zip gawk wget libmpc-dev gettext
+        sudo apt-get install -y automake bison build-essential ccache flex libc6-dev libgmp3-dev libmpfr-dev \
+        libsdl1.2-dev libtool-bin texinfo zip gawk wget libmpc-dev gettext
+
+    - name: Run rockboxdev.sh and save PATH modifications
+      if: steps.cache-before.outputs.cache-hit != 'true'
+      run: |
+        ORIGINAL_PATH="$PATH"
         cd tools
         chmod +x rockboxdev.sh
         sudo ./rockboxdev.sh --target=${{matrix.arch}}
         cd ..
+        
+        # Find the delta by removing the original PATH substring
+        MODIFIED_PATH="$PATH"
+        # Remove ORIGINAL_PATH from the beginning or middle of MODIFIED_PATH
+        DELTA_PATH=${MODIFIED_PATH//$ORIGINAL_PATH:/}
+        # Remove ORIGINAL_PATH from the end of MODIFIED_PATH, if present
+        DELTA_PATH=${DELTA_PATH%:$ORIGINAL_PATH}
+        echo "$DELTA_PATH" > /tmp/rockboxdev_path_modifications
+        
+        # Append the modifications to GITHUB_PATH
+        echo "$DELTA_PATH" >> $GITHUB_PATH
+        echo "DELTA_PATH: $DELTA_PATH"
+
+    - name: Add /tmp/local/bin to PATH
+      run: |
+        echo "/tmp/local/bin" >> $GITHUB_PATH
+
+    - name: Build Rockbox
+      run: |
         mkdir build
         cd build
         ../tools/configure --target=${{matrix.platform}} --type=N
         make -j
         make zip
-      
+
+    - name: Cache toolchain dependencies
+      if: steps.cache-before.outputs.cache-hit != 'true'
+      uses: actions/cache@v3
+      with:
+        path: |
+          /tmp/rbdev-dl
+          /tmp/local
+          /tmp/rbdev-build
+          /tmp/rockboxdev_path_modifications
+        key: ${{ runner.os }}-toolchain-${{ matrix.arch }}-${{ hashFiles('tools/rockboxdev.sh') }}
+        restore-keys: |
+          ${{ runner.os }}-toolchain-${{ matrix.arch }}-
+
     - name: Upload build
       uses: actions/upload-artifact@v4
       with:
