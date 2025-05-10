@@ -136,9 +136,8 @@ static int strnatcmp0(char const *a, char const *b,
       cb = to_int(b[bi]);
 
           /* process run of digits */
-          if (nat_isdigit(ca)  ||  nat_isdigit(cb)) {
-               fractional = (ca == '0' || cb == '0' || !nat_isdigit(ca) || 
-                             !nat_isdigit(cb));
+          if (nat_isdigit(ca)  &&  nat_isdigit(cb)) {
+               fractional = (ca == '0' || cb == '0');
 
                if (fractional) {
                     if ((result = compare_left(a+ai, b+bi)) != 0)
