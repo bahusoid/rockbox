@@ -36,6 +36,7 @@ int decode_jpeg_mem(unsigned char *data, unsigned long len,
                     struct bitmap *bm,
                     int maxsize,
                     int format,
-                    const struct custom_format *cformat);
+                    const struct custom_format *cformat,
+                    bool (*cb_progress)(int current, int total));
 
 #endif /* _JPEG_MEM_H */

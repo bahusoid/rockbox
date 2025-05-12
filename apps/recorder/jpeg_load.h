@@ -50,7 +50,8 @@ int read_jpeg_fd(int fd,
                  struct bitmap *bm,
                  int maxsize,
                  int format,
-                 const struct custom_format *cformat);
+                 const struct custom_format *cformat,
+                 bool (*cb_progress)(int current, int total));
 
 /**
  * read embedded jpeg files as above. Needs an offset and length into
@@ -73,6 +74,8 @@ int clip_jpeg_fd(int fd, int flags,
                  struct bitmap *bm,
                  int maxsize,
                  int format,
-                 const struct custom_format *cformat);
+                 const struct custom_format *cformat,
+                 bool (*cb_progress)(int current, int total));
 
 #endif /* _JPEG_JPEG_DECODER_H */
+

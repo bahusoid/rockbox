@@ -78,7 +78,7 @@ enum plugin_status plugin_start(const void* parameter)
     bm.data = plugin_buf;
     ret = decode_jpeg_mem(jpeg_buf, filesize, &bm, plugin_buf_len,
                           FORMAT_NATIVE|FORMAT_RESIZE|FORMAT_KEEP_ASPECT,
-                          CFORMAT);
+                          CFORMAT, NULL);
     if (ret < 1)
         return PLUGIN_ERROR;
 #ifdef USEGSLIB
