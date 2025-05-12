@@ -2284,7 +2284,7 @@ static bool incremental_albumart_cache(bool verbose)
         {
             rb->lseek(fd, file_offset, SEEK_SET);
             ret = read_jpeg_fd(fd, flags, &aa_cache.input_bmp,
-                              aa_cache.buf_sz, format, &format_transposed);
+                              aa_cache.buf_sz, format, &format_transposed, NULL);
             rb->close(fd);
         }
     }
@@ -5047,3 +5047,4 @@ enum plugin_status plugin_start(const void *parameter)
     }
     return ret;
 }
+
