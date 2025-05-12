@@ -1200,3 +1200,4 @@ char *plugin_get_current_filename(void)
     return current_plugin;
 }
 
+
