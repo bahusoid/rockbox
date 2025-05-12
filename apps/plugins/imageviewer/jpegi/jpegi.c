@@ -158,7 +158,7 @@ static int load_image(char *filename, struct image_info *info,
     }
 
     /* check size of image needed to load image. */
-    size = read_jpeg_fd(fd, flags, &bmp, *buf_size, format  | FORMAT_RETURN_SIZE, cformat);
+    size = read_jpeg_fd(fd, flags, &bmp, *buf_size, format  | FORMAT_RETURN_SIZE, cformat, NULL);
     struct dim img_dim = {.width = bmp.width, .height = bmp.height};
     bool resize = false;
 
@@ -192,7 +192,7 @@ static int load_image(char *filename, struct image_info *info,
             bmp.width = LCD_WIDTH*scale/dscale;
             bmp.height = LCD_HEIGHT*scale/dscale;
 
-            size = read_jpeg_fd(fd, flags, &bmp, *buf_size, format | FORMAT_RETURN_SIZE, cformat);
+            size = read_jpeg_fd(fd, flags, &bmp, *buf_size, format | FORMAT_RETURN_SIZE, cformat, NULL);
             rb->lseek(fd, offset, SEEK_SET);
 
             if (dscale == 1)
@@ -236,7 +236,7 @@ static int load_image(char *filename, struct image_info *info,
             bmp.width /= 2;
             bmp.height /= 2;
             rb->lseek(fd, 0, SEEK_SET);
-            size = read_jpeg_fd(fd, flags, &bmp, *buf_size, format | FORMAT_RETURN_SIZE, cformat);
+            size = read_jpeg_fd(fd, flags, &bmp, *buf_size, format | FORMAT_RETURN_SIZE, cformat, NULL);
         }
     }
 
@@ -281,7 +281,7 @@ static int load_image(char *filename, struct image_info *info,
     /* actual loading */
     time = *rb->current_tick;
     rb->lseek(fd, offset, SEEK_SET);
-    size = read_jpeg_fd(fd, flags, &bmp, *buf_size, format, cformat);
+    size = read_jpeg_fd(fd, flags, &bmp, *buf_size, format, cformat, iv->cb_progress);
     rb->close(fd);
     time = *rb->current_tick - time;
 
@@ -386,3 +386,4 @@ const struct image_decoder image_decoder = {
 };
 
 IMGDEC_HEADER
+
