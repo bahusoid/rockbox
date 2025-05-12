@@ -32,6 +32,7 @@
 #include "jpeg_load.h"
 /*#define JPEG_BS_DEBUG*/
 //#define ROCKBOX_DEBUG_JPEG
+//#undef JPEG_FROM_MEM
 /* for portability of below JPEG code */
 #define MEMSET(p,v,c) memset(p,v,c)
 #define MEMCPY(d,s,c) memcpy(d,s,c)
@@ -1833,7 +1834,11 @@ static void search_restart(struct jpeg *p_jpeg)
 
 static struct img_part *store_row_jpeg(void *jpeg_args)
 {
-    struct jpeg *p_jpeg = (struct jpeg*) jpeg_args;
+    struct jpeg *p_jpeg = ((void**) jpeg_args)[0];
+    bool (*cb_progress)(int current, int total) =((void**) jpeg_args)[1];
+    if (cb_progress && !cb_progress(++p_jpeg->cur_row, p_jpeg->set_rows))
+        return NULL;
+
 #ifdef HAVE_LCD_COLOR
     int mcu_hscale = p_jpeg->h_scale[1];
     int mcu_vscale = p_jpeg->v_scale[1];
@@ -2008,6 +2013,7 @@ block_end:
     p_jpeg->part.len = width;
     p_jpeg->part.buf = (jpeg_pix_t *)p_jpeg->out_ptr;
     p_jpeg->out_ptr += b_width;
+
     return &(p_jpeg->part);
 }
 
@@ -2036,7 +2042,7 @@ int clip_jpeg_file(const char* filename,
         return fd * 10 - 1;
     }
     lseek(fd, offset, SEEK_SET);
-    ret = clip_jpeg_fd(fd, 0, jpeg_size, bm, maxsize, format, cformat);
+    ret = clip_jpeg_fd(fd, 0, jpeg_size, bm, maxsize, format, cformat, NULL);
     close(fd);
     return ret;
 }
@@ -2089,9 +2095,10 @@ int clip_jpeg_fd(int fd, int flags,
 #endif
                  unsigned long len,
                  struct bitmap *bm,
-                 int maxsize,
+                 int maxsize,   
                  int format,
-                 const struct custom_format *cformat)
+                 const struct custom_format *cformat,
+                 bool (*cb_progress)(int current, int total))
 {
     bool resize = false, dither = false;
     struct rowset rset;
@@ -2301,12 +2308,16 @@ int clip_jpeg_fd(int fd, int flags,
     rset.rowstop = bm->height;
     rset.rowstep = 1;
     p_jpeg->resize = resize;
+    void* jpeg_args[] = {p_jpeg, cb_progress};
+    p_jpeg->set_rows = bm->height;
+    p_jpeg->cur_row = 0;
     if (resize)
     {
         if (resize_on_load(bm, dither, &src_dim, &rset, buf_start, maxsize,
             cformat, IF_PIX_FMT(p_jpeg->blocks == 1 ? 0 : 1,) store_row_jpeg,
-            p_jpeg))
+            jpeg_args))
             return bm_size;
+        return -1;
     } else {
         int row;
         struct scaler_context ctx = {
@@ -2326,7 +2337,10 @@ int clip_jpeg_fd(int fd, int flags,
         struct img_part *part;
         for (row = 0; row < bm->height; row++)
         {
-            part = store_row_jpeg(p_jpeg);
+            part = store_row_jpeg(jpeg_args);
+            if (part == NULL)
+                return -1;
+
 #ifdef HAVE_LCD_COLOR
             if (p_jpeg->blocks > 1)
             {
@@ -2358,9 +2372,10 @@ int read_jpeg_fd(int fd, int flags,
                  struct bitmap *bm,
                  int maxsize,
                  int format,
-                 const struct custom_format *cformat)
+                 const struct custom_format *cformat,
+                 bool (*cb_progress)(int current, int total))
 {
-    return clip_jpeg_fd(fd, flags, 0, bm, maxsize, format, cformat);
+    return clip_jpeg_fd(fd, flags, 0, bm, maxsize, format, cformat, cb_progress);
 }
 #endif
 
@@ -2376,3 +2391,4 @@ const size_t JPEG_DECODE_OVERHEAD =
     ;
 
 /**************** end JPEG code ********************/
+

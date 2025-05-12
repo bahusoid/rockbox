@@ -958,7 +958,8 @@ struct plugin_api {
     int (*read_jpeg_file)(const char* filename, struct bitmap *bm, int maxsize,
                           int format, const struct custom_format *cformat);
     int (*read_jpeg_fd)(int fd, int flags, struct bitmap *bm, int maxsize,
-                        int format, const struct custom_format *cformat);
+                        int format, const struct custom_format *cformat,
+                        bool (*cb_progress)(int current, int total));
 #endif
     void (*screen_dump_set_hook)(void (*hook)(int fh));
 
@@ -1048,5 +1049,6 @@ enum plugin_status plugin__start(const void* parameter)
 
 #endif /* __PCTOOL__ */
 #endif
+
 
 
