@@ -152,6 +152,7 @@ struct codec_api {
     long (*get_command)(intptr_t *param);
     /* Determine whether the track should be looped, if applicable. */
     bool (*loop_track)(void);
+    void (*strip_filesize)(off_t value);
 
     /* kernel/ system */
 #if defined(CPU_ARM) && CONFIG_PLATFORM & PLATFORM_NATIVE
