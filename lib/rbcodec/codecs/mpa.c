@@ -18,7 +18,8 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
-
+#define LOGF_ENABLE
+#include "logf.h"
 #include "codeclib.h"
 #include "libasf/asf.h"
 #include <codecs/libmad/mad.h>
@@ -448,6 +449,11 @@ enum codec_status codec_run(void)
     ci->configure(DSP_SET_FREQUENCY, ci->id3->frequency);
     current_frequency = ci->id3->frequency;
     codec_set_replaygain(ci->id3);
+    if (!ci->id3->is_asf_stream)
+    {
+        // End of file might contain ID3v1 or APE tags. Strip them from decoding
+        ci->strip_filesize(ci->id3->first_frame_offset + ci->id3->filesize);
+    }
 
      if (ci->id3->offset) {
 

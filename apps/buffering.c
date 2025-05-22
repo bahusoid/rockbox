@@ -1408,6 +1408,22 @@ ssize_t bufread(int handle_id, size_t size, void *dest)
     return size;
 }
 
+ssize_t bufstripsize(int handle_id, size_t size)
+{
+    struct memory_handle *h = find_handle(handle_id);
+    if (!h || h->filesize < size)
+        return ERR_INVALID_VALUE;
+
+    if (h->end >= h->filesize) {
+        h->filesize = size; 
+        h->end = size;
+        h->widx = ringbuf_sub_empty(h->widx, h->filesize - size);
+    } else {
+        size = ERR_INVALID_VALUE;
+    }
+    return size;
+}
+
 /* Update the "data" pointer to make the handle's data available to the caller.
    Return the length of the available linear data or < 0 for failure (handle
    not found).

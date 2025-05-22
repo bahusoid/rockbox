@@ -35,7 +35,7 @@
 #include "settings.h"
 
 /* Define LOGF_ENABLE to enable logf output in this file */
-/*#define LOGF_ENABLE*/
+#define LOGF_ENABLE
 #include "logf.h"
 
 /* macros to enable logf for queues
@@ -630,6 +630,15 @@ static void NORETURN_ATTR codec_thread(void)
 
 /** --- Miscellaneous external interfaces -- **/
 
+void codec_strip_filesize(size_t size)
+{
+    LOGFQUEUE("codec < Q_CODEC_STRIP_FILESIZE: old %zu  new %zu",ci.filesize, size);
+    if (bufstripsize(ci.audio_hid, size) > 0)
+    {
+        ci.filesize = size;
+    }
+}
+
 /* Initialize playback's codec interface */
 void INIT_ATTR codec_thread_init(void)
 {
@@ -647,6 +656,7 @@ void INIT_ATTR codec_thread_init(void)
     ci.configure        = codec_configure_callback;
     ci.get_command      = codec_get_command_callback;
     ci.loop_track       = codec_loop_track_callback;
+    ci.strip_filesize = codec_strip_filesize;
 
     /* Init threading */
     queue_init(&codec_queue, false);

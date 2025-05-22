@@ -3611,7 +3611,7 @@ static void buffer_event_finished_callback(unsigned short id, void *ev_data)
 
     case TYPE_PACKET_AUDIO:
         /* Strip any useless trailing tags that are left. */
-        strip_tags(hid);
+        //strip_tags(hid);
         /* Fall-through */
     case TYPE_ATOMIC_AUDIO:
         LOGFQUEUE("buffering > audio Q_AUDIO_HANDLE_FINISHED: %d", hid);
