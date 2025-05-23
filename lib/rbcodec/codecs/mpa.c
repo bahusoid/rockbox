@@ -82,7 +82,18 @@ static inline unsigned char *get_stream_data(size_t *realsize, size_t reqsize)
     static int errcount = 0;
     size_t datasize = stream_data_end - stream_data_start;
     if (!ci->id3->is_asf_stream)
-        return ci->request_buffer(realsize, reqsize);
+    {
+        unsigned char *request_buffer = ci->request_buffer(realsize, reqsize);
+        if (*realsize > 0)
+        {
+            unsigned long audio_stream_size = ci->id3->first_frame_offset + ci->id3->filesize;
+            size_t file_pos = ci->curpos + *realsize;
+            // ID3V1/APE tags can be placed at the end of file. Strip them from decoding.
+            if (file_pos >= audio_stream_size)
+                *realsize -= file_pos - audio_stream_size;
+        }
+        return request_buffer;
+    }
     else if (datasize < INPUT_CHUNK_SIZE / 2)
     {
         if (stream_data_start < stream_data_end && stream_data_start > stream_buffer)
@@ -640,3 +651,4 @@ enum codec_status codec_run(void)
 
     return CODEC_OK;
 }
+    
