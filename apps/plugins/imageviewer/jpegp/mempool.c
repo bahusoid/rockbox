@@ -14,6 +14,7 @@ extern void *malloc(size_t size)
     unsigned char* ptr = mem_pool;
 
     mem_pool+= size;
+    printf("malloc: %zu bytes, remaining memory: %zu bytes\n", size, memory_size);
     return ptr;
 }
 
@@ -40,6 +41,7 @@ extern void init_mem_pool(const unsigned char *buf, const ssize_t buf_size)
 extern ssize_t freeze_mem_pool(void)
 {
     mem_pool_start = mem_pool;
+    printf("freeze_mem_pool: memory frozen, available: %zu bytes\n", memory_size);
     return memory_size;
 }
 
@@ -47,4 +49,5 @@ extern void clear_mem_pool(void)
 {
     memory_size += mem_pool - mem_pool_start;
     mem_pool = mem_pool_start;
+    printf("clear_mem_pool: memory reset, available: %zu bytes\n", memory_size);
 }

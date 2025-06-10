@@ -43,7 +43,7 @@ jpeg81.c
 #include "GETC.h"
 #include "rb_glue.h"
 #include "jpeg81.h"
-
+#include "mempool.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 ///////////////////////////////////////// LOSSLESS /////////////////////////////////////////
@@ -144,7 +144,15 @@ static int ReadDiff(struct JPEGD *j, int s)	// JPEG magnitude stuff. One way to 
 static int ReadHuffmanCode(struct JPEGD *j, int *pb)	// index into the sym-table
 {
 	int v= GetBit(j);
-	while ( v >= *pb ) v= 2*v + GetBit(j) - *pb++;
+	int *pb_start = pb;  // Keep track of the starting position
+	while ( v >= *pb ) {
+		// Bounds check: HTB arrays have 16 elements (0-15)
+		if (pb - pb_start >= 15) {
+			// Prevent buffer overflow - return error code or safe value
+			return -1;  // Error code indicating invalid Huffman code
+		}
+		v= 2*v + GetBit(j) - *pb++;
+	}
 	return v;
 }	
 
@@ -155,7 +163,13 @@ static void dc_succ_huff(struct JPEGD *j, struct COMP *sc, TCOEF *coef)
 
 static void dc_decode_huff(struct JPEGD *j, struct COMP *sc, TCOEF *coef)
 {
-	int s= sc->DCS[ReadHuffmanCode(j, sc->DCB)];
+	int idx = ReadHuffmanCode(j, sc->DCB);
+	if (idx < 0) {
+		// Error in Huffman decoding - return without processing
+		*coef = sc->DC;  // Use last valid DC value
+		return;
+	}
+	int s= sc->DCS[idx];
 	if (s) sc->DC+= ReadDiff(j, s);
 	*coef= sc->DC;
 }
@@ -165,7 +179,12 @@ static void ac_decode_huff(struct JPEGD *j, struct COMP *sc, TCOEF *coef)
 	int k= j->Ss;
 	if (0==sc->EOBRUN) {
 		for (; ;k++) {
-			int s= sc->ACS[ReadHuffmanCode(j, sc->ACB)];
+			int idx = ReadHuffmanCode(j, sc->ACB);
+			if (idx < 0) {
+				// Error in Huffman decoding - exit loop
+				return;
+			}
+			int s= sc->ACS[idx];
 			int r= s>>4;
 			if ( s&=15 ) s= ReadDiff(j, s);
 			else {
@@ -175,6 +194,7 @@ static void ac_decode_huff(struct JPEGD *j, struct COMP *sc, TCOEF *coef)
 				}//else ZRL
 			}
 			k+=r; 
+			if (k >= 64) return; // Bounds check: prevent buffer overflow
 			coef[k]= s;
 			if (k==j->Se) return;
 		}
@@ -193,7 +213,12 @@ static void ac_succ_huff(struct JPEGD *j, struct COMP *sc, TCOEF *coef)
 	int k= j->Ss;
 	if (0==sc->EOBRUN) {
 		for (; ;k++) {
-			int s= sc->ACS[ReadHuffmanCode(j, sc->ACB)];
+			int idx = ReadHuffmanCode(j, sc->ACB);
+			if (idx < 0) {
+				// Error in Huffman decoding - exit loop
+				return;
+			}
+			int s= sc->ACS[idx];
 			int r= s>>4;
 			if ( s&=15 ) s= GetBit(j)? j->Al2 : -j->Al2;  
 			else {
@@ -202,21 +227,36 @@ static void ac_succ_huff(struct JPEGD *j, struct COMP *sc, TCOEF *coef)
 					break;				
 				}//else ZRL
 			}
-			for (; ;k++) if (!ac_refine(j, coef+k)) if (!r--) break;
+			for (; ;k++) {
+				if (k >= 64) return; // Bounds check: prevent buffer overflow
+				if (!ac_refine(j, coef+k)) if (!r--) break;
+			}
+			if (k >= 64) return; // Bounds check: prevent buffer overflow
 			coef[k]= s;
 			if (k==j->Se) return;
 		}
 	}
 	else sc->EOBRUN--; 
-	for (; k<=j->Se; k++) ac_refine(j, coef+k); // Refine EOBRUN
+	for (; k<=j->Se; k++) {
+		if (k >= 64) break; // Bounds check: prevent buffer overflow
+		ac_refine(j, coef+k); // Refine EOBRUN
+	}
 }
 
 static void du_sequential_huff(struct JPEGD *j, struct COMP *sc, TCOEF *coef) 
 {
 	int s, k;
 	dc_decode_huff(j, sc, coef);
-	for (k=1; (s=sc->ACS[ReadHuffmanCode(j, sc->ACB)]); k++) { // EOB?
+	for (k=1; ; k++) {
+		int idx = ReadHuffmanCode(j, sc->ACB);
+		if (idx < 0) {
+			// Error in Huffman decoding - exit loop
+			return;
+		}
+		s = sc->ACS[idx];
+		if (s == 0) break; // EOB?
 		k+= s>>4;
+		if (k >= 64) return; // Bounds check: prevent buffer overflow
 		if (s==0xf0) continue; // ZRL
 		coef[k]= ReadDiff(j, s&15);
 		if (k==63) return;
@@ -225,7 +265,13 @@ static void du_sequential_huff(struct JPEGD *j, struct COMP *sc, TCOEF *coef)
 
 static void decode_lossless_huff(struct JPEGD *j, struct COMP *sc, int x, int y, TSAMP *samp)	//	TODO: Pt
 {
-	int DIFF= sc->DCS[ReadHuffmanCode(j, sc->DCB)];
+	int idx = ReadHuffmanCode(j, sc->DCB);
+	if (idx < 0) {
+		// Error in Huffman decoding - use prediction value only
+		*samp = Predx(j, sc, x, y, samp);
+		return;
+	}
+	int DIFF= sc->DCS[idx];
 	*samp= Predx(j, sc, x, y, samp);
 	if (DIFF) *samp+= (DIFF==16)? 32768 : ReadDiff(j, DIFF);
 }
@@ -408,13 +454,18 @@ static void ac_band(struct JPEGD *j, struct COMP *sc, TCOEF *coef, int k)		// NB
 	while ( !DecodeBin(j, sc->ACST+k) )			//	EOB?
 	{
 		int V, sign;
-		while ( !DecodeBin(j, sc->ACST+k+63) ) k++;	// S0
+		while ( !DecodeBin(j, sc->ACST+k+63) ) {
+			k++;
+			if (k >= 64) return; // Bounds check: prevent buffer overflow
+		}
 		sign= DecodeFIX(j);
 		V= Decode_V(j, sc->ACST, k+126, k+126, (k>sc->Kx)? (217+1) : (189+1) );
 		if (sign) V = -V;
+		if (k >= 64) return; // Bounds check: prevent buffer overflow
 		coef[k]= V << j->Al;
 		if (k==j->Se) return;
 		k++;
+		if (k >= 64) return; // Bounds check: prevent buffer overflow
 	}
 }
 
@@ -443,6 +494,7 @@ static void ac_succ_arith(struct JPEGD *j, struct COMP *sc, TCOEF *coef)
 
 	for (; k <= EOBx; k++)
 	{
+		if (k >= 64) break; // Bounds check: prevent buffer overflow
 		if ( coef[k]) 
 		{	 
 			if (DecodeBin(j, sc->ACST+k+126)) coef[k] += (coef[k] > 0)? j->Al2 : -j->Al2;	// SC: correction bit?
@@ -455,7 +507,12 @@ static void ac_succ_arith(struct JPEGD *j, struct COMP *sc, TCOEF *coef)
 
 	for (; k <= j->Se && !DecodeBin(j, sc->ACST+k); k++)	// SE: EOB?
 	{
-		while (!DecodeBin(j, sc->ACST+k+63)) k++;
+		if (k >= 64) break; // Bounds check: prevent buffer overflow
+		while (!DecodeBin(j, sc->ACST+k+63)) {
+			k++;
+			if (k >= 64) return; // Bounds check: prevent buffer overflow
+		}
+		if (k >= 64) break; // Bounds check: prevent buffer overflow
 		coef[k]= DecodeFIX(j)? -j->Al2 : j->Al2;
 	}
 }
@@ -514,8 +571,14 @@ static void DecodeInterleaved_DCT(struct JPEGD *j)
 		for (c=0; c < j->Ns; c++) 
 		{
 			struct COMP *C= j->ScanComponents[c];
+
 			DU *du= C->du +  mcuy * C->du_width * C->Vi + mcux * C->Hi;
-			for (y=0; y<C->Vi; y++) for (x=0; x<C->Hi; x++) j->DecodeDataUnit(j, C, du[ C->du_width * y + x ]);	// Huff/arith
+			
+			for (y=0; y<C->Vi; y++) {
+				for (x=0; x<C->Hi; x++) {
+					j->DecodeDataUnit(j, C, &du[C->du_width * y + x][0]);	// Huff/arith
+				}
+			}
 		}
 
 		if (++n==j->mcu_total) return;	// We count MCU-s. No RST after the last 
@@ -530,7 +593,8 @@ static void DecodeSingle_DCT(struct JPEGD *j)
 
 	for (;;) 
 	{
-		j->DecodeDataUnit(j, C, C->du[ (n / C->du_w) * C->du_width +  n % C->du_w ]);	// Huff/arith
+		j->DecodeDataUnit(j, C, &C->du[n][0]);	// Huff/arith
+		
 		if ( ++n == C->du_size ) return;	// We count DU-s. No RST after the last 
 		Ri(j, n);
 	}
@@ -676,11 +740,21 @@ static int set_dim(struct JPEGD *j, int d)		// d= 1 (LL) or 8 (DCT)
 }
 
 
-extern enum JPEGENUM JPEGDecode(struct JPEGD *j)
+// Separate header parsing function - parses headers without allocating memory
+extern enum JPEGENUM JPEGParseHeaders(struct JPEGD *j)
 {
 	int marker, i;
 
 	j->jpeg_mem= 0;
+	
+	// Initialize streaming state
+	j->stream_state.streaming_mode = 0;
+	j->stream_state.chunk_callback = NULL;
+	j->stream_state.user_data = NULL;
+	j->stream_state.current_mcu_row = 0;
+	j->stream_state.chunk_buffer = NULL;
+	j->stream_state.chunk_buffer_size = 0;
+	
 	marker = NextMarker(j);
 	if ( marker != 0xD8 ) return JPEGENUMERR_MISSING_SOI;
 	printf("SOI\n");
@@ -800,45 +874,31 @@ extern enum JPEGENUM JPEGDecode(struct JPEGD *j)
 					j->Byte_in= Byte_in_huff;
 				}
 
-				// malloc sample storage 
-				{
-					TSAMP *samp;
-					int mallocTotalCoef= sizeof(TSAMP) * TotalDU;
-					j->jpeg_mem= calloc(mallocTotalCoef, 1);
-					if ( 0 == j->jpeg_mem ) return JPEGENUMERR_MALLOC;
-					samp= j->jpeg_mem;
-					for (i=0; i<j->Nf; i++) 
-					{
-						struct COMP *C= j->Components + i;
-						C->samp= samp;
-						samp+= C->du_total;
-						C->diffAbove= samp - C->du_width;	// 1 line DIFF-BUFFER for Arith
-					}
-				}
+				// For headers parsing - don't allocate memory yet, just determine parameters
+				// malloc sample storage will be done later in JPEGDecodeImage
 			}
 			else // DCT-mode
 			{
-				int TotalDU= set_dim(j, 8);		// for malloc in DU;
+				int TotalDU= set_dim(j, 8);		// Calculate dimensions for DCT mode
 
 				printf("  %d MCU (%d x %d)\n", j->mcu_total, j->mcu_width, j->mcu_height);				
 
-				// malloc DU-s
-				{
-					DU *du;
+				// Check if we should use streaming mode
+				int use_streaming = jpeg_should_use_streaming(j);
+				
+				if (use_streaming) {
 					int mallocTotalCoef= sizeof(DU) * TotalDU;
-					j->jpeg_mem= calloc(mallocTotalCoef, 1);
-					if ( 0 == j->jpeg_mem ) return JPEGENUMERR_MALLOC;
-					du= j->jpeg_mem;
-					for (i=0; i<j->Nf; i++) 
-					{
-						struct COMP *C= j->Components + i;
-						C->du= du;
-						du+= C->du_total;
-					}
+					printf("  Large image detected - streaming mode available\n");
+					printf("  (memory requirement %d bytes > %d threshold)\n", 
+						   mallocTotalCoef, JPEG_MIN_MEMORY_THRESHOLD);
+					
+					// Mark that streaming mode is available but don't allocate memory yet
+					j->stream_state.streaming_mode = 0; // Will be set to 1 later when callback is set
+				} else {
+					printf("  Traditional mode will be used\n");
 				}
 
-				printf("  Malloc for %d Data Units (%lu bytes)\n\n", TotalDU, sizeof(DU)*TotalDU);
-
+				// Set decoder functions based on compression type
 				if (j->SOF > 0xC8) {	// DCT Arithmetic
 					j->Reset_decoder= Reset_decoder_arith;
 					j->Byte_in= Byte_in_arith;
@@ -849,105 +909,10 @@ extern enum JPEGENUM JPEGDecode(struct JPEGD *j)
 				}
 			}
 		}
-		/*else if ( (marker & 0xf8) == 0xD0 )		// RSTn D0..D7
-		{
-			printf("RST%d\n", marker&7);
-			printf("%08X: ....\n", TELL());
-		}*/
 		else if ( marker == 0xD9 ) // EOI
 		{
 			printf("EOI\n");
 			return JPEGENUM_OK;	
-		}
-		else if ( marker == 0xDA )	// SOS
-		{
-			int ci;
-			GETWbi();	//Ls
-			printf("SOS\n");
-			j->Ns= GETC();//Ns
-			printf("  Ns: %d (%s scan)\n", j->Ns, (j->Ns>1)?"Interleaved":"Single");
-
-			for (ci=0; ci<j->Ns; ci++) 
-			{
-				struct COMP *sc;
-				int Cs= GETC();		// Cs -> Cid (Scan component selector)
-				int T= GETC();
-				int Td= T>>4;
-				int Ta= T&15;
-				printf("    Cs=%d Td=%d Ta=%d\n", Cs, Td, Ta);
-
-				{// safe search
-					for ( i=0; i<4 && j->Components[i].Ci != Cs; i++ ) ;
-					if ( 4 == i ) return JPEGENUMERR_COMPNOTFOUND;
-					j->ScanComponents[ci]= sc= j->Components+i;
-				}
-
-				if (j->SOF > 0xC8) 	// arithmetic
-				{
-					sc->U= j->U[Td];
-					sc->L= j->L[Td];
-					sc->Kx= j->Kx[Ta];
-					
-					if ((j->SOF&3)==3) sc->LLST= j->ACST[Td];	// LOSSLESS: ACST re-used to save storage (lossles stat. area little less than AC, but more than DC)
-					else {
-						sc->ACST= j->ACST[Ta]-1;	// DCT. Modified for speed: use 'k' to index the 63 increments for S0, SN,SP...
-						sc->DCST= j->DCST[Td];
-					}
-				}
-				else {	// Huffman
-					sc->ACB= j->HTB[1][Ta];
-					sc->ACS= j->HTS[1][Ta];
-					sc->DCB= j->HTB[0][Td];
-					sc->DCS= j->HTS[0][Td];
-				}
-			}
-
-			j->Ss= GETC();//Ss (DCT) or Px (LL)
-			j->Se= GETC();//Se
-			j->Al= GETC();//AhAl
-			j->Ah= j->Al>>4;
-			j->Al&= 15;
-			j->Al2= 1<<j->Al;//pre-computed
-
-			printf("  %s: %d\n", ((j->SOF&3)==3)?"Px":"Ss", j->Ss);
-			printf("  Se: %d\n", j->Se);
-			printf("  Ah: %d\n", j->Ah);
-			printf("  %s: %d\n", ((j->SOF&3)==3)?"Pt":"Al", j->Al);
-
-			printf("%08X: ECS\n", TELL());	// Entropy-Coded Segment 
-
-			j->Reset_decoder(j);	// arithmetic/huffman/lossless
-
-			if ((j->SOF&3)==3) // LOSSLESS
-			{
-        		if (j->Ns>1) 
-				{
-					DecodeInterleaved_LL(j);
-				}
-				else 
-				{
-					DecodeSingle_LL(j);
-				}
-			}
-			else {	// DCT-type
-
-				if (j->SOF > 0xC8) 	// arithmetic:
-				{
-					j->DecodeDataUnit= j->Ss? (j->Ah? ac_succ_arith : ac_decode_arith) : (j->Se? du_sequential_arith : (j->Ah? dc_succ_arith : dc_decode_arith));
-				}
-				else {	
-					j->DecodeDataUnit= j->Ss? (j->Ah? ac_succ_huff : ac_decode_huff) : (j->Se? du_sequential_huff : (j->Ah? dc_succ_huff : dc_decode_huff));
-				}
-				
-        		if (j->Ns>1) 
-				{
-					DecodeInterleaved_DCT(j);
-				}
-				else 
-				{  
-					DecodeSingle_DCT(j);
-				}
-			}
 		}
 		else if ( marker == 0xDB )	// DQT
 		{
@@ -992,6 +957,13 @@ extern enum JPEGENUM JPEGDecode(struct JPEGD *j)
 			SEEK(GETWbi()-2);
 			printf("COM\n");
 		}
+		else if ( marker == 0xDA )	// SOS - Start of Scan (stop here for header parsing)
+		{
+			// We've reached the start of scan - headers are complete
+			// Seek back to the beginning of the SOS marker for later processing
+			SEEK(-2);
+			return JPEGENUM_HEADERS_PARSED;
+		}
 		else 
 		{
 			printf("???\n");
@@ -999,4 +971,504 @@ extern enum JPEGENUM JPEGDecode(struct JPEGD *j)
 	}
 }
 
+// Separate image decoding function - handles SOS and image data
+extern enum JPEGENUM JPEGDecodeImage(struct JPEGD *j)
+{
+	int marker, i;
+	
+	// Verify that headers have been parsed
+	if (!j->SOF) {
+		return JPEGENUMERR_NO_HEADERS;
+	}
+	
+	// Continue from where header parsing left off - expect SOS marker
+	marker = NextMarker(j);
+	if ( marker != 0xDA ) {
+		return JPEGENUMERR_MISSING_SOS;
+	}
+	
+	// Handle Start of Scan (SOS) and image decoding
+	{
+		int ci;
+		GETWbi();	//Ls
+		printf("SOS\n");
+		j->Ns= GETC();//Ns
+		printf("  Ns: %d (%s scan)\n", j->Ns, (j->Ns>1)?"Interleaved":"Single");
+
+		for (ci=0; ci<j->Ns; ci++) 
+		{
+			struct COMP *sc;
+			int Cs= GETC();		// Cs -> Cid (Scan component selector)
+			int T= GETC();
+			int Td= T>>4;
+			int Ta= T&15;
+			printf("    Cs=%d Td=%d Ta=%d\n", Cs, Td, Ta);
+
+			{// safe search
+				for ( i=0; i<4 && j->Components[i].Ci != Cs; i++ ) ;
+				if ( 4 == i ) return JPEGENUMERR_COMPNOTFOUND;
+				j->ScanComponents[ci]= sc= j->Components+i;
+			}
+
+			if (j->SOF > 0xC8) 	// arithmetic
+			{
+				sc->U= j->U[Td];
+				sc->L= j->L[Td];
+				sc->Kx= j->Kx[Ta];
+				
+				if ((j->SOF&3)==3) sc->LLST= j->ACST[Td];	// LOSSLESS: ACST re-used to save storage (lossles stat. area little less than AC, but more than DC)
+				else {
+					sc->ACST= j->ACST[Ta]-1;	// DCT. Modified for speed: use 'k' to index the 63 increments for S0, SN,SP...
+					sc->DCST= j->DCST[Td];
+				}
+			}
+			else {	// Huffman
+				sc->ACB= j->HTB[1][Ta];
+				sc->ACS= j->HTS[1][Ta];
+				sc->DCB= j->HTB[0][Td];
+				sc->DCS= j->HTS[0][Td];
+			}
+		}
+
+		j->Ss= GETC();//Ss (DCT) or Px (LL)
+		j->Se= GETC();//Se
+		j->Al= GETC();//AhAl
+		j->Ah= j->Al>>4;
+		j->Al&= 15;
+		j->Al2= 1<<j->Al;//pre-computed
+
+		printf("  %s: %d\n", ((j->SOF&3)==3)?"Px":"Ss", j->Ss);
+		printf("  Se: %d\n", j->Se);
+		printf("  Ah: %d\n", j->Ah);
+		printf("  %s: %d\n", ((j->SOF&3)==3)?"Pt":"Al", j->Al);
+
+		printf("%08X: ECS\n", TELL());	// Entropy-Coded Segment 
+
+		// Now handle memory allocation based on mode
+		if ((j->SOF&3)==3) // LOSSLESS-mode
+		{
+			// Allocate memory for lossless mode
+			int TotalDU= 0;
+			for (i=0; i<j->Nf; i++) {
+				struct COMP *C= j->Components + i;
+				TotalDU += C->du_total;
+			}
+			
+			if (j->SOF > 0xC8) {	// arithmetic:
+				// Arithmetic: need a line to store DIFF
+				for (i=0; i<j->Nf; i++) 
+				{
+					struct COMP *C= j->Components + i;
+					C->du_total += C->du_width;
+					TotalDU+= C->du_width;
+				}
+			}
+			
+			// malloc sample storage 
+			{
+				TSAMP *samp;
+				int mallocTotalCoef= sizeof(TSAMP) * TotalDU;
+				j->jpeg_mem= calloc(mallocTotalCoef, 1);
+				if ( 0 == j->jpeg_mem ) return JPEGENUMERR_MALLOC;
+				samp= j->jpeg_mem;
+				for (i=0; i<j->Nf; i++) 
+				{
+					struct COMP *C= j->Components + i;
+					C->samp= samp;
+					samp+= C->du_total;
+					C->diffAbove= samp - C->du_width;	// 1 line DIFF-BUFFER for Arith
+				}
+			}
+		}
+		else // DCT-mode
+		{
+			int TotalDU= 0;
+			for (i=0; i<j->Nf; i++) {
+				struct COMP *C= j->Components + i;
+				TotalDU += C->du_total;
+			}
+			
+			// Check if streaming mode is enabled and has callback
+			if (j->stream_state.streaming_mode && j->stream_state.chunk_callback) {
+				printf("  Using streaming mode for memory allocation and decoding\n");
+				
+				// Streaming mode - allocate chunk buffer instead of full image
+				int chunk_size = JPEG_MAX_MCU_ROWS_PER_CHUNK * j->mcu_width;
+				int chunk_dus = 0;
+				for (i=0; i<j->Nf; i++) {
+					struct COMP *C= j->Components + i;
+					chunk_dus += chunk_size * C->Hi * C->Vi;
+				}
+				
+				int mallocChunkCoef = sizeof(DU) * chunk_dus;
+				j->stream_state.chunk_buffer = calloc(mallocChunkCoef, 1);
+				if (!j->stream_state.chunk_buffer) return JPEGENUMERR_MALLOC;
+				j->stream_state.chunk_buffer_size = mallocChunkCoef;
+				
+				printf("  Allocated streaming chunk buffer: %d bytes for %d DUs\n", 
+					   mallocChunkCoef, chunk_dus);
+			} else {
+				printf("  Using traditional mode for memory allocation\n");
+				
+				// Traditional mode - allocate full image
+				DU *du;
+				int mallocTotalCoef= sizeof(DU) * TotalDU;
+				
+				j->jpeg_mem= calloc(mallocTotalCoef, 1);
+				if ( 0 == j->jpeg_mem ) return JPEGENUMERR_MALLOC;
+				du= j->jpeg_mem;
+				for (i=0; i<j->Nf; i++) 
+				{
+					struct COMP *C= j->Components + i;
+					C->du= du;
+					du+= C->du_total;
+				}
+
+				printf("  Malloc for %d Data Units (%lu bytes)\n\n", TotalDU, sizeof(DU)*TotalDU);
+			}
+		}
+
+		j->Reset_decoder(j);	// arithmetic/huffman/lossless
+
+		if ((j->SOF&3)==3) // LOSSLESS
+		{
+			if (j->Ns>1) 
+			{
+				DecodeInterleaved_LL(j);
+			}
+			else 
+			{
+				DecodeSingle_LL(j);
+			}
+		}
+		else {	// DCT-type
+
+			if (j->SOF > 0xC8) 	// arithmetic:
+			{
+				j->DecodeDataUnit= j->Ss? (j->Ah? ac_succ_arith : ac_decode_arith) : (j->Se? du_sequential_arith : (j->Ah? dc_succ_arith : dc_decode_arith));
+			}
+			else {	
+				j->DecodeDataUnit= j->Ss? (j->Ah? ac_succ_huff : ac_decode_huff) : (j->Se? du_sequential_huff : (j->Ah? dc_succ_huff : dc_decode_huff));
+			}
+			
+			// Check if streaming mode is active and properly initialized
+			if (j->stream_state.streaming_mode && j->stream_state.chunk_callback) {
+				printf("  Using streaming mode for decoding\n");
+				return jpeg_decode_streaming(j);
+			} else {
+				printf("  Using traditional mode for decoding\n");
+				
+				// Use traditional decode functions
+				if (j->Ns>1) 
+				{
+					DecodeInterleaved_DCT(j);
+				}
+				else 
+				{  
+					DecodeSingle_DCT(j);
+				}
+			}
+		}
+	}
+	
+	// Check for EOI marker
+	marker = NextMarker(j);
+	if ( marker == 0xD9 ) {
+		printf("EOI\n");
+		return JPEGENUM_OK;
+	}
+	
+	return JPEGENUMERR_MISSING_EOI;
+}
+
+// Legacy function for backward compatibility - now uses the separated functions
+extern enum JPEGENUM JPEGDecode(struct JPEGD *j)
+{
+	enum JPEGENUM result;
+	
+	// First parse headers
+	result = JPEGParseHeaders(j);
+	if (result != JPEGENUM_HEADERS_PARSED) {
+		return result;
+	}
+	
+	// Then decode the image
+	return JPEGDecodeImage(j);
+}
+
 #pragma GCC diagnostic pop
+
+// Streaming mode implementation
+int jpeg_should_use_streaming(struct JPEGD *j)
+{
+#if JPEG_STREAMING_ENABLED
+    if (!j) return 0;
+    
+    // Calculate total memory that would be needed for full image
+    int total_memory = 0;
+    int i;
+    for (i = 0; i < j->Nf; i++) {
+        struct COMP *C = j->Components + i;
+        total_memory += sizeof(DU) * C->du_total;
+    }
+    
+    // Enable streaming if memory requirement exceeds threshold
+    return (total_memory > JPEG_MIN_MEMORY_THRESHOLD);
+#else
+    return 0;
+#endif
+}
+
+int jpeg_init_streaming(struct JPEGD *j, 
+                       int (*chunk_callback)(struct JPEGD *j, struct JPEG_STREAM_CHUNK *chunk, void *data),
+                       void *callback_data)
+{
+#if JPEG_STREAMING_ENABLED
+    if (!j || !chunk_callback) return 0;
+    
+    struct JPEG_STREAM_STATE *stream = &j->stream_state;
+    
+    // Initialize streaming state
+    stream->streaming_mode = 1;
+    stream->chunk_callback = chunk_callback;
+    stream->user_data = callback_data;
+    stream->current_chunk = 0;
+    
+    // Calculate total memory needed and chunk size
+    stream->total_memory_needed = 0;
+    int i;
+    for (i = 0; i < j->Nf; i++) {
+        struct COMP *C = j->Components + i;
+        stream->total_memory_needed += sizeof(DU) * C->du_total;
+    }
+    
+    // Calculate optimal number of MCU rows per chunk
+    int mcu_rows_per_chunk = JPEG_MAX_MCU_ROWS_PER_CHUNK;
+    
+    // Adjust chunk size based on available memory
+    int chunk_du_count = 0;
+    for (i = 0; i < j->Nf; i++) {
+        struct COMP *C = j->Components + i;
+        // Calculate DUs per MCU row for this component
+        int dus_per_mcu_row = C->du_width * C->Vi;
+        chunk_du_count += dus_per_mcu_row * mcu_rows_per_chunk;
+    }
+    
+    stream->chunk_memory_size = sizeof(DU) * chunk_du_count;
+    
+    // Calculate total number of chunks needed
+    stream->total_chunks = (j->mcu_height + mcu_rows_per_chunk - 1) / mcu_rows_per_chunk;
+    
+    // Initialize chunks
+    int chunk_idx;
+    int remaining_mcu_rows = j->mcu_height;
+    int current_mcu_row = 0;
+    
+    for (chunk_idx = 0; chunk_idx < stream->total_chunks; chunk_idx++) {
+        struct JPEG_STREAM_CHUNK *chunk = &stream->chunks[chunk_idx];
+        
+        chunk->start_mcu_row = current_mcu_row;
+        chunk->num_mcu_rows = (remaining_mcu_rows > mcu_rows_per_chunk) ? 
+                              mcu_rows_per_chunk : remaining_mcu_rows;
+        
+        chunk->start_y = current_mcu_row * j->Vmax * 8;
+        chunk->chunk_height = chunk->num_mcu_rows * j->Vmax * 8;
+        
+        // Ensure we don't exceed image height
+        if (chunk->start_y + chunk->chunk_height > j->Y) {
+            chunk->chunk_height = j->Y - chunk->start_y;
+        }
+        
+        // Calculate DU count for this chunk
+        chunk->chunk_du_count = 0;
+        for (i = 0; i < j->Nf; i++) {
+            struct COMP *C = j->Components + i;
+            int dus_per_mcu_row = C->du_width * C->Vi;
+            chunk->chunk_du_count += dus_per_mcu_row * chunk->num_mcu_rows;
+        }
+        
+        chunk->chunk_data = NULL; // Will be allocated when needed
+        
+        current_mcu_row += chunk->num_mcu_rows;
+        remaining_mcu_rows -= chunk->num_mcu_rows;
+    }
+    
+    printf("Streaming mode initialized: %d chunks, %d bytes per chunk (total would be %d bytes)\n",
+           stream->total_chunks, stream->chunk_memory_size, stream->total_memory_needed);
+    
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+static int jpeg_allocate_chunk_memory(struct JPEGD *j, struct JPEG_STREAM_CHUNK *chunk)
+{
+    if (chunk->chunk_data) {
+        clear_mem_pool();
+    }
+    
+    size_t chunk_size = sizeof(DU) * chunk->chunk_du_count;
+    chunk->chunk_data = calloc(chunk_size, 1);
+    
+    if (!chunk->chunk_data) {
+        printf("Failed to allocate memory for chunk (%zu bytes)\n", chunk_size);
+        return 0;
+    }
+    
+    // Update component pointers to point to this chunk's memory
+    DU *du = (DU *)chunk->chunk_data;
+    int i;
+    for (i = 0; i < j->Nf; i++) {
+        struct COMP *C = j->Components + i;
+        C->du = du;
+        
+        // Calculate DUs for this chunk for this component
+        int dus_per_mcu_row = C->du_width * C->Vi;
+        int dus_this_chunk = dus_per_mcu_row * chunk->num_mcu_rows;
+        
+        du += dus_this_chunk;
+    }
+    
+    return 1;
+}
+
+static void jpeg_free_chunk_memory(struct JPEG_STREAM_CHUNK *chunk)
+{
+    if (chunk->chunk_data) {
+        clear_mem_pool();
+        chunk->chunk_data = NULL;
+    }
+}
+
+enum JPEGENUM jpeg_decode_streaming(struct JPEGD *j)
+{
+#if JPEG_STREAMING_ENABLED
+    if (!j || !j->stream_state.streaming_mode) {
+        return JPEGDecodeImage(j); // Fall back to regular decoding
+    }
+    
+    struct JPEG_STREAM_STATE *stream = &j->stream_state;
+    printf("Starting streaming decode: %d chunks\n", stream->total_chunks);
+    
+    freeze_mem_pool();
+    
+    // The key insight: we can't decode arbitrary MCU ranges from JPEG entropy stream
+    // because the entropy coding is sequential. Instead, we need to decode MCUs
+    // in order but process them in chunks.
+    
+    // We'll decode MCUs incrementally and call the callback for each chunk as we go
+    int mcus_decoded = 0;
+    int current_chunk = 0;
+    
+    while (mcus_decoded < j->mcu_total && current_chunk < stream->total_chunks) {
+        struct JPEG_STREAM_CHUNK *chunk = &stream->chunks[current_chunk];
+        stream->current_chunk = current_chunk;
+        
+        printf("Processing chunk %d/%d (MCU rows %d-%d)\n", 
+               current_chunk + 1, stream->total_chunks,
+               chunk->start_mcu_row, chunk->start_mcu_row + chunk->num_mcu_rows - 1);
+        
+        // Allocate memory for this chunk
+        if (!jpeg_allocate_chunk_memory(j, chunk)) {
+            return JPEGENUMERR_MALLOC;
+        }
+        
+        // Calculate how many MCUs to decode for this chunk
+        int chunk_start_mcu = chunk->start_mcu_row * j->mcu_width;
+        int chunk_num_mcus = chunk->num_mcu_rows * j->mcu_width;
+        
+        // Make sure we don't exceed total MCUs
+        if (chunk_start_mcu + chunk_num_mcus > j->mcu_total) {
+            chunk_num_mcus = j->mcu_total - chunk_start_mcu;
+        }
+        
+        printf("  Decoding MCUs %d to %d for chunk %d\n", 
+               mcus_decoded, mcus_decoded + chunk_num_mcus - 1, current_chunk);
+        
+        // Decode MCUs incrementally for this chunk
+        enum JPEGENUM decode_result = JPEGENUM_OK;
+        int mcus_in_chunk = 0;
+        
+        while (mcus_in_chunk < chunk_num_mcus && mcus_decoded < j->mcu_total) {
+            int mcu_idx = mcus_decoded;
+            int mcuy = mcu_idx / j->mcu_width;
+            int mcux = mcu_idx % j->mcu_width;
+            
+            // Decode this MCU
+            if (j->Ns > 1) {
+                // Interleaved - decode all components for this MCU
+                for (int c = 0; c < j->Ns; c++) {
+                    struct COMP *C = j->ScanComponents[c];
+                    DU *du = C->du + mcuy * C->du_width * C->Vi + mcux * C->Hi;
+                    for (int y = 0; y < C->Vi; y++) {
+                        for (int x = 0; x < C->Hi; x++) {
+                            j->DecodeDataUnit(j, C, &du[C->du_width * y + x][0]);
+                        }
+                    }
+                }
+            } else {
+                // Single component
+                struct COMP *C = j->ScanComponents[0];
+                int du_idx = (mcu_idx / C->du_w) * C->du_width + mcu_idx % C->du_w;
+                j->DecodeDataUnit(j, C, &C->du[du_idx][0]);
+            }
+            
+            mcus_decoded++;
+            mcus_in_chunk++;
+            
+            // Handle restart intervals
+            if (j->Ri && (mcus_decoded % j->Ri == 0) && mcus_decoded < j->mcu_total) {
+                Ri(j, mcus_decoded);
+            }
+        }
+        
+        if (decode_result != JPEGENUM_OK) {
+            printf("MCU decode failed at MCU %d\n", mcus_decoded);
+            jpeg_free_chunk_memory(chunk);
+            return decode_result;
+        }
+        
+        // Call the callback to process this chunk
+        if (stream->chunk_callback) {
+            int callback_result = stream->chunk_callback(j, chunk, stream->user_data);
+            if (callback_result != 0) {
+                printf("Chunk callback failed for chunk %d\n", current_chunk);
+                jpeg_free_chunk_memory(chunk);
+                return JPEGENUMERR_MALLOC; // Use this as generic error
+            }
+        }
+        
+        // Free memory for this chunk
+        jpeg_free_chunk_memory(chunk);
+        current_chunk++;
+    }
+    
+    printf("Streaming decode completed successfully, %d MCUs decoded\n", mcus_decoded);
+    return JPEGENUM_OK;
+#else
+    return JPEGDecodeImage(j);
+#endif
+}
+
+void jpeg_cleanup_streaming(struct JPEGD *j)
+{
+#if JPEG_STREAMING_ENABLED
+    if (!j) return;
+    
+    struct JPEG_STREAM_STATE *stream = &j->stream_state;
+    
+    // Free any allocated chunk memory
+    int i;
+    for (i = 0; i < stream->total_chunks; i++) {
+        jpeg_free_chunk_memory(&stream->chunks[i]);
+    }
+    
+    // Reset streaming state
+    stream->streaming_mode = 0;
+    stream->total_chunks = 0;
+    stream->current_chunk = 0;
+    stream->chunk_callback = NULL;
+    stream->user_data = NULL;
+#endif
+}

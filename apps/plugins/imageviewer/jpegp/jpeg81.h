@@ -19,8 +19,14 @@
 *   SOFTWARE.
 */
 
+// Streaming mode configuration
+#define JPEG_STREAMING_ENABLED 1
+#define JPEG_MAX_MCU_ROWS_PER_CHUNK 8  // Process MCUs in chunks of this many rows
+#define JPEG_MIN_MEMORY_THRESHOLD (512 * 1024)  // 512KB threshold for enabling streaming
+
 enum JPEGENUM {
 	JPEGENUM_OK=1, 
+	JPEGENUM_HEADERS_PARSED=2,      // Headers successfully parsed, ready for image decode
 	JPEGENUMERR_MISSING_SOI = -999,	// file doesnt start with SOI 
 	JPEGENUMERR_UNKNOWN_SOF,		// differential frame?
 	JPEGENUMERR_COMP4,				// more than 4 components in file
@@ -32,6 +38,9 @@ enum JPEGENUM {
 	JPEGENUMERR_MARKERDNL,			// DNL marker found (not supported)
 	JPEGENUMERR_ZEROY,				// Y in SOFn is zero (DNL?)
 	JPEGENUMERR_COMPNOTFOUND,		// Scan component selector (Csj) not found among Component identifiers (Ci)
+	JPEGENUMERR_NO_HEADERS,			// Headers must be parsed before decoding image
+	JPEGENUMERR_MISSING_SOS,		// Expected SOS marker not found
+	JPEGENUMERR_MISSING_EOI,		// Expected EOI marker not found
 };
 
 typedef short TCOEF;	// 16-bit coefficients
@@ -41,6 +50,37 @@ typedef unsigned short TSAMP;	// Lossless 'coefficients' are unsigned
 struct CABACSTATE  {	// borrowed from the AVC decoder
 	int StateIdx;
 	int valMPS;
+};
+
+// Forward declaration
+struct JPEGD;
+
+// Streaming mode structures
+struct JPEG_STREAM_CHUNK {
+    int start_mcu_row;      // Starting MCU row for this chunk
+    int num_mcu_rows;       // Number of MCU rows in this chunk
+    int start_y;            // Starting Y coordinate in pixels
+    int chunk_height;       // Height of this chunk in pixels
+    void *chunk_data;       // Memory for this chunk's data units
+    int chunk_du_count;     // Number of data units in this chunk
+};
+
+struct JPEG_STREAM_STATE {
+    int streaming_mode;         // 1 if streaming mode is active
+    int total_memory_needed;    // Total memory that would be needed for full image
+    int chunk_memory_size;      // Memory size for each chunk
+    int total_chunks;           // Total number of chunks needed
+    int current_chunk;          // Current chunk being processed
+    int current_mcu_row;        // Current MCU row being processed
+    struct JPEG_STREAM_CHUNK chunks[32];  // Support up to 32 chunks
+    
+    // Chunk buffer for streaming mode
+    void *chunk_buffer;         // Memory buffer for current chunk
+    int chunk_buffer_size;      // Size of chunk buffer
+    
+    // Callback function for processing completed chunks
+    int (*chunk_callback)(struct JPEGD *j, struct JPEG_STREAM_CHUNK *chunk, void *user_data);
+    void *user_data;            // User data passed to callback
 };
 
 struct COMP {		// Image Component Info and variables 
@@ -107,6 +147,9 @@ struct JPEGD {		// The JPEG DECODER OBJECT
 	int mcu_height;
 	int mcu_total;	// covers the whole image
 	
+	// Streaming mode support
+	struct JPEG_STREAM_STATE stream_state;
+	
 	int HTB[2][4][16];					// Huffman 'base' values 
 	unsigned char HTS[2][4][256];		// Huffman 'symbol' values
 
@@ -145,3 +188,13 @@ struct JPEGD {		// The JPEG DECODER OBJECT
 };
 
 extern enum JPEGENUM JPEGDecode(struct JPEGD *j);
+extern enum JPEGENUM JPEGParseHeaders(struct JPEGD *j);
+extern enum JPEGENUM JPEGDecodeImage(struct JPEGD *j);
+
+// Streaming mode functions
+extern int jpeg_init_streaming(struct JPEGD *j, 
+                              int (*chunk_callback)(struct JPEGD *j, struct JPEG_STREAM_CHUNK *chunk, void *data),
+                              void *callback_data);
+extern enum JPEGENUM jpeg_decode_streaming(struct JPEGD *j);
+extern int jpeg_should_use_streaming(struct JPEGD *j);
+extern void jpeg_cleanup_streaming(struct JPEGD *j);
