@@ -222,6 +222,7 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
         char_enc = cue_file->encoding;
     }
 
+
     /* Look for a Unicode BOM */
     unsigned char bom_read = 0;
     if (read(fd, line, BOM_UTF_8_SIZE) > 0)
@@ -259,9 +260,9 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
 
     if (is_embedded)
         strcpy(cue->file, cue->path);
-
-    while ((line_len = read_line(fd, line, read_bytes)) > 0
-        && cue->track_count < MAX_TRACKS )
+    char* buffer = cue->buffer;
+    memset(cue->tracks, 0, sizeof(cue->tracks));
+    while ((line_len = read_line(fd, line, read_bytes)) > 0)
     {
         if (char_enc == CHAR_ENC_UTF_16_LE)
         {
@@ -288,6 +289,11 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
         enum eCS_SUPPORTED_TAGS option = cuesheet_tag_get_option(s);
         if (option == eCS_TRACK)
         {
+            if (cue->track_count >= MAX_TRACKS)
+            {
+                logf(HZ * 2, "Too many tracks in cuesheet %s", cue_file->path);
+                break;
+            }
             cue->track_count++;
         }
         else if (option == eCS_INDEX_01)
@@ -317,17 +323,17 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
             {
                 case eCS_TITLE: /* TITLE */
                     dest = (cue->track_count <= 0) ? cue->title :
-                            cue->tracks[cue->track_count-1].title;
+                            (cue->tracks[cue->track_count-1].title = buffer);
                     break;
 
                 case eCS_PERFORMER: /* PERFORMER */
                     dest = (cue->track_count <= 0) ? cue->performer :
-                        cue->tracks[cue->track_count-1].performer;
+                        (cue->tracks[cue->track_count-1].performer = buffer);
                     break;
 
                 case eCS_SONGWRITER: /* SONGWRITER */
                     dest = (cue->track_count <= 0) ? cue->songwriter :
-                            cue->tracks[cue->track_count-1].songwriter;
+                            (cue->tracks[cue->track_count-1].songwriter = buffer);
                     break;
 
                 case eCS_FILE: /* FILE */
@@ -358,15 +364,22 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
                         && *(string + 1) > 127 && *(string + 1) < 192)
                         char_enc = CHAR_ENC_UTF_8;
                 }
+                bool buffer_used = dest == buffer;
                 if (char_enc == CHAR_ENC_ISO_8859_1)
                 {
-                    dest = iso_decode_ex(string, dest, -1,
+                    dest = iso_decode_ex(string, dest , -1,
                         strlen(string), count - 1);
                     *dest = '\0';
+                    if (buffer_used)
+                        buffer = dest + 1;
                 }
                 else
                 {
                     strmemccpy(dest, string, count);
+                    if (buffer_used)
+                    {
+                        buffer+= count;
+                    }
                 }
             }
         }
@@ -379,6 +392,10 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
             if (bytes_left < read_bytes)
                 read_bytes = bytes_left;
         }
+    }
+    if(cue->track_count > MAX_TRACKS)
+    {
+        cue->track_count = MAX_TRACKS;
     }
     close(fd);
 
@@ -396,11 +413,11 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
     int i;
     for (i = 0; i < cue->track_count; i++)
     {
-        if (*(cue->tracks[i].performer) == '\0')
-            strmemccpy(cue->tracks[i].performer, cue->performer, MAX_NAME*3);
+        if (cue->tracks[i].performer == NULL)
+            cue->tracks[i].performer = cue->performer;
 
-        if (*(cue->tracks[i].songwriter) == '\0')
-            strmemccpy(cue->tracks[i].songwriter, cue->songwriter, MAX_NAME*3);
+        if (cue->tracks[i].songwriter == NULL)
+            cue->tracks[i].songwriter =  cue->songwriter;
     }
 
     return true;
@@ -444,7 +461,13 @@ static const char* list_get_name_cb(int selected_item,
     struct cuesheet *cue = (struct cuesheet *)data;
 
     if (selected_item & 1)
-        strmemccpy(buffer, cue->tracks[selected_item/2].title, buffer_len);
+    {
+        char* title = cue->tracks[selected_item/2].title;
+        if(title == NULL)
+            buffer[0] = 0;
+        else
+            strmemccpy(buffer, cue->tracks[selected_item/2].title, buffer_len);
+    }
     else
         snprintf(buffer, buffer_len, "%02d. %s", selected_item/2+1,
                  cue->tracks[selected_item/2].performer);

@@ -28,16 +28,18 @@
 #include "metadata.h"
 
 #define MAX_NAME 80    /* Max length of information strings */
-#define MAX_TRACKS 99  /* Max number of tracks in a cuesheet */
+#define MAX_TRACKS 256  /* Max number of tracks in a cuesheet */
 
 struct cue_track_info {
-    char title[MAX_NAME*3+1];
-    char performer[MAX_NAME*3+1];
-    char songwriter[MAX_NAME*3+1];
+    char* title;
+    char* performer;
+    char* songwriter;
     unsigned long offset; /* ms from start of track */
 };
 
 struct cuesheet {
+    char buffer[64*1024];
+
     char path[MAX_PATH];
     char file[MAX_PATH];
     char title[MAX_NAME*3+1];
@@ -45,10 +47,11 @@ struct cuesheet {
     char songwriter[MAX_NAME*3+1];
 
     int track_count;
+
     struct cue_track_info tracks[MAX_TRACKS];
 
     int curr_track_idx;
-    struct cue_track_info *curr_track;
+    struct cue_track_info* curr_track;
 };
 
 struct cuesheet_file {
