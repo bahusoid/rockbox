@@ -692,7 +692,7 @@ static void track_list_free_buf_info(struct track_buf_info *tbip)
     bufclose(hid);
 }
 
-/* Return current track plus an offset */
+/* Return current track plus an offset */ 
 static bool track_list_current(int offset, struct track_info *infop)
 {
     return !!track_list_get_info_from(track_list.current_hid, offset, infop);
@@ -812,6 +812,8 @@ static void track_list_clear(unsigned int action)
             if (hid == track_list.in_progress_hid)
                 track_list.in_progress_hid = 0;
 
+            // if (tbip->info.cuesheet_hid >= 0 && hid == current_hid)
+            //     id3_get(PLAYING_ID3)->cuesheet = NULL;
             track_list_free_buf_info(tbip);
         }
 
@@ -1860,6 +1862,8 @@ static bool audio_load_cuesheet(struct track_info *infop,
 
             if (hid >= 0)
             {
+                //buf_pin_handle(hid, true);
+
                 void *cuesheet = NULL;
                 bufgetdata(hid, sizeof (struct cuesheet), &cuesheet);
 
