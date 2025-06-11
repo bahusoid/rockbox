@@ -166,42 +166,41 @@ const char *get_cuesheetid3_token(struct wps_token *token, struct mp3entry *id3,
                                   int offset_tracks, char *buf, int buf_size)
 {
     struct cuesheet *cue = id3?id3->cuesheet:NULL;
-    if (!cue || !cue->curr_track)
+    if (!cue)
         return NULL;
 
-    struct cue_track_info *track = cue->curr_track;
-    if (offset_tracks)
-    {
-        if (cue->curr_track_idx+offset_tracks < cue->track_count)
-            track+=offset_tracks;
-        else
-            return NULL;
-    }
+    int index = cue->curr_track_idx+offset_tracks;
+    if(index < 0 || index >= cue->track_count)
+        return NULL;
+
+    struct cue_track_info *track = get_cue_track(cue, index);
     switch (token->type)
     {
         case SKIN_TOKEN_METADATA_ARTIST:
-            return *track->performer ? track->performer : NULL;
+            return get_cue_track_performer(cue, track);
         case SKIN_TOKEN_METADATA_COMPOSER:
-            return *track->songwriter ? track->songwriter : NULL;
+            return get_cue_track_songwriter(cue, track);
+        case SKIN_TOKEN_METADATA_TRACK_TITLE:
+            return get_cue_track_title(cue, track);
+
         case SKIN_TOKEN_METADATA_ALBUM:
             return *cue->title ? cue->title : NULL;
         case SKIN_TOKEN_METADATA_ALBUM_ARTIST:
             return *cue->performer ? cue->performer : NULL;
-        case SKIN_TOKEN_METADATA_TRACK_TITLE:
-            return *track->title ? track->title : NULL;
         case SKIN_TOKEN_PLAYLIST_ENTRIES:
             snprintf(buf, buf_size, "%d", cue->track_count);
             return buf;
         case SKIN_TOKEN_PLAYLIST_POSITION:
-            snprintf(buf, buf_size, "%d", cue->curr_track_idx+offset_tracks+1);
+            snprintf(buf, buf_size, "%d", index+1);
             return buf;
         case SKIN_TOKEN_METADATA_TRACK_NUMBER:
             snprintf(buf, buf_size, "%d/%d",
-                     cue->curr_track_idx+offset_tracks+1, cue->track_count);
+                     index+1, cue->track_count);
             return buf;
         default:
-            return NULL;
+            break;
     }
+
     return NULL;
 }
 
