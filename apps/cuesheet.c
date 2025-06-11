@@ -198,6 +198,9 @@ static enum eCS_SUPPORTED_TAGS cuesheet_tag_get_option(const char *option)
     return eCS_NOTFOUND;
 #undef CS_OPTN
 }
+#define get_track(index) (get_cue_track(cue, index))
+
+#define get_track_buffer(field)  ({field = buffer - cue->buffer; buffer;})
 
 /* parse cuesheet "cue_file" and store the information in "cue" */
 bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
@@ -221,6 +224,7 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
         bytes_left = cue_file->size;
         char_enc = cue_file->encoding;
     }
+
 
     /* Look for a Unicode BOM */
     unsigned char bom_read = 0;
@@ -255,13 +259,15 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
     /* Initialization */
     memset(cue, 0, sizeof(struct cuesheet));
     strcpy(cue->path, cue_file->path);
-    cue->curr_track = cue->tracks;
 
     if (is_embedded)
         strcpy(cue->file, cue->path);
 
-    while ((line_len = read_line(fd, line, read_bytes)) > 0
-        && cue->track_count < MAX_TRACKS )
+    struct cue_track_info* cue_track;
+    char* buffer = cue->buffer;
+    *buffer++ = 0; //make zero index to point to empty string.
+    char* buffer_end  = (char*)get_track(0);
+    while ((line_len = read_line(fd, line, read_bytes)) > 0)
     {
         if (char_enc == CHAR_ENC_UTF_16_LE)
         {
@@ -288,6 +294,13 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
         enum eCS_SUPPORTED_TAGS option = cuesheet_tag_get_option(s);
         if (option == eCS_TRACK)
         {
+            cue_track = get_track(cue->track_count);
+            buffer_end =(char*)cue_track;
+            if (buffer >= buffer_end)
+            {
+                DEBUGF("Too many tracks in cuesheet %s", cue_file->path);
+                break;
+            }
             cue->track_count++;
         }
         else if (option == eCS_INDEX_01)
@@ -297,13 +310,13 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
             s = skip_whitespace(s);
             s = strchr(s,' ');
             s = skip_whitespace(s);
-            cue->tracks[cue->track_count-1].offset = 60*1000 * atoi(s);
+            cue_track->offset = 60*1000 * atoi(s);
             s = strchr(s,':') + 1;
-            cue->tracks[cue->track_count-1].offset += 1000 * atoi(s);
+            cue_track->offset += 1000 * atoi(s);
             s = strchr(s,':') + 1;
-            cue->tracks[cue->track_count-1].offset += 13 * atoi(s);
+            cue_track->offset += 13 * atoi(s);
 #else
-            cue->tracks[cue->track_count-1].offset = parse_cue_index(s);
+            cue_track->offset = parse_cue_index(s);
 #endif
         }
         else if (option != eCS_NOTFOUND) 
@@ -316,18 +329,17 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
             switch (option)
             {
                 case eCS_TITLE: /* TITLE */
-                    dest = (cue->track_count <= 0) ? cue->title :
-                            cue->tracks[cue->track_count-1].title;
+                    dest = (cue->track_count <= 0) ? cue->title : get_track_buffer(cue_track->title_idx);
                     break;
 
                 case eCS_PERFORMER: /* PERFORMER */
                     dest = (cue->track_count <= 0) ? cue->performer :
-                        cue->tracks[cue->track_count-1].performer;
+                        get_track_buffer(cue_track->performer_idx);
                     break;
 
                 case eCS_SONGWRITER: /* SONGWRITER */
                     dest = (cue->track_count <= 0) ? cue->songwriter :
-                            cue->tracks[cue->track_count-1].songwriter;
+                            get_track_buffer(cue_track->songwriter_idx);
                     break;
 
                 case eCS_FILE: /* FILE */
@@ -358,16 +370,22 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
                         && *(string + 1) > 127 && *(string + 1) < 192)
                         char_enc = CHAR_ENC_UTF_8;
                 }
+                bool buffer_used = dest == buffer;
+                if (buffer_used)
+                    count = buffer_end - buffer;
+
                 if (char_enc == CHAR_ENC_ISO_8859_1)
                 {
-                    dest = iso_decode_ex(string, dest, -1,
+                    dest = iso_decode_ex(string, dest , -1,
                         strlen(string), count - 1);
                     *dest = '\0';
                 }
                 else
                 {
-                    strmemccpy(dest, string, count);
+                    dest = strmemccpy(dest, string, count);
                 }
+                if (buffer_used)
+                    buffer = dest + 1;
             }
         }
 
@@ -380,6 +398,10 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
                 read_bytes = bytes_left;
         }
     }
+    // if(cue->track_count > MAX_TRACKS)
+    // {
+    //     cue->track_count = MAX_TRACKS;
+    // }
     close(fd);
 
     /* If just a filename, add path information from cuesheet path */
@@ -390,17 +412,6 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
         char *slash = strrchr(cue->file, '/');
         if (!slash++) slash = cue->file;
         strmemccpy(slash, line, MAX_PATH - (slash - cue->file));
-    }
-
-    /* If some songs don't have performer info, we copy the cuesheet performer */
-    int i;
-    for (i = 0; i < cue->track_count; i++)
-    {
-        if (*(cue->tracks[i].performer) == '\0')
-            strmemccpy(cue->tracks[i].performer, cue->performer, MAX_NAME*3);
-
-        if (*(cue->tracks[i].songwriter) == '\0')
-            strmemccpy(cue->tracks[i].songwriter, cue->songwriter, MAX_NAME*3);
     }
 
     return true;
@@ -426,12 +437,11 @@ static bool seek(unsigned long pos)
    and updates the information about the current track. */
 int cue_find_current_track(struct cuesheet *cue, unsigned long curpos)
 {
-    int i=0;
-    while (i < cue->track_count-1 && cue->tracks[i+1].offset < curpos)
+    int i = get_cue_curr_track(cue)->offset < curpos ? cue->curr_track_idx: 0;
+    while (i < cue->track_count - 1 && get_track(i + 1)->offset < curpos)
         i++;
 
     cue->curr_track_idx = i;
-    cue->curr_track = cue->tracks + i;
     return i;
 }
 
@@ -443,11 +453,16 @@ static const char* list_get_name_cb(int selected_item,
 {
     struct cuesheet *cue = (struct cuesheet *)data;
 
+    struct cue_track_info* track = get_track(selected_item/2);
     if (selected_item & 1)
-        strmemccpy(buffer, cue->tracks[selected_item/2].title, buffer_len);
+    {
+        strmemccpy(buffer, get_cue_track_title(cue, track), buffer_len);
+    }
     else
-        snprintf(buffer, buffer_len, "%02d. %s", selected_item/2+1,
-                 cue->tracks[selected_item/2].performer);
+    {
+        snprintf(buffer, buffer_len, "%02d. %s", selected_item / 2 + 1,
+            get_cue_track_performer(cue, track));
+    }
 
     return buffer;
 }
@@ -493,7 +508,7 @@ bool browse_cuesheet(struct cuesheet *cue)
             {
                 bool startit = true;
                 unsigned long elapsed =
-                    cue->tracks[gui_synclist_get_sel_pos(&lists)/2].offset;
+                    get_track(gui_synclist_get_sel_pos(&lists)/2)->offset;
 
                 id3 = audio_current_track();
                 if (id3 && *id3->path)
@@ -582,13 +597,13 @@ bool curr_cuesheet_skip(struct cuesheet *cue, int direction, unsigned long curr_
             DEFAULT_SKIP_THRESH seconds have elapsed, skip to the start of the
             current cuesheet segment */
             if (direction == 1 ||
-                  ((curr_pos - cue->tracks[track].offset) < DEFAULT_SKIP_THRESH))
+                  ((curr_pos - get_track(track)->offset) < DEFAULT_SKIP_THRESH))
             {
                 track += direction;
             }
         }
 
-        seek(cue->tracks[track].offset);
+        seek(get_track(track)->offset);
         return true;
     }
 
@@ -613,7 +628,7 @@ void cue_draw_markers(struct screen *screen, struct cuesheet *cue,
     for (i=1; i < cue->track_count; i++)
     {
         /* Convert seconds prior to multiplication to avoid overflow. */
-        xi = x + (w * (cue->tracks[i].offset/1000)) / tracklen_seconds;
+        xi = x + (w * (get_track(i)->offset/1000)) / tracklen_seconds;
         draw_veritcal_line_mark(screen, xi, y, h);
     }
 }
@@ -621,9 +636,9 @@ void cue_draw_markers(struct screen *screen, struct cuesheet *cue,
 bool cuesheet_subtrack_changed(struct mp3entry *id3)
 {
     struct cuesheet *cue = id3->cuesheet;
-    if (cue && (id3->elapsed < cue->curr_track->offset
+    if (cue && (id3->elapsed < get_cue_curr_track(cue)->offset
             || (cue->curr_track_idx < cue->track_count - 1
-                && id3->elapsed >= (cue->curr_track+1)->offset)))
+                && id3->elapsed >= get_cue_track(cue, cue->curr_track_idx + 1)->offset)))
     {
         cue_find_current_track(cue, id3->elapsed);
         return true;
