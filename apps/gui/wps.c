@@ -451,7 +451,7 @@ static void play_hop(int direction)
     if (cue && (cue->curr_track_idx+1 < cue->track_count))
     {
         int next = cue->curr_track_idx+1;
-        struct cue_track_info *t = &cue->tracks[next];
+        struct cue_track_info *t = get_cue_track(cue, next);
         remaining = t->offset - elapsed;
     }
 

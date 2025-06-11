@@ -28,14 +28,16 @@
 #include "metadata.h"
 
 #define MAX_NAME 80    /* Max length of information strings */
-#define MAX_TRACKS 99  /* Max number of tracks in a cuesheet */
+#define MAX_TRACKS 256  /* Max number of tracks in a cuesheet */
 
 struct cue_track_info {
-    char title[MAX_NAME*3+1];
-    char performer[MAX_NAME*3+1];
-    char songwriter[MAX_NAME*3+1];
+    int title_idx;
+    int performer_idx;
+    int songwriter_idx;
     unsigned long offset; /* ms from start of track */
 };
+
+#define MAX_LIST  (64000/sizeof(struct cue_track_info))
 
 struct cuesheet {
     char path[MAX_PATH];
@@ -45,11 +47,39 @@ struct cuesheet {
     char songwriter[MAX_NAME*3+1];
 
     int track_count;
-    struct cue_track_info tracks[MAX_TRACKS];
 
+    union
+    {
+        struct cue_track_info tracks[MAX_LIST];
+        char buffer[sizeof(struct cue_track_info) * MAX_LIST];
+    };
     int curr_track_idx;
-    struct cue_track_info *curr_track;
 };
+
+static FORCE_INLINE struct cue_track_info* get_cue_track(struct cuesheet *cue, int index)
+{
+    return &cue->tracks[MAX_LIST - index - 1];
+}
+
+static FORCE_INLINE struct cue_track_info* get_cue_curr_track(struct cuesheet *cue)
+{
+    return get_cue_track(cue, cue->curr_track_idx);
+}
+
+static FORCE_INLINE char* get_cue_track_performer(struct cuesheet *cue, struct cue_track_info* track)
+{
+    return track->performer_idx ? &cue->buffer[track->performer_idx] : cue->performer;
+}
+
+static FORCE_INLINE char* get_cue_track_songwriter(struct cuesheet *cue, struct cue_track_info* track)
+{
+    return track->songwriter_idx ? &cue->buffer[track->songwriter_idx] : cue->songwriter;
+}
+
+static FORCE_INLINE char* get_cue_track_title(struct cuesheet *cue, struct cue_track_info* track)
+{
+    return &cue->buffer[track->title_idx];
+}
 
 struct cuesheet_file {
     char path[MAX_PATH];
