@@ -784,8 +784,8 @@ static void track_list_clear(unsigned int action)
             if (hid == track_list.in_progress_hid)
                 track_list.in_progress_hid = 0;
 
-            if (tbip->info.cuesheet_hid >= 0 && hid == current_hid)
-                id3_get(PLAYING_ID3)->cuesheet = NULL;
+            // if (tbip->info.cuesheet_hid >= 0 && hid == current_hid)
+            //     id3_get(PLAYING_ID3)->cuesheet = NULL;
             track_list_free_buf_info(tbip);
         }
 

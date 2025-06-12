@@ -265,9 +265,8 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
         strcpy(cue->file, cue->path);
 
     struct cue_track_info* cue_track;
-    cue->curr_track = &get_track(0);
     void* buffer = cue->tracks;
-    void* buffer_end  = cue->curr_track;
+    void* buffer_end  = &get_track(0);
     while ((line_len = read_line(fd, line, read_bytes)) > 0)
     {
         if (char_enc == CHAR_ENC_UTF_16_LE)
@@ -450,12 +449,11 @@ static bool seek(unsigned long pos)
    and updates the information about the current track. */
 int cue_find_current_track(struct cuesheet *cue, unsigned long curpos)
 {
-    int i = curpos > cue->curr_track->offset ? cue->curr_track_idx: 0;
+    int i = curpos > get_cue_curr_track(cue)->offset ? cue->curr_track_idx: 0;
     while (i < cue->track_count - 1 && get_track(i+1).offset < curpos)
         i++;
 
     cue->curr_track_idx = i;
-    cue->curr_track = &get_track(i);
     return i;
 }
 
@@ -651,7 +649,7 @@ void cue_draw_markers(struct screen *screen, struct cuesheet *cue,
 bool cuesheet_subtrack_changed(struct mp3entry *id3)
 {
     struct cuesheet *cue = id3->cuesheet;
-    if (cue && (id3->elapsed < cue->curr_track->offset
+    if (cue && (id3->elapsed < get_cue_curr_track(cue)->offset
             || (cue->curr_track_idx < cue->track_count - 1
                 && id3->elapsed >= get_cue_track(cue, cue->curr_track_idx + 1)->offset)))
     {

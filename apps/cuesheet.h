@@ -51,12 +51,16 @@ struct cuesheet {
     struct cue_track_info tracks[MAX_LIST];
 
     int curr_track_idx;
-    struct cue_track_info* curr_track;
 };
 
 static FORCE_INLINE struct cue_track_info* get_cue_track(struct cuesheet *cue, int index)
 {
     return &cue->tracks[MAX_LIST - index - 1];
+}
+
+static FORCE_INLINE struct cue_track_info* get_cue_curr_track(struct cuesheet *cue)
+{
+    return &cue->tracks[cue->curr_track_idx];
 }
 
 struct cuesheet_file {

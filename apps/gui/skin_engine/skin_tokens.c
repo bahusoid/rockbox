@@ -166,29 +166,15 @@ const char *get_cuesheetid3_token(struct wps_token *token, struct mp3entry *id3,
                                   int offset_tracks, char *buf, int buf_size)
 {
     struct cuesheet *cue = id3?id3->cuesheet:NULL;
-    if (!cue || !cue->curr_track)
+    if (!cue)
         return NULL;
 
-    struct cue_track_info *track = cue->curr_track;
-    if (offset_tracks)
-    {
-        if (cue->curr_track_idx+offset_tracks < cue->track_count)
-            track = get_cue_track(cue, cue->curr_track_idx+offset_tracks);
-        else
-            return NULL;
-    }
     switch (token->type)
     {
-        case SKIN_TOKEN_METADATA_ARTIST:
-            return *track->performer ? track->performer : NULL;
-        case SKIN_TOKEN_METADATA_COMPOSER:
-            return *track->songwriter ? track->songwriter : NULL;
         case SKIN_TOKEN_METADATA_ALBUM:
             return *cue->title ? cue->title : NULL;
         case SKIN_TOKEN_METADATA_ALBUM_ARTIST:
             return *cue->performer ? cue->performer : NULL;
-        case SKIN_TOKEN_METADATA_TRACK_TITLE:
-            return *track->title ? track->title : NULL;
         case SKIN_TOKEN_PLAYLIST_ENTRIES:
             snprintf(buf, buf_size, "%d", cue->track_count);
             return buf;
@@ -200,7 +186,23 @@ const char *get_cuesheetid3_token(struct wps_token *token, struct mp3entry *id3,
                      cue->curr_track_idx+offset_tracks+1, cue->track_count);
             return buf;
         default:
-            return NULL;
+            break;
+    }
+
+    if(cue->curr_track_idx+offset_tracks >= cue->track_count)
+        return NULL;
+
+    struct cue_track_info *track = get_cue_track(cue, cue->curr_track_idx+offset_tracks);
+    switch (token->type)
+    {
+        case SKIN_TOKEN_METADATA_ARTIST:
+            return *track->performer ? track->performer : NULL;
+        case SKIN_TOKEN_METADATA_COMPOSER:
+            return *track->songwriter ? track->songwriter : NULL;
+        case SKIN_TOKEN_METADATA_TRACK_TITLE:
+            return *track->title ? track->title : NULL;
+        default:
+            break;
     }
     return NULL;
 }
