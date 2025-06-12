@@ -37,9 +37,9 @@ struct cue_track_info {
     unsigned long offset; /* ms from start of track */
 };
 
-struct cuesheet {
-    char buffer[64*1024];
+#define MAX_LIST  (64000/sizeof(struct cue_track_info))
 
+struct cuesheet {
     char path[MAX_PATH];
     char file[MAX_PATH];
     char title[MAX_NAME*3+1];
@@ -48,11 +48,16 @@ struct cuesheet {
 
     int track_count;
 
-    struct cue_track_info tracks[MAX_TRACKS];
+    struct cue_track_info tracks[MAX_LIST];
 
     int curr_track_idx;
     struct cue_track_info* curr_track;
 };
+
+static FORCE_INLINE struct cue_track_info* get_cue_track(struct cuesheet *cue, int index)
+{
+    return &cue->tracks[MAX_LIST - index - 1];
+}
 
 struct cuesheet_file {
     char path[MAX_PATH];

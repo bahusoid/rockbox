@@ -173,7 +173,7 @@ const char *get_cuesheetid3_token(struct wps_token *token, struct mp3entry *id3,
     if (offset_tracks)
     {
         if (cue->curr_track_idx+offset_tracks < cue->track_count)
-            track+=offset_tracks;
+            track = get_cue_track(cue, cue->curr_track_idx+offset_tracks);
         else
             return NULL;
     }
