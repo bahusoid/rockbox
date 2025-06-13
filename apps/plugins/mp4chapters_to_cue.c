@@ -21,6 +21,32 @@
 
 #include "plugin.h"
 
+/* Debug logging to file */
+static int debug_fd = -1;
+
+static void debug_log(const char *format, ...) {
+    if (debug_fd < 0) {
+        debug_fd = rb->open("/mp4chapters_debug.log", O_WRONLY | O_CREAT | O_APPEND, 0666);
+        if (debug_fd < 0) return;
+    }
+    
+    va_list args;
+    va_start(args, format);
+    char buffer[512];
+    rb->vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    
+    rb->write(debug_fd, buffer, rb->strlen(buffer));
+    rb->write(debug_fd, "\n", 1);
+}
+
+static void debug_close(void) {
+    if (debug_fd >= 0) {
+        rb->close(debug_fd);
+        debug_fd = -1;
+    }
+}
+
 /* Global buffer management */
 static char *g_buffer = NULL;
 static size_t g_buffer_size = 0;
@@ -90,8 +116,14 @@ struct chapter_info {
 /* MP4 utility functions */
 static uint32_t read_uint32be(int fd) {
     uint8_t buf[4];
-    if (rb->read(fd, buf, 4) != 4) return 0;
-    return (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
+    ssize_t bytes_read = rb->read(fd, buf, 4);
+    if (bytes_read != 4) {
+        debug_log("read_uint32be failed: got %d bytes instead of 4", (int)bytes_read);
+        return 0;
+    }
+    uint32_t result = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
+    DEBUGF("read_uint32be: bytes=%02X %02X %02X %02X -> 0x%08X\n", buf[0], buf[1], buf[2], buf[3], result);
+    return result;
 }
 
 static uint64_t read_uint64be(int fd) {
@@ -118,28 +150,91 @@ static void timestamp_to_cue_time(uint64_t timestamp_ms, char *time_str, size_t 
     rb->snprintf(time_str, size, "%02u:%02u:%02u", minutes, seconds, frames);
 }
 
+/* Escape special characters in CUE strings */
+static void escape_cue_string(const char *input, char *output, size_t output_size) {
+    size_t in_pos = 0, out_pos = 0;
+    
+    while (input[in_pos] && out_pos < output_size - 1) {
+        char c = input[in_pos];
+        
+        /* Replace or escape problematic characters */
+        if (c == '"') {
+            /* Replace quote with single quote */
+            if (out_pos < output_size - 1) {
+                output[out_pos++] = '\'';
+            }
+        } else if (c == '\r' || c == '\n') {
+            /* Replace newlines with space */
+            if (out_pos < output_size - 1) {
+                output[out_pos++] = ' ';
+            }
+        } else if (c >= 32 && c <= 126) {
+            /* Keep printable ASCII characters */
+            output[out_pos++] = c;
+        } else if ((unsigned char)c >= 128) {
+            /* Keep UTF-8 characters as-is */
+            output[out_pos++] = c;
+        } else {
+            /* Replace other control characters with space */
+            if (out_pos < output_size - 1) {
+                output[out_pos++] = ' ';
+            }
+        }
+        in_pos++;
+    }
+    
+    output[out_pos] = '\0';
+}
+
 /* Recursively search for atoms in MP4 structure */
 static int search_for_atom(int fd, off_t start_pos, off_t end_pos, uint32_t target_atom,
                           off_t *found_pos, off_t *found_size) {
     off_t current_pos = start_pos;
+    int search_count = 0;
+    
+    debug_log("search_for_atom: looking for %c%c%c%c in range %ld-%ld", 
+               (char)(target_atom >> 24), (char)(target_atom >> 16), 
+               (char)(target_atom >> 8), (char)target_atom, 
+               (long)start_pos, (long)end_pos);
     
     while (current_pos < end_pos) {
-        if (rb->lseek(fd, current_pos, SEEK_SET) < 0) break;
+        search_count++;
+        if (search_count > 100) {
+            debug_log("search_for_atom: too many atoms, breaking");
+            break;
+        }
+        
+        if (rb->lseek(fd, current_pos, SEEK_SET) < 0) {
+            debug_log("search_for_atom: lseek failed at %ld", (long)current_pos);
+            break;
+        }
         
         uint32_t atom_size = read_uint32be(fd);
         uint32_t atom_type = read_uint32be(fd);
         
-        if (atom_size < 8) break;
+        if (atom_size < 8) {
+            debug_log("search_for_atom: bad atom size %lu at %ld", (unsigned long)atom_size, (long)current_pos);
+            break;
+        }
+        
+        debug_log("search_for_atom: found %c%c%c%c size=%lu at %ld", 
+                   (char)(atom_type >> 24), (char)(atom_type >> 16), 
+                   (char)(atom_type >> 8), (char)atom_type, 
+                   (unsigned long)atom_size, (long)current_pos);
         
         if (atom_type == target_atom) {
             *found_pos = current_pos;
             *found_size = atom_size;
+            debug_log("search_for_atom: FOUND target atom at %ld", (long)current_pos);
             return 1;
         }
         
         /* Recursively search container atoms */
         if (atom_type == MP4_moov || atom_type == MP4_trak || 
             atom_type == MP4_mdia || atom_type == MP4_minf || atom_type == MP4_stbl) {
+            debug_log("search_for_atom: recursing into container %c%c%c%c", 
+                       (char)(atom_type >> 24), (char)(atom_type >> 16), 
+                       (char)(atom_type >> 8), (char)atom_type);
             if (search_for_atom(fd, current_pos + 8, current_pos + atom_size,
                                target_atom, found_pos, found_size)) {
                 return 1;
@@ -149,6 +244,7 @@ static int search_for_atom(int fd, off_t start_pos, off_t end_pos, uint32_t targ
         current_pos += atom_size;
     }
     
+    debug_log("search_for_atom: target not found after %d atoms", search_count);
     return 0;
 }
 
@@ -160,19 +256,28 @@ static struct chapter_info* parse_apple_chapter_track(int fd, off_t track_start,
     int chapter_count = 0;
     uint32_t track_timescale = 1000; /* Default timescale */
     
+    debug_log("Parsing Apple track...");
+    
     /* Look for track header to check if this is a text track */
     off_t tkhd_pos, tkhd_size;
+    debug_log("Searching for tkhd in track from %ld to %ld", (long)track_start, (long)track_end);
     if (!search_for_atom(fd, track_start, track_end, MP4_tkhd, &tkhd_pos, &tkhd_size)) {
         DEBUGF("No tkhd found in track\n");
+        debug_log("No tkhd found in track range %ld-%ld", (long)track_start, (long)track_end);
         return 0;
     }
+    
+    debug_log("Found tkhd at %ld", (long)tkhd_pos);
     
     /* Look for media atom */
     off_t mdia_pos, mdia_size;
     if (!search_for_atom(fd, track_start, track_end, MP4_mdia, &mdia_pos, &mdia_size)) {
         DEBUGF("No mdia found in track\n");
+        debug_log("No mdia found");
         return 0;
     }
+    
+    debug_log("Found mdia, checking timescale...");
     
     /* Look for media header to get correct timescale */
     off_t mdhd_pos, mdhd_size;
@@ -192,14 +297,17 @@ static struct chapter_info* parse_apple_chapter_track(int fd, off_t track_start,
         }
         
         DEBUGF("Found track timescale: %u\n", track_timescale);
+        debug_log("Found track timescale: %u", track_timescale);
     } else {
         DEBUGF("No mdhd found, using default timescale\n");
+        debug_log("No mdhd, using default timescale");
     }
     
     /* Look for media handler to check track type */
     off_t hdlr_pos, hdlr_size;
     if (!search_for_atom(fd, mdia_pos, mdia_pos + mdia_size, MP4_hdlr, &hdlr_pos, &hdlr_size)) {
         DEBUGF("No hdlr found in track\n");
+        debug_log("No hdlr found");
         return 0;
     }
     
@@ -211,35 +319,48 @@ static struct chapter_info* parse_apple_chapter_track(int fd, off_t track_start,
            (char)(handler_type >> 24), (char)(handler_type >> 16), 
            (char)(handler_type >> 8), (char)handler_type);
     
+    debug_log("Handler: %c%c%c%c", 
+               (char)(handler_type >> 24), (char)(handler_type >> 16), 
+               (char)(handler_type >> 8), (char)handler_type);
+    
     if (handler_type != MP4_TEXT && handler_type != MP4_tx3g) {
         DEBUGF("Not a text track, skipping\n");
+        debug_log("Not text track: %c%c%c%c", 
+                   (char)(handler_type >> 24), (char)(handler_type >> 16), 
+                   (char)(handler_type >> 8), (char)handler_type);
         return 0; /* Not a text track */
     }
     
     DEBUGF("Found text track!\n");
+    debug_log("Found text track!");
     
     /* Look for media information atom first */
     off_t minf_pos, minf_size;
     if (!search_for_atom(fd, mdia_pos + 8, mdia_pos + mdia_size, MP4_minf, &minf_pos, &minf_size)) {
         DEBUGF("No minf found in text track\n");
+        debug_log("No minf found in text track");
         return 0;
     }
     
     DEBUGF("Found minf in text track\n");
+    debug_log("Found minf in text track");
     
     /* Look for sample table */
     off_t stbl_pos, stbl_size;
     if (!search_for_atom(fd, minf_pos + 8, minf_pos + minf_size, MP4_stbl, &stbl_pos, &stbl_size)) {
         DEBUGF("No stbl found in text track\n");
+        debug_log("No stbl found in text track");
         return 0;
     }
     
     DEBUGF("Found sample table in text track at pos %ld, size %ld\n", (long)stbl_pos, (long)stbl_size);
+    debug_log("Found sample table in text track at pos %ld, size %ld", (long)stbl_pos, (long)stbl_size);
     
     /* Get time-to-sample information */
     off_t stts_pos, stts_size;
     if (!search_for_atom(fd, stbl_pos + 8, stbl_pos + stbl_size, MP4_stts, &stts_pos, &stts_size)) {
         DEBUGF("No stts found\n");
+        debug_log("No stts found");
         return 0;
     }
     
@@ -247,6 +368,7 @@ static struct chapter_info* parse_apple_chapter_track(int fd, off_t track_start,
     off_t stsz_pos, stsz_size;
     if (!search_for_atom(fd, stbl_pos + 8, stbl_pos + stbl_size, MP4_stsz, &stsz_pos, &stsz_size)) {
         DEBUGF("No stsz found\n");
+        debug_log("No stsz found");
         return 0;
     }
     
@@ -261,10 +383,12 @@ static struct chapter_info* parse_apple_chapter_track(int fd, off_t track_start,
     
     if (!has_stco && !has_co64) {
         DEBUGF("No chunk offset table found\n");
+        debug_log("No chunk offset table found");
         return 0;
     }
     
     DEBUGF("Found all required sample tables\n");
+    debug_log("Found all required sample tables");
     
     /* Read sample size table to get number of samples */
     rb->lseek(fd, stsz_pos + 8 + 4, SEEK_SET); /* Skip atom header + version/flags */
@@ -273,13 +397,23 @@ static struct chapter_info* parse_apple_chapter_track(int fd, off_t track_start,
     
     DEBUGF("Sample count: %u, default size: %u, timescale: %u\n", sample_count, default_sample_size, track_timescale);
     
+    debug_log("Sample count: %u, default size: %u, timescale: %u", sample_count, default_sample_size, track_timescale);
+    
     if (sample_count == 0) {
+        debug_log("Sample count is zero, returning");
         return 0; /* Sanity check */
     }
 
     // Allocate memory for chapters
     struct chapter_info *chapters = buffer_alloc(sizeof(struct chapter_info) * sample_count);
+    if (chapters == NULL) {
+        DEBUGF("Failed to allocate memory for chapters\n");
+        debug_log("Failed to allocate memory for chapters");
+        return 0;
+    }
     *num_chapters = sample_count;
+    
+    debug_log("Allocated memory for %u chapters", sample_count);
     
     
     /* Calculate memory requirements */
@@ -453,29 +587,49 @@ static struct chapter_info* parse_apple_chapter_track(int fd, off_t track_start,
 /* Find and parse MP4 chapters (both Nero and Apple formats) */
 static struct chapter_info* find_mp4_chapters(const char *mp4_path, int* chapter_count) {
     int fd = rb->open(mp4_path, O_RDONLY);
-    if (fd < 0) return NULL;
+    if (fd < 0) {
+        debug_log("Failed to open file: %s", mp4_path);
+        return NULL;
+    }
+    
+    debug_log("Starting MP4 chapter search...");
     
     uint32_t atom_size, atom_type;
     off_t file_pos = 0;
     
     /* First pass: Look for Nero chpl atoms (simpler format) */
+    debug_log("Looking for Nero chapters...");
+    int atom_count = 0;
     while (1) {
-        if (rb->lseek(fd, file_pos, SEEK_SET) < 0) break;
-        if (rb->read(fd, &atom_size, 4) != 4) break;
-        if (rb->read(fd, &atom_type, 4) != 4) break;
+        if (rb->lseek(fd, file_pos, SEEK_SET) < 0) {
+            debug_log("lseek failed at pos %ld", (long)file_pos);
+            break;
+        }
         
-        /* Convert to host byte order */
-        atom_size = (atom_size >> 24) | ((atom_size >> 8) & 0xFF00) | 
-                   ((atom_size << 8) & 0xFF0000) | (atom_size << 24);
-        atom_type = (atom_type >> 24) | ((atom_type >> 8) & 0xFF00) | 
-                   ((atom_type << 8) & 0xFF0000) | (atom_type << 24);
+        atom_size = read_uint32be(fd);
+        atom_type = read_uint32be(fd);
+        atom_count++;
         
-        if (atom_size < 8) break;
+        if (atom_size == 0 || atom_type == 0) {
+            debug_log("NULL atom %d: size=%lu type=%lu", atom_count, (unsigned long)atom_size, (unsigned long)atom_type);
+            break;
+        }
+        
+        if (atom_size < 8) {
+            debug_log("Bad atom size: %lu", (unsigned long)atom_size);
+            break;
+        }
+        
+        debug_log("Atom %d: %c%c%c%c size=%lu", atom_count,
+                   (char)(atom_type >> 24), (char)(atom_type >> 16), 
+                   (char)(atom_type >> 8), (char)atom_type, (unsigned long)atom_size);
         
         if (atom_type == MP4_chpl) {
+            debug_log("Found Nero chpl atom!");
             /* Found Nero chapter list atom */
             rb->lseek(fd, 8, SEEK_CUR); /* Skip version and flags */
             uint8_t num_chapters = read_uint8(fd);
+            debug_log("Nero chapters count: %d", num_chapters);
             struct chapter_info *chapters = buffer_alloc( sizeof(*chapters) * num_chapters);
             for (int i = 0; i < num_chapters; i++) {
                 uint64_t timestamp_100ns = read_uint64be(fd);
@@ -503,50 +657,109 @@ static struct chapter_info* find_mp4_chapters(const char *mp4_path, int* chapter
     struct chapter_info *chapters = NULL;
     {
         file_pos = 0;
+        debug_log("Looking for Apple chapters...");
         
         while (1) {
             if (rb->lseek(fd, file_pos, SEEK_SET) < 0) break;
-            if (rb->read(fd, &atom_size, 4) != 4) break;
-            if (rb->read(fd, &atom_type, 4) != 4) break;
             
-            /* Convert to host byte order */
-            atom_size = (atom_size >> 24) | ((atom_size >> 8) & 0xFF00) | 
-                       ((atom_size << 8) & 0xFF0000) | (atom_size << 24);
-            atom_type = (atom_type >> 24) | ((atom_type >> 8) & 0xFF00) | 
-                       ((atom_type << 8) & 0xFF0000) | (atom_type << 24);
+            atom_size = read_uint32be(fd);
+            atom_type = read_uint32be(fd);
             
             if (atom_size < 8) break;
             
+            debug_log("Apple search: %c%c%c%c size=%lu", 
+                       (char)(atom_type >> 24), (char)(atom_type >> 16), 
+                       (char)(atom_type >> 8), (char)atom_type, (unsigned long)atom_size);
+            
             if (atom_type == MP4_moov) {
+                debug_log("Found moov atom!");
                 /* Found movie atom - look for chapter tracks */
                 DEBUGF("Found moov atom, searching for tracks...\n");
                 off_t moov_end = file_pos + atom_size;
                 off_t moov_pos = file_pos + 8;
                 int track_num = 0;
                 
+                debug_log("moov: pos=%ld end=%ld size=%lu", 
+                           (long)moov_pos, (long)moov_end, (unsigned long)atom_size);
+                
                 /* Look for tracks that might contain chapters */
+                int loop_count = 0;
                 while (moov_pos < moov_end && *chapter_count == 0) {
-                    rb->lseek(fd, moov_pos, SEEK_SET);
+                    loop_count++;
+                    debug_log("Loop %d: seeking to pos %ld", loop_count, (long)moov_pos);
+                    
+                    if (rb->lseek(fd, moov_pos, SEEK_SET) < 0) {
+                        debug_log("lseek failed at pos %ld", (long)moov_pos);
+                        break;
+                    }
+                    
+                    /* Verify current position */
+                    off_t current_pos = rb->lseek(fd, 0, SEEK_CUR);
+                    debug_log("Loop %d: current file pos is %ld", loop_count, (long)current_pos);
+                    
+                    debug_log("Loop %d: reading sub atom", loop_count);
                     uint32_t sub_size = read_uint32be(fd);
                     uint32_t sub_type = read_uint32be(fd);
+                    debug_log("Loop %d: read sub_size=%lu sub_type=0x%08X", loop_count, (unsigned long)sub_size, sub_type);
                     
-                    if (sub_size < 8) break;
+                    debug_log("sub atom: %c%c%c%c size=%lu", 
+                               (char)(sub_type >> 24), (char)(sub_type >> 16), 
+                               (char)(sub_type >> 8), (char)sub_type, (unsigned long)sub_size);
+                    
+                    if (sub_size < 8) {
+                        debug_log("Bad sub_size %lu, breaking", (unsigned long)sub_size);
+                        break;
+                    }
+                    
+                    /* Safety check for reasonable atom size */
+                    if (sub_size > 100000000) { /* 100MB limit */
+                        debug_log("Suspiciously large sub_size %lu, skipping", (unsigned long)sub_size);
+                        moov_pos += 8; /* Skip this atom header and try next */
+                        continue;
+                    }
                     
                     if (sub_type == MP4_trak) {
                         track_num++;
+                        debug_log("Found track %d, checking...", track_num);
+                        debug_log("Track %d: pos=%ld size=%lu", track_num, (long)moov_pos, (unsigned long)sub_size);
                         DEBUGF("Checking track %d for chapters...\n", track_num);
                         /* Check if this track contains chapters */
+                        debug_log("Calling parse_apple_chapter_track for track %d", track_num);
                         chapters = parse_apple_chapter_track(fd, moov_pos + 8, sub_size - 8, chapter_count);
+                        debug_log("parse_apple_chapter_track returned, chapters=%d", *chapter_count);
 
                         if (*chapter_count > 0) {
+                            debug_log("SUCCESS: %d chapters in track %d!", *chapter_count, track_num);
                             DEBUGF("Found %d chapters in track %d!\n", *chapter_count, track_num);
                             break;
                         } else {
+                            debug_log("Track %d: no chapters", track_num);
                             DEBUGF("Track %d: no chapters found\n", track_num);
                         }
+                    } else {
+                        debug_log("Skipping non-track atom: %c%c%c%c", 
+                                   (char)(sub_type >> 24), (char)(sub_type >> 16), 
+                                   (char)(sub_type >> 8), (char)sub_type);
                     }
                     
+                    debug_log("Loop %d: advancing moov_pos by %lu", loop_count, (unsigned long)sub_size);
                     moov_pos += sub_size;
+                    
+                    /* Safety check to prevent infinite loop */
+                    if (sub_size == 0) {
+                        debug_log("Zero size atom, breaking");
+                        break;
+                    }
+                    
+                    /* Additional safety check for loop count */
+                    if (loop_count > 1000) {
+                        debug_log("Too many loops (%d), breaking", loop_count);
+                        break;
+                    }
+                }
+                
+                if (*chapter_count == 0) {
+                    debug_log("No chapters found in %d tracks", track_num);
                 }
                 break;
             }
@@ -564,6 +777,8 @@ static bool generate_cue_file(const char *mp4_path, struct chapter_info *chapter
     char cue_path[MAX_PATH];
     char *dot;
     
+    debug_log("Starting CUE generation...");
+    
     /* Create CUE filename */
     rb->strlcpy(cue_path, mp4_path, MAX_PATH);
     dot = rb->strrchr(cue_path, '.');
@@ -573,26 +788,43 @@ static bool generate_cue_file(const char *mp4_path, struct chapter_info *chapter
         rb->strlcat(cue_path, ".cue", MAX_PATH);
     }
     
+    debug_log("Creating CUE file: %s", cue_path);
+    
     int fd = rb->open(cue_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    if (fd < 0) return false;
+    if (fd < 0) {
+        debug_log("Failed to create CUE file");
+        return false;
+    }
+    
+    debug_log("CUE file opened, writing header...");
+    
+    /* Write UTF-8 BOM for better compatibility */
+    const char utf8_bom[] = "\xEF\xBB\xBF";
+    rb->write(fd, utf8_bom, 3);
     
     /* Get MP4 metadata */
     struct mp3entry id3;
     bool have_metadata = rb->get_metadata(&id3, -1, mp4_path);
     
     /* Write CUE header */
-    rb->fdprintf(fd, "REM Generated by Rockbox MP4 Chapters to CUE plugin\n");
+    rb->fdprintf(fd, "REM Generated by Rockbox MP4 Chapters to CUE plugin (UTF-8)\n");
     
     if (have_metadata && id3.title) {
-        rb->fdprintf(fd, "TITLE \"%s\"\n", id3.title);
+        char escaped_title[MAX_LEN];
+        escape_cue_string(id3.title, escaped_title, sizeof(escaped_title));
+        rb->fdprintf(fd, "TITLE \"%s\"\n", escaped_title);
     } else {
         char *basename = rb->strrchr(mp4_path, '/');
         basename = basename ? basename + 1 : (char*)mp4_path;
-        rb->fdprintf(fd, "TITLE \"%s\"\n", basename);
+        char escaped_basename[MAX_LEN];
+        escape_cue_string(basename, escaped_basename, sizeof(escaped_basename));
+        rb->fdprintf(fd, "TITLE \"%s\"\n", escaped_basename);
     }
     
     if (have_metadata && id3.artist) {
-        rb->fdprintf(fd, "PERFORMER \"%s\"\n", id3.artist);
+        char escaped_artist[MAX_LEN];
+        escape_cue_string(id3.artist, escaped_artist, sizeof(escaped_artist));
+        rb->fdprintf(fd, "PERFORMER \"%s\"\n", escaped_artist);
     }
     
     /* Extract filename for FILE line */
@@ -600,18 +832,23 @@ static bool generate_cue_file(const char *mp4_path, struct chapter_info *chapter
     filename = filename ? filename + 1 : (char*)mp4_path;
     rb->fdprintf(fd, "FILE \"%s\" MP3\n", filename);
     
+    debug_log("Writing %d chapters...", chapter_count);
+    
     /* Write chapters as tracks */
     for (int i = 0; i < chapter_count; i++) {
         char time_str[16];
+        char escaped_title[MAX_LEN];
+        
         timestamp_to_cue_time(chapters[i].timestamp, time_str, sizeof(time_str));
+        escape_cue_string(chapters[i].title, escaped_title, sizeof(escaped_title));
         
         rb->fdprintf(fd, "  TRACK %02d AUDIO\n", i + 1);
-        rb->fdprintf(fd, "    TITLE \"%s\"\n", chapters[i].title);
-
+        rb->fdprintf(fd, "    TITLE \"%s\"\n", escaped_title);
         rb->fdprintf(fd, "    INDEX 01 %s\n", time_str);
     }
     
     rb->close(fd);
+    debug_log("CUE file generation complete!");
     return true;
 }
 
@@ -619,42 +856,62 @@ static bool generate_cue_file(const char *mp4_path, struct chapter_info *chapter
 enum plugin_status plugin_start(const void* parameter) {
     char* mp4_path = (char*)parameter;
     
+    debug_log("MP4 Chapters plugin starting...");
+    
     if (!mp4_path || !mp4_path[0]) {
         rb->splash(HZ*2, "No file specified");
+        debug_close();
         return PLUGIN_ERROR;
     }
+    
+    debug_log("Processing file: %s", mp4_path);
     
     /* Check if file exists and is readable */
     if (!rb->file_exists(mp4_path)) {
         rb->splash(HZ*2, "File not found");
+        debug_close();
         return PLUGIN_ERROR;
     }
+    
+    debug_log("File exists, initializing...");
     
     /* Initialize buffer management */
     if (!init_buffer()) {
         rb->splash(HZ*2, "Out of memory");
+        debug_close();
         return PLUGIN_ERROR;
     }
+    
+    debug_log("Buffer initialized: %d bytes", (int)g_buffer_size);
     
     /* Reset buffer before use */
     buffer_reset();
     
 
     /* Find MP4 chapters */
-    int chapter_count;
+    int chapter_count = 0;  /* Initialize to 0! */
+    debug_log("Starting chapter search...");
     struct chapter_info *chapters = find_mp4_chapters(mp4_path, &chapter_count);
     
     if (chapter_count <= 0) {
         rb->splash(HZ*2, "No chapters found");
+        debug_close();
         return PLUGIN_OK;
     }
 
+    debug_log("Found %d chapters, generating CUE...", chapter_count);
+    
     /* Generate CUE file */
-    if (generate_cue_file(mp4_path, chapters, chapter_count)) {
+    bool success = generate_cue_file(mp4_path, chapters, chapter_count);
+    
+    if (success) {
         rb->splashf(HZ*2, "CUE file created with %d tracks", chapter_count);
-        return PLUGIN_OK;
+        debug_log("SUCCESS: CUE file created with %d tracks", chapter_count);
     } else {
-        rb->splashf(HZ*2, "Failed to create CUE file with %d tracks", chapter_count);
-        return PLUGIN_ERROR;
+        rb->splashf(HZ*2, "Failed to create CUE file");
+        debug_log("ERROR: Failed to create CUE file");
     }
+    
+    debug_close();
+    return success ? PLUGIN_OK : PLUGIN_ERROR;
 }
