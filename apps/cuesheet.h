@@ -31,9 +31,9 @@
 #define MAX_TRACKS 256  /* Max number of tracks in a cuesheet */
 
 struct cue_track_info {
-    char* title;
-    char* performer;
-    char* songwriter;
+    int title_idx;
+    int performer_idx;
+    int songwriter_idx;
     unsigned long offset; /* ms from start of track */
 };
 
@@ -48,8 +48,11 @@ struct cuesheet {
 
     int track_count;
 
-    struct cue_track_info tracks[MAX_LIST];
-
+    union
+    {
+        struct cue_track_info tracks[MAX_LIST];
+        char buffer[0];
+    };
     int curr_track_idx;
 };
 
@@ -61,6 +64,10 @@ static FORCE_INLINE struct cue_track_info* get_cue_track(struct cuesheet *cue, i
 static FORCE_INLINE struct cue_track_info* get_cue_curr_track(struct cuesheet *cue)
 {
     return &cue->tracks[cue->curr_track_idx];
+}
+static FORCE_INLINE char* get_cue_track_value(struct cuesheet *cue, int idx)
+{
+    return &cue->buffer[idx];
 }
 
 struct cuesheet_file {

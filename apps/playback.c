@@ -1684,7 +1684,6 @@ static bool audio_load_cuesheet(struct track_info *infop,
 
     if (cue && infop->cuesheet_hid == ERR_HANDLE_NOT_FOUND)
     {
-        cue->track_count = 0;
         /* If error other than a full buffer, then mark it "unsupported" to
            avoid reloading attempt */
         int hid = ERR_UNSUPPORTED_TYPE;
@@ -1696,7 +1695,7 @@ static bool audio_load_cuesheet(struct track_info *infop,
 
             if (hid >= 0)
             {
-                buf_pin_handle(hid, true);
+                //buf_pin_handle(hid, true);
 
                 void *cuesheet = NULL;
                 bufgetdata(hid, sizeof (struct cuesheet), &cuesheet);

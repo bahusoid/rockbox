@@ -203,6 +203,8 @@ static enum eCS_SUPPORTED_TAGS cuesheet_tag_get_option(const char *option)
 
 #define get_last_track() (get_track(cue->track_count-1))
 
+#define xx(field)  ({field = buffer - cue->buffer; buffer;})
+
 /* parse cuesheet "cue_file" and store the information in "cue" */
 bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
 {
@@ -265,8 +267,9 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
         strcpy(cue->file, cue->path);
 
     struct cue_track_info* cue_track;
-    void* buffer = cue->tracks;
-    void* buffer_end  = &get_track(0);
+    char* buffer = cue->buffer;
+    *buffer++ = 0; //make zero index to point to empty string.
+    char* buffer_end  = (char*)&get_track(0);
     while ((line_len = read_line(fd, line, read_bytes)) > 0)
     {
         if (char_enc == CHAR_ENC_UTF_16_LE)
@@ -294,13 +297,13 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
         enum eCS_SUPPORTED_TAGS option = cuesheet_tag_get_option(s);
         if (option == eCS_TRACK)
         {
-            buffer_end = &get_track(cue->track_count + 1);
+            cue_track = &get_track(cue->track_count);
+            buffer_end =(char*)cue_track;
             if (buffer >= buffer_end)
             {
-                logf(HZ * 2, "Too many tracks in cuesheet %s", cue_file->path);
+                DEBUGF("Too many tracks in cuesheet %s", cue_file->path);
                 break;
             }
-            cue_track = &get_track(cue->track_count);
             cue->track_count++;
         }
         else if (option == eCS_INDEX_01)
@@ -329,18 +332,17 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
             switch (option)
             {
                 case eCS_TITLE: /* TITLE */
-                    dest = (cue->track_count <= 0) ? cue->title :
-                            (cue_track->title = buffer);
+                    dest = (cue->track_count <= 0) ? cue->title : xx(cue_track->title_idx);
                     break;
 
                 case eCS_PERFORMER: /* PERFORMER */
                     dest = (cue->track_count <= 0) ? cue->performer :
-                        (cue_track->performer = buffer);
+                        xx(cue_track->performer_idx);
                     break;
 
                 case eCS_SONGWRITER: /* SONGWRITER */
                     dest = (cue->track_count <= 0) ? cue->songwriter :
-                            (cue_track->songwriter = buffer);
+                            xx(cue_track->songwriter_idx);
                     break;
 
                 case eCS_FILE: /* FILE */
@@ -415,17 +417,6 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
         strmemccpy(slash, line, MAX_PATH - (slash - cue->file));
     }
 
-    /* If some songs don't have performer info, we copy the cuesheet performer */
-    int i;
-    for (i = 0; i < cue->track_count; i++)
-    {
-        if (get_track(i).performer == NULL)
-           get_track(i).performer = cue->performer;
-
-        if (get_track(i).songwriter == NULL)
-           get_track(i).songwriter =  cue->songwriter;
-    }
-
     return true;
 }
 
@@ -465,17 +456,16 @@ static const char* list_get_name_cb(int selected_item,
 {
     struct cuesheet *cue = (struct cuesheet *)data;
 
+    struct cue_track_info* track_info = &get_track(selected_item/2);
     if (selected_item & 1)
     {
-        char* title = get_track(selected_item/2).title;
-        if(title == NULL)
-            buffer[0] = 0;
-        else
-            strmemccpy(buffer, get_track(selected_item/2).title, buffer_len);
+        strmemccpy(buffer, track_info->title_idx ? &cue->buffer[track_info->title_idx] : cue->title, buffer_len);
     }
     else
-        snprintf(buffer, buffer_len, "%02d. %s", selected_item/2+1,
-                 get_track(selected_item/2).performer);
+    {
+        snprintf(buffer, buffer_len, "%02d. %s", selected_item / 2 + 1,
+            track_info->performer_idx ? &cue->buffer[track_info->performer_idx] : cue->performer);
+    }
 
     return buffer;
 }

@@ -196,11 +196,11 @@ const char *get_cuesheetid3_token(struct wps_token *token, struct mp3entry *id3,
     switch (token->type)
     {
         case SKIN_TOKEN_METADATA_ARTIST:
-            return *track->performer ? track->performer : NULL;
+            return track->performer_idx ? &cue->buffer[track->performer_idx] : cue->performer;
         case SKIN_TOKEN_METADATA_COMPOSER:
-            return *track->songwriter ? track->songwriter : NULL;
+            return track->songwriter_idx ? &cue->buffer[track->songwriter_idx] : cue->songwriter;
         case SKIN_TOKEN_METADATA_TRACK_TITLE:
-            return *track->title ? track->title : NULL;
+            return track->title_idx ? &cue->buffer[track->title_idx] : cue->title;
         default:
             break;
     }
