@@ -143,11 +143,10 @@ static uint8_t read_uint8(int fd) {
 
 /* Convert timestamp (milliseconds) to CUE format MM:SS:FF */
 static void timestamp_to_cue_time(uint64_t timestamp_ms, char *time_str, size_t size) {
-    uint32_t minutes = timestamp_ms / 60000;
-    uint32_t seconds = (timestamp_ms % 60000) / 1000;
-    uint32_t frames = ((timestamp_ms % 1000) * 75) / 1000; /* 75 frames per second for CUE */
-    
-    rb->snprintf(time_str, size, "%02u:%02u:%02u", minutes, seconds, frames);
+    int minutes = timestamp_ms / 60000;
+    int seconds = (timestamp_ms % 60000) / 1000;
+    int frames = ((timestamp_ms % 1000) * 75) / 1000; /* 75 frames per second for CUE */
+    rb->snprintf(time_str, size, "%02d:%02d:%02d", minutes, seconds, frames);
 }
 
 /* Escape special characters in CUE strings */
