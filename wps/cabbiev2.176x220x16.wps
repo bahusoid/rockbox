@@ -57,7 +57,7 @@
 %Cd
 #
 # Track Info - Album Art
-%ax%Vl(a,0,120,-,59,1)
+%ax%Vl(a,0,120,-,60,1)
 %s%ac%?it<%it|%fn>
 %s%ac%?id<%id|%?d(1)<%d(1)|%(root%)>>%?iy<%, %iy|>
 %s%ac%?ia<%ia|%?iA<%iA|%?d(2)<%d(2)|%(root%)>>>
