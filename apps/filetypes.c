@@ -575,6 +575,36 @@ int filetype_get_icon(int attr)
     return filetypes[index].icon;
 }
 
+static int filetype_get_plugin_index_by_extension(char* filename)
+{
+    int index = file_find_extension(filename);
+    struct file_type *ft_indexed = &filetypes[index];
+
+    /* attempt to find a suitable viewer by file extension */
+    if(ft_indexed->plugin == NULL && ft_indexed->extension != NULL)
+    {
+        struct file_type *ft;
+        int i = filetype_count;
+        while (--i > index)
+        {
+            ft = &filetypes[i];
+            if (ft->plugin == NULL || ft->extension == NULL)
+                continue;
+            else if (ft->plugin != NULL &&
+                     strcmp(ft->extension, ft_indexed->extension) == 0)
+            {
+                while (ft->plugin == filetypes[i - 1].plugin)
+                    --i;
+                /*splashf(HZ*3, "Found %d %s %s", i, ft->extension, ft->plugin);*/
+                return i;
+            }
+        }
+    }
+    if (ft_indexed->plugin == NULL)
+        index = -1;
+    return index; /* Not Found */
+}
+
 static int filetype_get_plugin_index(int attr)
 {
     int index = find_attr(attr);
@@ -657,12 +687,10 @@ static int openwith_get_talk(int selected_item, void * data)
 
 char* filetype_get_viewer(char *buffer, size_t buffer_len, const char* current_file)
 {
-    int attr = filetype_get_attr(current_file);
-
     struct simplelist_info info;
     simplelist_info_init(&info, str(LANG_ONPLAY_OPEN_WITH), viewer_count, NULL);
 
-    int default_index = filetype_get_plugin_index(attr);
+    int default_index = filetype_get_plugin_index_by_extension(current_file);
 
     if (default_index >= 0)
     {
