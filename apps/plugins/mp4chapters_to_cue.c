@@ -24,11 +24,26 @@
 /* Debug logging to file */
 static int debug_fd = -1;
 
-static void debug_log(const char *format, ...) {
-    if (debug_fd < 0) {
-        debug_fd = rb->open("/mp4chapters_debug.log", O_WRONLY | O_CREAT | O_APPEND, 0666);
-        if (debug_fd < 0) return;
+static void mp4_debug_init(const char *audio_path) {
+    if (debug_fd >= 0) return; /* Already initialized */
+    
+    char log_path[MAX_PATH];
+    char *dot;
+    
+    /* Create log filename based on audio file */
+    rb->strlcpy(log_path, audio_path, MAX_PATH);
+    dot = rb->strrchr(log_path, '.');
+    if (dot) {
+        rb->strcpy(dot, ".log");
+    } else {
+        rb->strlcat(log_path, ".log", MAX_PATH);
     }
+    
+    debug_fd = rb->open(log_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+}
+
+static void debug_log(const char *format, ...) {
+    if (debug_fd < 0) return;
     
     va_list args;
     va_start(args, format);
@@ -40,7 +55,7 @@ static void debug_log(const char *format, ...) {
     rb->write(debug_fd, "\n", 1);
 }
 
-static void debug_close(void) {
+static void mp4_debug_close(void) {
     if (debug_fd >= 0) {
         rb->close(debug_fd);
         debug_fd = -1;
@@ -371,6 +386,14 @@ static struct chapter_info* parse_apple_chapter_track(int fd, off_t track_start,
         return 0;
     }
     
+    /* Get sample-to-chunk table */
+    off_t stsc_pos, stsc_size;
+    if (!search_for_atom(fd, stbl_pos + 8, stbl_pos + stbl_size, MP4_stsc, &stsc_pos, &stsc_size)) {
+        DEBUGF("No stsc found\n");
+        debug_log("No stsc found");
+        return 0;
+    }
+    
     /* Get chunk offset table to find sample data */
     off_t stco_pos, stco_size;
     bool has_stco = search_for_atom(fd, stbl_pos + 8, stbl_pos + stbl_size, MP4_stco, &stco_pos, &stco_size);
@@ -440,6 +463,20 @@ static struct chapter_info* parse_apple_chapter_track(int fd, off_t track_start,
         return 0;
     }
     
+    /* Read sample-to-chunk table first */
+    rb->lseek(fd, stsc_pos + 8 + 4, SEEK_SET); /* Skip atom header + version/flags */
+    uint32_t stsc_entry_count = read_uint32be(fd);
+    debug_log("Sample-to-chunk entries: %u", stsc_entry_count);
+    
+    /* For text tracks, usually each sample is in its own chunk, but let's check */
+    uint32_t samples_per_chunk = 1; /* Default assumption */
+    if (stsc_entry_count > 0) {
+        /* Read first entry to see samples per chunk */
+        uint32_t first_chunk = read_uint32be(fd);
+        samples_per_chunk = read_uint32be(fd);
+        debug_log("First chunk: %u, samples per chunk: %u", first_chunk, samples_per_chunk);
+    }
+    
     /* Read chunk offset table */
     uint32_t chunk_count = 0;
     
@@ -478,15 +515,9 @@ static struct chapter_info* parse_apple_chapter_track(int fd, off_t track_start,
     /* Build timestamp array from time-to-sample data */
     uint64_t current_time = 0;
     uint32_t sample_index = 0;
-    uint64_t current_chunk_pos = 0; /* Position within current chunk */
     
     /* Helper buffer for reading sample data */
     char sample_buffer[512];
-    
-    /* Start at the beginning of the first chunk */
-    if (chunk_count > 0) {
-        current_chunk_pos = chunk_offsets[0];
-    }
     
     for (uint32_t i = 0; i < stts_entry_count; i++) {
         rb->lseek(fd, stts_pos + 8 + 8 + (i * 8), SEEK_SET);
@@ -503,8 +534,27 @@ static struct chapter_info* parse_apple_chapter_track(int fd, off_t track_start,
             DEBUGF("Chapter %d: time=%lu units, timestamp=%lu ms (timescale=%u)\n", 
                    chapter_count, (unsigned long)current_time, (unsigned long)chapters[chapter_count].timestamp, track_timescale);
             
+            /* Calculate sample position in file */
+            /* For text tracks, typically each sample is in its own chunk */
+            uint64_t sample_pos = 0;
+            if (sample_index < chunk_count) {
+                sample_pos = chunk_offsets[sample_index];
+            } else if (chunk_count > 0) {
+                /* If we have fewer chunks than samples, assume samples are sequential within chunks */
+                uint32_t chunk_index = sample_index / samples_per_chunk;
+                uint32_t sample_in_chunk = sample_index % samples_per_chunk;
+                
+                if (chunk_index < chunk_count) {
+                    sample_pos = chunk_offsets[chunk_index];
+                    /* Add offset for samples within chunk */
+                    if (default_sample_size > 0) {
+                        sample_pos += sample_in_chunk * default_sample_size;
+                    }
+                }
+            }
+            
             /* Try to read the actual chapter title from sample data */
-            if (chunk_count > 0) {
+            if (sample_pos > 0) {
                 /* Get sample size */
                 uint32_t sample_size;
                 if (default_sample_size > 0) {
@@ -516,11 +566,22 @@ static struct chapter_info* parse_apple_chapter_track(int fd, off_t track_start,
                 }
                 
                 if (sample_size > 0 && sample_size < sizeof(sample_buffer)) {
-                    /* Read sample data from current position in chunk */
-                    rb->lseek(fd, current_chunk_pos, SEEK_SET);
+                    /* Read sample data from calculated position */
+                    rb->lseek(fd, sample_pos, SEEK_SET);
                     int bytes_read = rb->read(fd, sample_buffer, sample_size);
                     
                     if (bytes_read > 0) {
+                        /* Add debug logging for sample data */
+                        debug_log("Sample %u: pos=%lu size=%u bytes_read=%d", 
+                                  sample_index, (unsigned long)sample_pos, sample_size, bytes_read);
+                        
+                        /* Debug: show first few bytes of sample */
+                        if (bytes_read >= 4) {
+                            debug_log("Sample %u data: %02X %02X %02X %02X...", 
+                                      sample_index, sample_buffer[0], sample_buffer[1], 
+                                      sample_buffer[2], sample_buffer[3]);
+                        }
+                        
                         /* Parse text sample - format varies but often starts with length */
                         const char *title_text = NULL;
                         
@@ -528,14 +589,17 @@ static struct chapter_info* parse_apple_chapter_track(int fd, off_t track_start,
                         if (sample_size >= 2) {
                             /* Check for length-prefixed string (common format) */
                             uint16_t text_len = (sample_buffer[0] << 8) | sample_buffer[1];
+                            debug_log("Sample %u: trying length-prefixed, text_len=%u", sample_index, text_len);
                             if (text_len > 0 && text_len < sample_size - 2 && text_len < 200) {
                                 title_text = &sample_buffer[2];
                                 rb->strlcpy(chapters[chapter_count].title, title_text, MIN(text_len  + 1, MAX_LEN));
+                                debug_log("Sample %u: extracted title '%s'", sample_index, chapters[chapter_count].title);
                             }
                         }
                         
                         /* If that didn't work, try looking for plain text */
                         if (title_text == NULL) {
+                            debug_log("Sample %u: trying plain text search", sample_index);
                             /* Look for readable text in the sample */
                             for (uint32_t k = 0; k < sample_size - 1; k++) {
                                 if (sample_buffer[k] >= 32 && sample_buffer[k] <= 126) {
@@ -551,18 +615,21 @@ static struct chapter_info* parse_apple_chapter_track(int fd, off_t track_start,
                                         size_t copy_len = text_end - k + 1;
                                         rb->strlcpy(chapters[chapter_count].title, &sample_buffer[k], MIN(copy_len, MAX_LEN));
                                         title_text = chapters[chapter_count].title;
+                                        debug_log("Sample %u: found plain text '%s' at offset %u", 
+                                                  sample_index, chapters[chapter_count].title, k);
                                         break;
                                     }
                                 }
                             }
                         }
                         
+                        if (title_text == NULL) {
+                            debug_log("Sample %u: no readable text found", sample_index);
+                        }
+                        
                         DEBUGF("Sample %u: size=%u, title='%s'\n", sample_index, sample_size, 
                                title_text ? chapters[chapter_count].title : "failed");
                     }
-                    
-                    /* Move to next sample position within the chunk */
-                    current_chunk_pos += sample_size;
                 }
             }
             
@@ -833,7 +900,7 @@ static bool generate_cue_file(const char *mp4_path, struct chapter_info *chapter
     
     debug_log("Writing %d chapters...", chapter_count);
     
-    /* Write chapters as tracks */
+    /* Write chapters as tracks  */
     for (int i = 0; i < chapter_count; i++) {
         char time_str[16];
         char escaped_title[MAX_LEN];
@@ -855,11 +922,16 @@ static bool generate_cue_file(const char *mp4_path, struct chapter_info *chapter
 enum plugin_status plugin_start(const void* parameter) {
     char* mp4_path = (char*)parameter;
     
+    /* Initialize debug logging first */
+    if (mp4_path && mp4_path[0]) {
+        mp4_debug_init(mp4_path);
+    }
+    
     debug_log("MP4 Chapters plugin starting...");
     
     if (!mp4_path || !mp4_path[0]) {
         rb->splash(HZ*2, "No file specified");
-        debug_close();
+        mp4_debug_close();
         return PLUGIN_ERROR;
     }
     
@@ -868,7 +940,7 @@ enum plugin_status plugin_start(const void* parameter) {
     /* Check if file exists and is readable */
     if (!rb->file_exists(mp4_path)) {
         rb->splash(HZ*2, "File not found");
-        debug_close();
+        mp4_debug_close();
         return PLUGIN_ERROR;
     }
     
@@ -877,7 +949,7 @@ enum plugin_status plugin_start(const void* parameter) {
     /* Initialize buffer management */
     if (!init_buffer()) {
         rb->splash(HZ*2, "Out of memory");
-        debug_close();
+        mp4_debug_close();
         return PLUGIN_ERROR;
     }
     
@@ -894,7 +966,7 @@ enum plugin_status plugin_start(const void* parameter) {
     
     if (chapter_count <= 0) {
         rb->splash(HZ*2, "No chapters found");
-        debug_close();
+        mp4_debug_close();
         return PLUGIN_OK;
     }
 
@@ -911,6 +983,6 @@ enum plugin_status plugin_start(const void* parameter) {
         debug_log("ERROR: Failed to create CUE file");
     }
     
-    debug_close();
+    mp4_debug_close();
     return success ? PLUGIN_OK : PLUGIN_ERROR;
 }
