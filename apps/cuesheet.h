@@ -51,7 +51,7 @@ struct cuesheet {
     union
     {
         struct cue_track_info tracks[MAX_LIST];
-        char buffer[0];
+        char buffer[sizeof(struct cue_track_info) * MAX_LIST];
     };
     int curr_track_idx;
 };
@@ -63,11 +63,22 @@ static FORCE_INLINE struct cue_track_info* get_cue_track(struct cuesheet *cue, i
 
 static FORCE_INLINE struct cue_track_info* get_cue_curr_track(struct cuesheet *cue)
 {
-    return &cue->tracks[cue->curr_track_idx];
+    return get_cue_track(cue, cue->curr_track_idx);
 }
-static FORCE_INLINE char* get_cue_track_value(struct cuesheet *cue, int idx)
+
+static FORCE_INLINE char* get_cue_track_performer(struct cuesheet *cue, struct cue_track_info* track)
 {
-    return &cue->buffer[idx];
+    return track->performer_idx ? &cue->buffer[track->performer_idx] : cue->performer;
+}
+
+static FORCE_INLINE char* get_cue_track_songwriter(struct cuesheet *cue, struct cue_track_info* track)
+{
+    return track->songwriter_idx ? &cue->buffer[track->songwriter_idx] : cue->songwriter;
+}
+
+static FORCE_INLINE char* get_cue_track_title(struct cuesheet *cue, struct cue_track_info* track)
+{
+    return &cue->buffer[track->title_idx];
 }
 
 struct cuesheet_file {

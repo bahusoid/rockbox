@@ -169,8 +169,20 @@ const char *get_cuesheetid3_token(struct wps_token *token, struct mp3entry *id3,
     if (!cue)
         return NULL;
 
+    int index = cue->curr_track_idx+offset_tracks;
+    if(index < 0 || index >= cue->track_count)
+        return NULL;
+
+    struct cue_track_info *track = get_cue_track(cue, index);
     switch (token->type)
     {
+        case SKIN_TOKEN_METADATA_ARTIST:
+            return get_cue_track_performer(cue, track);
+        case SKIN_TOKEN_METADATA_COMPOSER:
+            return get_cue_track_songwriter(cue, track);
+        case SKIN_TOKEN_METADATA_TRACK_TITLE:
+            return get_cue_track_title(cue, track);
+
         case SKIN_TOKEN_METADATA_ALBUM:
             return *cue->title ? cue->title : NULL;
         case SKIN_TOKEN_METADATA_ALBUM_ARTIST:
@@ -179,31 +191,16 @@ const char *get_cuesheetid3_token(struct wps_token *token, struct mp3entry *id3,
             snprintf(buf, buf_size, "%d", cue->track_count);
             return buf;
         case SKIN_TOKEN_PLAYLIST_POSITION:
-            snprintf(buf, buf_size, "%d", cue->curr_track_idx+offset_tracks+1);
+            snprintf(buf, buf_size, "%d", index+1);
             return buf;
         case SKIN_TOKEN_METADATA_TRACK_NUMBER:
             snprintf(buf, buf_size, "%d/%d",
-                     cue->curr_track_idx+offset_tracks+1, cue->track_count);
+                     index+1, cue->track_count);
             return buf;
         default:
             break;
     }
 
-    if(cue->curr_track_idx+offset_tracks >= cue->track_count)
-        return NULL;
-
-    struct cue_track_info *track = get_cue_track(cue, cue->curr_track_idx+offset_tracks);
-    switch (token->type)
-    {
-        case SKIN_TOKEN_METADATA_ARTIST:
-            return track->performer_idx ? &cue->buffer[track->performer_idx] : cue->performer;
-        case SKIN_TOKEN_METADATA_COMPOSER:
-            return track->songwriter_idx ? &cue->buffer[track->songwriter_idx] : cue->songwriter;
-        case SKIN_TOKEN_METADATA_TRACK_TITLE:
-            return track->title_idx ? &cue->buffer[track->title_idx] : cue->title;
-        default:
-            break;
-    }
     return NULL;
 }
 
