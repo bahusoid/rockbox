@@ -130,7 +130,7 @@ static const struct fileattr_icon_voice inbuilt_attr_icons_voices[] = {
     { FILE_ATTR_FONT,  Icon_Font,      VOICE_EXT_FONT },
     { FILE_ATTR_KBD,   Icon_Keyboard,  VOICE_EXT_KBD },
     { FILE_ATTR_BMARK, Icon_Bookmark,  VOICE_EXT_BMARK },
-    { FILE_ATTR_CUE,   Icon_Bookmark,  VOICE_EXT_CUESHEET },
+    { FILE_ATTR_CUE,   Icon_Playlist,  VOICE_EXT_CUESHEET },
     { FILE_ATTR_SBS,   Icon_Wps,       VOICE_EXT_SBS },
 #ifdef HAVE_REMOTE_LCD
     { FILE_ATTR_RSBS,  Icon_Wps,       VOICE_EXT_RSBS },
