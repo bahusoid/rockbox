@@ -97,7 +97,6 @@ struct playlist_info
     char filename[MAX_PATH];  /* path name of m3u playlist on disk  */
     /* full path of control file (with extra room for extensions) */
     char control_filename[sizeof(PLAYLIST_CONTROL_FILE) + 8];
-    struct cuesheet* cuesheet; /* cuesheet for this playlist, if any */
 };
 
 struct playlist_track_info
