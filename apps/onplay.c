@@ -669,9 +669,9 @@ MENUITEM_RETURNVALUE(plugin_item, ID2P(LANG_OPEN_PLUGIN),
 static bool view_cue(void)
 {
     struct mp3entry* id3 = audio_current_track();
-    if (id3 && id3->cuesheet)
+    if (id3 && (id3->cuesheet || playlist_get_current()->cuesheet))
     {
-        browse_cuesheet(id3->cuesheet);
+        browse_cuesheet(id3->cuesheet ? id3->cuesheet : playlist_get_current()->cuesheet);
     }
     return false;
 }
@@ -684,8 +684,10 @@ static int view_cue_item_callback(int action,
     struct mp3entry* id3 = audio_current_track();
     if (action == ACTION_REQUEST_MENUITEM)
     {
-        if (!selected_file.path || !id3 || !id3->cuesheet)
-            return ACTION_EXIT_MENUITEM;
+         if (!selected_file.path || ((!id3 || !id3->cuesheet) && !playlist_get_current()->cuesheet ))
+         {
+             return ACTION_EXIT_MENUITEM;
+         }
     }
     return action;
 }
