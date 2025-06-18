@@ -34,7 +34,6 @@ struct cue_track_info {
     int title_idx;
     int performer_idx;
     int songwriter_idx;
-    int file_idx;
     unsigned long offset; /* ms from start of track */
 };
 
@@ -46,7 +45,6 @@ struct cuesheet {
     char title[MAX_NAME*3+1];
     char performer[MAX_NAME*3+1];
     char songwriter[MAX_NAME*3+1];
-    bool multi_file;
 
     int track_count;
 
@@ -76,11 +74,6 @@ static FORCE_INLINE char* get_cue_track_performer(struct cuesheet *cue, struct c
 static FORCE_INLINE char* get_cue_track_songwriter(struct cuesheet *cue, struct cue_track_info* track)
 {
     return track->songwriter_idx ? &cue->buffer[track->songwriter_idx] : cue->songwriter;
-}
-
-static FORCE_INLINE char* get_cue_track_file(struct cuesheet *cue, struct cue_track_info* track)
-{
-    return track->file_idx ? &cue->buffer[track->file_idx] : cue->file;
 }
 
 static FORCE_INLINE char* get_cue_track_title(struct cuesheet *cue, struct cue_track_info* track)
