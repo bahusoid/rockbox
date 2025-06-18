@@ -267,6 +267,8 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
     char* buffer = cue->buffer;
     *buffer++ = 0; //make zero index to point to empty string.
     char* buffer_end  = (char*)get_track(0);
+    int last_file_idx = 0;
+
     while ((line_len = read_line(fd, line, read_bytes)) > 0)
     {
         if (char_enc == CHAR_ENC_UTF_16_LE)
@@ -343,8 +345,14 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
                     break;
 
                 case eCS_FILE: /* FILE */
-                    if (is_embedded || cue->track_count > 0)
+                    if (is_embedded)
                         break;
+
+                    if (cue->track_count > 0)
+                    {
+                        dest = get_track_buffer(last_file_idx);
+                        break;
+                    }
 
                     dest = cue->file;
                     count = MAX_PATH;
@@ -507,28 +515,37 @@ bool browse_cuesheet(struct cuesheet *cue)
             case ACTION_STD_OK:
             {
                 bool startit = true;
-                unsigned long elapsed =
-                    get_track(gui_synclist_get_sel_pos(&lists)/2)->offset;
+                struct cue_track_info *track = get_track(gui_synclist_get_sel_pos(&lists)/2);
+                unsigned long elapsed = track->offset;
 
                 id3 = audio_current_track();
-                if (id3 && *id3->path)
-                {
-                    look_for_cuesheet_file(id3, &cue_file);
-                    if (!strcmp(cue->path, cue_file.path))
-                        startit = false;
-                }
+                // if (id3 && *id3->path)
+                // {
+                //     look_for_cuesheet_file(id3, &cue_file);
+                //     if (!strcmp(cue->path, cue_file.path))
+                //         startit = false;
+                // }
+                //
+                // if (!startit)
+                //     startit = !seek(elapsed);
+                //
+                // if (!startit || !*cue->file)
+                //     break;
 
-                if (!startit)
-                    startit = !seek(elapsed);
-
-                if (!startit || !*cue->file)
-                    break;
-
+                char* track_file = get_cue_track_file(cue, track);
+                /* check that this cue is the same one that would be found by
+                   a search from playback */
                 char file[MAX_PATH];
-                strmemccpy(file, cue->file, MAX_PATH);
-                char *fname = strrsplt(file, '/');
-                char *dirname = fname <= file + 1 ? "/" : file;
-                bookmark_play(dirname, 0, elapsed, 0, current_tick, fname);
+                strmemccpy(file, track_file, MAX_PATH);
+
+                {
+                    char *fname = strrsplt(file, '/');
+                    char *dirname = fname <= file + 1 ? "/" : file;
+                    if (bookmark_play(dirname, 0, elapsed, 0, current_tick, fname))
+                    {
+                        playlist_get_current()->cuesheet = cue;
+                    }
+                }
                 break;
                 } /* ACTION_STD_OK */
 
