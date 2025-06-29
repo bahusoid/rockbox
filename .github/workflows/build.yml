@@ -33,6 +33,11 @@ jobs:
             arch: m
             platform: 11
 
+          - name: iriverh120_rtcmod
+            arch: m
+            platform: 10
+            type: AR
+
     runs-on: ubuntu-22.04
     name: ${{matrix.name}}
 
@@ -98,7 +103,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        ../tools/configure --target=${{matrix.platform}} --type=N
+        ../tools/configure --target=${{matrix.platform}} --type=${{matrix.type || 'N'}}
         make -j
         make zip
 
