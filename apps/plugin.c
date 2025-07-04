@@ -841,13 +841,15 @@ static const struct plugin_api rockbox_api = {
     path_strip_volume,
 #endif
 
+#ifdef HAVE_ALBUMART
     /* Album Art functions */
     id3_unsynchronize,
     base64_decode,
     parse_flac_album_art,
     get_ogg_format_and_move_to_comments,
     ogg_file_init,
-    ogg_file_read
+    ogg_file_read,
+#endif
     /* new stuff at the end, sort into place next time the API gets incompatible */
 };
 

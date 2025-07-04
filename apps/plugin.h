@@ -992,7 +992,8 @@ struct plugin_api {
 #endif
     /* new stuff at the end, sort into place next time
        the API gets incompatible */
-    
+
+#ifdef HAVE_ALBUMART
     /* Album Art functions */
     int (*id3_unsynchronize)(char* tag, int len, bool *ff_found);
     size_t (*base64_decode)(const char *in, size_t in_len, unsigned char *out);
@@ -1001,6 +1002,7 @@ struct plugin_api {
     int (*get_ogg_format_and_move_to_comments)(int fd, unsigned char *buf);
     bool (*ogg_file_init)(struct ogg_file* file, int fd, int type, int remaining);
     ssize_t (*ogg_file_read)(struct ogg_file* file, void* buffer, size_t buffer_size);
+#endif
 };
 
 /* plugin header */
