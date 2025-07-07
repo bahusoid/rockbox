@@ -1567,7 +1567,6 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
 int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
                 bool (*pf_progress)(int current, int total))
 {
-    struct bitstream bs; /* bitstream "object" */
     int block[64]; /* decoded DCT coefficients */
 
     int width, height;
@@ -1615,10 +1614,10 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
     else return -1; /* not supported */
 
     /* init bitstream, fake a restart to make it start */
-    bs.get_buffer = 0;
-    bs.next_input_byte = p_jpeg->p_entropy_data;
-    bs.bits_left = 0;
-    bs.input_end = p_jpeg->p_entropy_end;
+    // bs.get_buffer = 0;
+    // bs.next_input_byte = p_jpeg->p_entropy_data;
+    // bs.bits_left = 0;
+    // bs.input_end = p_jpeg->p_entropy_end;
 
     width  = p_jpeg->x_phys / downscale;
     height = p_jpeg->y_phys / downscale;
@@ -1632,7 +1631,7 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
     store_offs[p_jpeg->store_pos[2]] = width * 8 / downscale; /* below */
     store_offs[p_jpeg->store_pos[3]] = store_offs[1] + store_offs[2]; /* r+b */
 
-    for(y=0; y<p_jpeg->y_mbl && bs.next_input_byte <= bs.input_end; y++)
+    for(y=0; y<p_jpeg->y_mbl && p_jpeg->len > 0; y++)
     {
         p_byte = p_line;
         p_line += skip_strip;
@@ -1651,7 +1650,8 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
                 struct derived_tbl* actbl = &p_jpeg->ac_derived_tbls[ti];
 
                 /* Section F.2.2.1: decode the DC coefficient difference */
-                s = huff_decode_dc(&bs, dctbl);
+                huff_decode_dc(p_jpeg, dctbl, s, r);
+                s = HUFF_EXTEND(r, s);
 
                 if (ci == 0) /* only for Y component */
                 {
@@ -1664,15 +1664,15 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
                     /* Section F.2.2.2: decode the AC coefficients */
                     for (; k < k_need; k++)
                     {
-                        s = huff_decode_ac(&bs, actbl);
+                        huff_decode_ac(p_jpeg, actbl, s);
                         r = s >> 4;
                         s &= 15;
 
                         if (s)
                         {
                             k += r;
-                            check_bit_buffer(&bs, s);
-                            r = get_bits(&bs, s);
+                            check_bit_buffer(p_jpeg, s);
+                            r = get_bits(p_jpeg, s);
                             block[zag[k]] = HUFF_EXTEND(r, s);
                         }
                         else
@@ -1689,15 +1689,15 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
                 /* In this path we just discard the values */
                 for (; k < 64; k++)
                 {
-                    s = huff_decode_ac(&bs, actbl);
+                    huff_decode_ac(p_jpeg, actbl, s);
                     r = s >> 4;
                     s &= 15;
 
                     if (s)
                     {
                         k += r;
-                        check_bit_buffer(&bs, s);
-                        drop_bits(&bs, s);
+                        check_bit_buffer(p_jpeg, s);
+                        drop_bits(p_jpeg, s);
                     }
                     else
                     {
@@ -1717,7 +1717,7 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
             if (p_jpeg->restart_interval && --restart == 0)
             {   /* if a restart marker is due: */
                 restart = p_jpeg->restart_interval; /* count again */
-                search_restart(&bs); /* align the bitstream */
+                search_restart(p_jpeg); /* align the bitstream */
                 last_dc_val = 0; /* reset decoder */
             }
         } /* for x */
