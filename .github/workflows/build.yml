@@ -38,6 +38,11 @@ jobs:
             platform: 10
             type: AR
 
+          - name: ipod mini 2g
+            arch: a
+            platform: 26
+            type: AR
+
     runs-on: ubuntu-22.04
     name: ${{matrix.name}}
 
