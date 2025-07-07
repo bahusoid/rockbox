@@ -2120,6 +2120,7 @@ static bool get_albumart_for_index_from_db(const int slide_index, char *buf,
           retrieve_id3(&id3, tcs.result);
     if (ret && !search_albumart_files(&id3, ":", buf, buflen))
     {
+#ifdef HAVE_ALBUMART
         if (id3.has_embedded_albumart && id3.albumart.type == AA_TYPE_JPG)
         {
             strncpy(buf, id3.path, buflen);
@@ -2128,6 +2129,7 @@ static bool get_albumart_for_index_from_db(const int slide_index, char *buf,
             ret = true;
         }
         else
+#endif
         {
             ret = false;
         }
