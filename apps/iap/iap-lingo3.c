@@ -707,7 +707,7 @@ void iap_handlepkt_mode3(const unsigned int len, const unsigned char *buf)
 
                     CHECKLEN(7);
                     index = get_u32(&buf[0x03]);
-                    audio_skip(index-iap_get_trackindex());
+                    audio_skip(index-iap_get_trackindex(), 0);
 
                     cmd_ok(cmd);
                     break;
@@ -1058,7 +1058,7 @@ void iap_handlepkt_mode3(const unsigned int len, const unsigned char *buf)
                 cmd_ack(cmd, IAP_ACK_BAD_PARAM);
                 break;
             }
-            audio_skip(index-iap_get_trackindex());
+            audio_skip(index-iap_get_trackindex(), 0);
             cmd_ok(cmd);
 
             break;
