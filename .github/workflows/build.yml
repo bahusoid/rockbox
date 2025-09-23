@@ -130,7 +130,18 @@ jobs:
       with:
         name: ${{matrix.name}}.zip
         path: build/rockbox.zip
-    
+
+    - name: Upload debug files
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{matrix.name}}-debug
+        path: |
+          build/**/*.elf
+          build/**/*.map
+          build/**/*.log
+          build/**/*.dmp
+          build/**/*.dump
+
     - name: Upload log
       uses: actions/upload-artifact@v4
       if: failure()
