@@ -6,19 +6,34 @@
 # it stopped
 set -e
 
+system=`uname -s`
+
+# MacOS is perpetually special
+if [ "$system" == "Darwin" ]; then
+    parallel=`sysctl -n hw.physicalcpu`
+    READLINK=greadlink
+    TMP="$TMPDIR"
+    SED=gsed
+else
+    READLINK=readlink
+    parallel=`nproc`
+    TMP=/tmp
+    SED=sed
+fi
+
 # this is where this script will store downloaded files and check for already
 # downloaded files
-dlwhere="${RBDEV_DOWNLOAD:-/tmp/rbdev-dl}"
+dlwhere="${RBDEV_DOWNLOAD:-$TMP/rbdev-dl}"
 
 # will append the target string to the prefix dir mentioned here
 # Note that the user running this script must be able to do make install in
 # this given prefix directory. Also make sure that this given root dir
 # exists.
-prefix="${RBDEV_PREFIX:-/usr/local}"
+prefix="${RBDEV_PREFIX:-$TMP/local}"
 
 # This directory is used to extract all files and to build everything in. It
 # must not exist before this script is invoked (as a security measure).
-builddir="${RBDEV_BUILD:-/tmp/rbdev-build}"
+builddir="${RBDEV_BUILD:-$TMP/rbdev-build}"
 
 # This script needs to use GNU Make. On Linux systems, GNU Make is invoked
 # by running the "make" command, on most BSD systems, GNU Make is invoked
@@ -27,6 +42,17 @@ if [ -f "`which gmake 2>/dev/null`" ]; then
     make="gmake"
 else
     make="make"
+fi
+
+# record version
+makever=`$make -v |$SED -n '1p' | $SED -e 's/.* \([0-9]*\)\.\([0-9]*\).*/\1\2/'`
+
+# This is the absolute path to where the script resides.
+rockboxdevdir="$( $READLINK -f "$( dirname "${BASH_SOURCE[0]}" )" )"
+patch_dir="$rockboxdevdir/toolchain-patches"
+
+if [ $parallel -gt 1 ] ; then
+  make_parallel=-j$parallel
 fi
 
 if [ -z $GNU_MIRROR ] ; then
@@ -38,7 +64,7 @@ if [ -z $LINUX_MIRROR ] ; then
 fi
 
 # These are the tools this script requires and depends upon.
-reqtools="gcc bzip2 gzip make patch makeinfo automake libtool autoconf flex bison"
+reqtools="gcc g++ xz bzip2 gzip $make patch makeinfo automake libtool autoconf flex bison"
 
 ##############################################################################
 # Functions:
@@ -166,22 +192,52 @@ gettool() {
                 srv_file="gcc-core-$version"
             fi
             url="$GNU_MIRROR/gcc/gcc-$version"
+	    if ! version_lt "$version" "7.2"; then
+		ext="tar.xz"
+	    fi
             ;;
 
         binutils)
             url="$GNU_MIRROR/binutils"
+	    if ! version_lt "$version" "2.28.1"; then
+		ext="tar.xz"
+	    fi
             ;;
 
         glibc)
             url="$GNU_MIRROR/glibc"
-            ;;
-
-        crosstool-ng)
-            url="http://crosstool-ng.org/download/crosstool-ng"
+	    if ! version_lt "$version" "2.11"; then
+		ext="tar.xz"
+	    fi
             ;;
 
         alsa-lib)
-            url="ftp://ftp.alsa-project.org/pub/lib/"
+            url="ftp://ftp.alsa-project.org/pub/lib"
+            ;;
+
+        libffi)
+            url="ftp://sourceware.org/pub/libffi"
+            ext="tar.gz"
+            ;;
+
+        glib)
+            url="https://ftp.gnome.org/pub/gnome/sources/glib/2.46"
+            ext="tar.xz"
+            ;;
+
+        zlib)
+            url="https://www.zlib.net/fossils"
+            ext="tar.gz"
+            ;;
+
+        dbus)
+            url="https://dbus.freedesktop.org/releases/dbus"
+            ext="tar.gz"
+            ;;
+
+        expat)
+            url="https://src.fedoraproject.org/repo/pkgs/expat/expat-2.1.0.tar.gz/dd7dab7a5fea97d2a6a43f511449b7cd"
+            ext="tar.gz"
             ;;
 
         linux)
@@ -230,8 +286,10 @@ extract() {
         tar xjf "$dlwhere/$1.tar.bz2"
     elif [ -f "$dlwhere/$1.tar.gz" ]; then
         tar xzf "$dlwhere/$1.tar.gz"
+    elif [ -f "$dlwhere/$1.tar.xz" ]; then
+        tar xJf "$dlwhere/$1.tar.xz"
     else
-        echo "ROCKBOXDEV: I don't know how to extract $1 (no bzip2 or gzip)"
+        echo "ROCKBOXDEV: unknown compression for $1"
         exit
     fi
 }
@@ -245,21 +303,24 @@ run_cmd() {
     echo "Running '$@'" >>$logfile
     if ! $@ >> "$logfile" 2>&1; then
         echo "ROCKBOXDEV: an error occured, please see $logfile"
-        exit
+        exit 1
     fi
 }
 
-# check if the following should be executed or not, depending on RESTART variable:
+# check if the following should be executed or not, depending on RBDEV_RESTART variable:
 # $1=tool
-# If RESTART is empty, always perform step, otherwise only perform is there is
-# an exact match. On the first match, RESTART is reset to "" so that next step
+# If RBDEV_RESTART is empty, always perform step, otherwise only perform is there
+# is an exact match. On the first match, RBDEV_RESTART is reset to "" so that next step
 # are executed
 check_restart() {
-    if [ "$1" = "$RESTART" ]; then
-        RESTART=""
-        true
+    if [ "x$RBDEV_RESTART" = "x" ]; then
+        return 0
+    elif [ "$1" = "$RBDEV_RESTART" ]; then
+        RBDEV_RESTART=""
+        return 0
+    else
+        return 1
     fi
-    [ "$RESTART" = "" ] && true || false
 }
 
 # advanced tool building: create a build directory, run configure, run make
@@ -280,9 +341,9 @@ buildtool() {
     install_opts="$5"
     logfile="$builddir/build-$toolname.log"
 
-    stepname=${RESTART_STEP-$tool}
+    stepname=${RESTART_STEP:-$tool}
     if ! check_restart "$stepname"; then
-        echo "ROCKBOXDEV: Skipping step '$stepname' as requested per RESTART"
+        echo "ROCKBOXDEV: Skipping step '$stepname' as requested per RBDEV_RESTART"
         return
     fi
     echo "ROCKBOXDEV: Starting step '$stepname'"
@@ -293,8 +354,7 @@ buildtool() {
     echo "ROCKBOXDEV: mkdir build-$toolname"
     mkdir "build-$toolname"
 
-    echo "ROCKBOXDEV: cd build-$toolname"
-    cd "build-$toolname"
+    cd build-$toolname
 
     # in-tree/out-of-tree build
     case "$tool" in
@@ -305,24 +365,37 @@ buildtool() {
             cp -r ../$toolname/* .
             cfg_dir="."
             ;;
-
         *)
             # out-of-tree
             cfg_dir="../$toolname";
             ;;
     esac
 
-    if [ "$config_opt" != "NO_CONFIGURE" ]; then
+    if [ "$RESTART_STEP" == "gcc-stage1" ] ; then
+	CXXFLAGS="-std=gnu++03"
+    elif [ "$RESTART_STEP" == "gcc-stage2" ] ; then
+	CXXFLAGS="-std=gnu++11"
+    else
+	CXXFLAGS=""
+    fi
+
+    if [ "$tool" == "zlib" ]; then
         echo "ROCKBOXDEV: $toolname/configure"
         # NOTE glibc requires to be compiled with optimization
         CFLAGS='-U_FORTIFY_SOURCE -fgnu89-inline -O2' run_cmd "$logfile" \
+            "$cfg_dir/configure" "--prefix=$prefix" \
+            $config_opt
+    elif [ "$config_opt" != "NO_CONFIGURE" ]; then
+        echo "ROCKBOXDEV: $toolname/configure"
+        # NOTE glibc requires to be compiled with optimization
+        CFLAGS='-U_FORTIFY_SOURCE -fgnu89-inline -O2' CXXFLAGS="$CXXFLAGS" run_cmd "$logfile" \
             "$cfg_dir/configure" "--prefix=$prefix" \
             --disable-docs $config_opt
     fi
 
     if [ "$make_opts" != "NO_MAKE" ]; then
         echo "ROCKBOXDEV: $toolname/make"
-        run_cmd "$logfile" $make $make_opts
+        run_cmd "$logfile" $make $make_parallel $make_opts
     fi
 
     if [ "$install_opts" = "" ]; then
@@ -331,9 +404,14 @@ buildtool() {
     echo "ROCKBOXDEV: $toolname/make (install)"
     run_cmd "$logfile" $make $install_opts
 
-    echo "ROCKBOXDEV: rm -rf build-$toolname $toolname"
     cd ..
+
+    echo "ROCKBOXDEV: rm -rf build-$toolname $toolname"
     rm -rf build-$toolname
+    if [ "$stepname" != "gcc-stage1" ] ; then
+        echo "ROCKBOXDEV: rm -rf $toolname"
+        rm -rf $toolname
+    fi
 }
 
 build() {
@@ -343,8 +421,25 @@ build() {
     patch="$4"
     configure_params="$5"
     needs_libs="$6"
+    logfile="$builddir/build-$toolname.log"
 
-    patch_url="http://www.rockbox.org/gcc"
+    stepname=${RESTART_STEP:-$toolname}
+    if ! check_restart "$stepname"; then
+        echo "ROCKBOXDEV: Skipping step '$stepname' as requested per RBDEV_RESTART"
+        return
+    fi
+    echo "ROCKBOXDEV: Starting step '$stepname'"
+
+    # GCC is special..
+    if [ "$toolname" == "gcc" ]; then
+	configure_params="--enable-languages=c --disable-libssp $configure_params"
+
+        # For Apple targets only
+        if [ "$system" == "Darwin" ] ; then
+            patch="$patch apple_silicon.patch"
+            EXTRA_CXXFLAGS="-fbracket-depth=512"
+        fi
+    fi
 
     # create build directory
     if test -d $builddir; then
@@ -360,11 +455,6 @@ build() {
     gettool "$toolname" "$version"
     file="$toolname-$version"
 
-    # download patch
-    for p in $patch; do
-        getfile "$p" "$patch_url"
-    done
-
     cd $builddir
 
     extract "$toolname-$version"
@@ -374,7 +464,7 @@ build() {
         echo "ROCKBOXDEV: applying patch $p"
 
         # apply the patch
-        (cd $builddir/$toolname-$version && patch -p1 < "$dlwhere/$p")
+        (cd $builddir/$toolname-$version && patch -p1 < "$patch_dir/$p")
 
         # check if the patch applied cleanly
         if [ $? -gt 0 ]; then
@@ -383,121 +473,39 @@ build() {
         fi
     done
 
-    # kludge to avoid having to install GMP, MPFR and MPC, for new gcc
+    # kludge to avoid having to install GMP, MPFR, MPC and ISL
     if test -n "$needs_libs"; then
-        cd "gcc-$version"
-        if (echo $needs_libs | grep -q gmp && test ! -d gmp); then
-            echo "ROCKBOXDEV: Getting GMP"
-            getfile "gmp-4.3.2.tar.bz2" "$GNU_MIRROR/gmp"
-            tar xjf $dlwhere/gmp-4.3.2.tar.bz2
-            ln -s gmp-4.3.2 gmp
-        fi
-
-        if (echo $needs_libs | grep -q mpfr && test ! -d mpfr); then
-            echo "ROCKBOXDEV: Getting MPFR"
-            getfile "mpfr-2.4.2.tar.bz2" "$GNU_MIRROR/mpfr"
-            tar xjf $dlwhere/mpfr-2.4.2.tar.bz2
-            ln -s mpfr-2.4.2 mpfr
-        fi
-
-        if (echo $needs_libs | grep -q mpc && test ! -d mpc); then
-            echo "ROCKBOXDEV: Getting MPC"
-            getfile "mpc-0.8.1.tar.gz" "http://www.multiprecision.org/downloads"
-            tar xzf $dlwhere/mpc-0.8.1.tar.gz
-            ln -s mpc-0.8.1 mpc
+        cd "$toolname-$version"
+        if (echo $needs_libs | grep -q isl && test ! -d isl); then
+            echo "ROCKBOXDEV: Getting ISL"
+            getfile "isl-0.15.tar.bz2" "https://gcc.gnu.org/pub/gcc/infrastructure"
+            tar xjf $dlwhere/isl-0.15.tar.bz2
+            ln -s isl-0.15 isl
         fi
         cd $builddir
     fi
 
+    echo "ROCKBOXDEV: logging to $logfile"
+    rm -f "$logfile"
+
     echo "ROCKBOXDEV: mkdir build-$toolname"
     mkdir build-$toolname
 
-    echo "ROCKBOXDEV: cd build-$toolname"
     cd build-$toolname
 
     echo "ROCKBOXDEV: $toolname/configure"
-    case $toolname in
-        crosstool-ng) # ct-ng doesnt support out-of-tree build and the src folder is named differently
-            toolname="crosstool-ng"
-            cp -r ../$toolname-$version/* ../$toolname-$version/.version .
-            ./configure --prefix=$prefix $configure_params
-        ;;
-        *)
-            CFLAGS='-U_FORTIFY_SOURCE -fgnu89-inline' ../$toolname-$version/configure --target=$target --prefix=$prefix --enable-languages=c --disable-libssp --disable-docs $configure_params
-        ;;
-    esac
+    CFLAGS='-U_FORTIFY_SOURCE -fgnu89-inline -fcommon -O2' CXXFLAGS="-std=gnu++03 $EXTRA_CXXFLAGS" run_cmd "$logfile" ../$toolname-$version/configure --target=$target --prefix=$prefix --disable-docs $configure_params
 
     echo "ROCKBOXDEV: $toolname/make"
-    $make
+    run_cmd "$logfile" $make $make_parallel
 
     echo "ROCKBOXDEV: $toolname/make install"
-    $make install
+    run_cmd "$logfile" $make install
+
+    cd ..
 
     echo "ROCKBOXDEV: rm -rf build-$toolname $toolname-$version"
-    cd ..
     rm -rf build-$toolname $toolname-$version
-}
-
-make_ctng() {
-    if test -f "`which ct-ng 2>/dev/null`"; then
-        ctng="ct-ng"
-    else
-        ctng=""
-    fi
-
-    if test ! -n "$ctng"; then
-        if test ! -f "$prefix/bin/ct-ng"; then # look if we build it already
-            build "crosstool-ng" "" "1.13.2" "crosstool-ng-1.13.2.diff"
-        fi
-    fi
-    ctng=`PATH=$prefix/bin:$PATH which ct-ng`
-}
-
-build_ctng() {
-    ctng_target="$1"
-    extra="$2"
-    tc_arch="$3"
-    tc_host="$4"
-
-    make_ctng
-
-    dlurl="http://www.rockbox.org/gcc/$ctng_target"
-
-    # download 
-    getfile "ct-ng-config" "$dlurl"
-
-    test -n "$extra" && getfile "$extra" "$dlurl"
-    
-    # create build directory
-    if test -d $builddir; then
-        if test ! -w $builddir; then
-            echo "ROCKBOXDEV: No write permission for $builddir"
-            exit
-        fi
-    else
-        mkdir -p $builddir
-    fi
-
-    # copy config and cd to $builddir
-    mkdir $builddir/build-$ctng_target
-    ctng_config="$builddir/build-$ctng_target/.config"
-    cat "$dlwhere/ct-ng-config" | sed -e "s,\(CT_PREFIX_DIR=\).*,\1$prefix," > $ctng_config
-    cd $builddir/build-$ctng_target
-
-    $ctng "build"
-
-    # install extras
-    if test -e "$dlwhere/$extra"; then
-        # verify the toolchain has sysroot support
-        if test -n `cat $ctng_config | grep CT_USE_SYSROOT\=y`; then
-            sysroot=`cat $ctng_config | grep CT_SYSROOT_NAME | sed -e 's,CT_SYSROOT_NAME\=\"\([a-zA-Z0-9]*\)\",\1,'`
-            tar xf "$dlwhere/$extra" -C "$prefix/$tc_arch-$ctng_target-$tc_host/$sysroot"
-        fi
-    fi
-    
-    # cleanup
-    cd $builddir
-    rm -rf $builddir/build-$ctng_target
 }
 
 # build a cross compiler toolchain for linux
@@ -518,6 +526,8 @@ build_linux_toolchain () {
     linux_ver="$6"
     glibc_ver="$7"
     glibc_opts="$8"
+    glibc_patches="$9"
+
     # where to put the sysroot
     sysroot="$prefix/$target/sysroot"
     # extract arch from target
@@ -541,6 +551,11 @@ build_linux_toolchain () {
         mkdir -p $builddir
     fi
 
+    if [ "$makever" -gt 43 ] ; then
+	glibc_make_opts="--jobserver-style=pipe --shuffle=none"
+#	MAKEFLAGS="--jobserver-style=pipe --shuffle=none"
+    fi
+
     # download all tools
     gettool "binutils" "$binutils_ver"
     gettool "gcc" "$gcc_ver"
@@ -554,8 +569,20 @@ build_linux_toolchain () {
     extract "linux-$linux_ver"
     extract "glibc-$glibc_ver"
 
-    # we make it possible to restart a build on error by using the RESTART
-    # variable, the format is RESTART="tool" where tool is the toolname at which
+    # do we have a patch?
+    for p in $glibc_patches; do
+        echo "ROCKBOXDEV: applying patch $p"
+	(cd $builddir/glibc-$glibc_ver ; patch -p1 < "$patch_dir/$p")
+
+	# check if the patch applied cleanly
+        if [ $? -gt 0 ]; then
+            echo "ROCKBOXDEV: failed to apply patch $p"
+            exit
+        fi
+    done
+
+    # we make it possible to restart a build on error by using the RBDEV_RESTART
+    # variable, the format is RBDEV_RESTART="tool" where tool is the toolname at which
     # to restart (binutils, gcc)
 
     # install binutils, with support for sysroot
@@ -584,11 +611,13 @@ build_linux_toolchain () {
     # build glibc using the first stage cross compiler
     # we need to set the prefix to /usr because the glibc runs on the actual
     # target and is indeed installed in /usr
+    RESTART_STEP="glibc" \
     prefix="/usr" \
     buildtool "glibc" "$glibc_ver" "--target=$target --host=$target --build=$MACHTYPE \
         --with-__thread --with-headers=$sysroot/usr/include $glibc_opts" \
-        "" "install install_root=$sysroot"
+        "$glibc_make_opts" "install install_root=$sysroot"
     # build stage 2 compiler
+    RESTART_STEP="gcc-stage2" \
     buildtool "gcc" "$gcc_ver" "$gcc_opts --enable-languages=c,c++ --target=$target \
         --with-sysroot=$sysroot" "" ""
 }
@@ -598,7 +627,7 @@ usage () {
     echo "options:"
     echo "  --help              Display this help"
     echo "  --target=LIST       List of targets to build"
-    echo "  --restart=STEP      Restart build at given STEP (same as RESTART env var)"
+    echo "  --restart=STEP      Restart build at given STEP (same as RBDEV_RESTART env var)"
     echo "  --prefix=PREFIX     Set install prefix (same as RBDEV_PREFIX env var)"
     echo "  --dlwhere=DIR       Set download directory (same as RBDEV_DOWNLOAD env var)"
     echo "  --builddir=DIR      Set build directory (same as RBDEV_BUILD env var)"
@@ -660,12 +689,21 @@ if [ -n "$missingtools" ]; then
     exit 1
 fi
 
-echo "Download directory : $dlwhere (set RBDEV_DOWNLOAD or use --download= to change)"
+if ! $make -v | grep -q GNU ; then
+    echo "ROCKBOXDEV: Building the rockbox toolchains requires GNU Make."
+    exit 1
+fi
+
+dlwhere=$($READLINK -f "$dlwhere")
+prefix=$($READLINK -f "$prefix")
+builddir=$($READLINK -f "$builddir")
+
+echo "Download directory : $dlwhere (set RBDEV_DOWNLOAD or use --dlwhere= to change)"
 echo "Install prefix     : $prefix  (set RBDEV_PREFIX or use --prefix= to change)"
 echo "Build dir          : $builddir (set RBDEV_BUILD or use --builddir= to change)"
 echo "Make options       : $MAKEFLAGS (set MAKEFLAGS or use --makeflags= to change)"
 echo "Restart step       : $RBDEV_RESTART (set RBDEV_RESTART or use --restart= to change)"
-echo "Target arch        : $RBDEV_TARGET (set RBDEV_TARGET or use --target to change)"
+echo "Target arch        : $RBDEV_TARGET (set RBDEV_TARGET or use --target= to change)"
 
 # Verify download directory
 if test -d "$dlwhere"; then
@@ -697,46 +735,35 @@ fi
 
 if [ -z "$RBDEV_TARGET" ]; then
     echo "Select target arch:"
-    echo "s   - sh       (Archos models)"
     echo "m   - m68k     (iriver h1x0/h3x0, iaudio m3/m5/x5 and mpio hd200)"
-    echo "a   - arm      (ipods, iriver H10, Sansa, D2, Gigabeat, etc)"
-    echo "i   - mips     (Jz47xx and ATJ-based players)"
-    echo "r   - arm-app  (Samsung ypr0)"
+    echo "a   - arm      (ipods, iriver H10, Sansa, D2, Gigabeat, older Sony NWZ, etc)"
+    echo "i   - mips     (Jz47xx/x1000 based players)"
     echo "x   - arm-linux  (Generic Linux ARM: Samsung ypr0, Linux-based Sony NWZ)"
-    echo "y   - mips-linux  (Generic Linux MIPS: AGPTek Rocker)"
+    echo "y   - mips-linux  (Generic Linux MIPS: eg the many HiBy-OS targets)"
     echo "separate multiple targets with spaces"
-    echo "(Example: \"s m a\" will build sh, m68k and arm)"
+    echo "(Example: \"m a i\" will build m68k, arm, and mips)"
     echo ""
     selarch=`input`
 else
     selarch=$RBDEV_TARGET
 fi
-system=`uname -s`
 
 # add target dir to path to ensure the new binutils are used in gcc build
 PATH="$prefix/bin:${PATH}"
 
 for arch in $selarch
 do
+    export MAKEFLAGS=`echo $MAKEFLAGS| $SED 's/ -r / /'`  # We don't want -r
     echo ""
     case $arch in
-        [Ss])
-            # For binutils 2.16.1 builtin rules conflict on some systems with a
-            # default rule for Objective C. Disable the builtin make rules. See
-            # http://sourceware.org/ml/binutils/2005-12/msg00259.html
-            export MAKEFLAGS="-r $MAKEFLAGS"
-            build "binutils" "sh-elf" "2.16.1" "binutils-2.16.1-texinfo-fix.diff" "--disable-werror"
-            build "gcc" "sh-elf" "4.0.3" "gcc-4.0.3-rockbox-1.diff"
-            ;;
-
         [Ii])
-            build "binutils" "mipsel-elf" "2.26.1" "" "--disable-werror"
-            build "gcc" "mipsel-elf" "4.9.4" "" "" "gmp mpfr mpc"
+            build "binutils" "mipsel-elf" "2.26.1" "" "--disable-werror" "gmp isl"
+            build "gcc" "mipsel-elf" "4.9.4" "" "" "gmp mpfr mpc isl"
             ;;
 
         [Mm])
-            build "binutils" "m68k-elf" "2.20.1" "binutils-2.20.1-texinfo-fix.diff" "--disable-werror"
-            build "gcc" "m68k-elf" "4.5.2" "" "--with-arch=cf MAKEINFO=missing" "gmp mpfr mpc"
+            build "binutils" "m68k-elf" "2.26.1" "" "--disable-werror" "gmp isl"
+            build "gcc" "m68k-elf" "4.9.4" "" "--with-arch=cf MAKEINFO=missing" "gmp mpfr mpc isl"
             ;;
 
         [Aa])
@@ -748,11 +775,8 @@ do
                     gccopts="--disable-nls"
                     ;;
             esac
-            build "binutils" "arm-elf-eabi" "2.20.1" "binutils-2.20.1-ld-thumb-interwork-long-call.diff binutils-2.20.1-texinfo-fix.diff" "$binopts --disable-werror"
-            build "gcc" "arm-elf-eabi" "4.4.4" "rockbox-multilibs-noexceptions-arm-elf-eabi-gcc-4.4.2_1.diff" "$gccopts MAKEINFO=missing" "gmp mpfr"
-            ;;
-        [Rr])
-            build_ctng "ypr0" "alsalib.tar.gz" "arm" "linux-gnueabi"
+            build "binutils" "arm-elf-eabi" "2.26.1" "" "$binopts --disable-werror" "gmp isl"
+            build "gcc" "arm-elf-eabi" "4.9.4" "rockbox-multilibs-noexceptions-arm-elf-eabi-gcc-4.9.4.diff" "$gccopts MAKEINFO=missing" "gmp mpfr mpc isl"
             ;;
         [Xx])
             # IMPORTANT NOTE
@@ -784,7 +808,7 @@ do
             # avoid patches/bugs.
             glibcopts="--enable-kernel=2.6.23 --enable-oldest-abi=2.4"
             build_linux_toolchain "arm-rockbox-linux-gnueabi" "2.26.1" "" "4.9.4" \
-                "$gccopts" "2.6.32.68" "2.19" "$glibcopts"
+                "$gccopts" "2.6.32.68" "2.19" "$glibcopts" "glibc-220-make44.patch"
             # build alsa-lib
             # we need to set the prefix to how it is on device (/usr) and then
             # tweak install dir at make install step
@@ -794,7 +818,7 @@ do
             prefix="/usr" buildtool "alsa-lib" "$alsalib_ver" \
                 "--host=$target --disable-python" "" "install DESTDIR=$prefix/$target/sysroot"
             ;;
-        [yy])
+        [Yy])
             # IMPORTANT NOTE
             # This toolchain must support several targets and thus must support
             # the oldest possible configuration.
@@ -805,24 +829,67 @@ do
             #        compiles with GCC >6
             #   kernel: 3.10.14
             #   glibc: 2.16
+            #   alsa: 1.0.29
+            #
+            # FiiO M3K Linux:
+            #   kernel: 3.10.14
+            #   glibc: 2.16
+            #   alsa: 1.0.26
             #
             # To maximize compatibility, we use kernel 3.2.85 which is the lastest
             # longterm 3.2 kernel and is supported by the latest glibc, and we
-            # require support for up to glibc 2.4
+            # require support for up to glibc 2.16
             # We use a recent 2.26.1 binutils to avoid any build problems and
             # avoid patches/bugs.
-            glibcopts="--enable-kernel=3.2 --enable-oldest-abi=2.4"
+            glibcopts="--enable-kernel=3.2 --enable-oldest-abi=2.16"
             # FIXME: maybe add -mhard-float
             build_linux_toolchain "mipsel-rockbox-linux-gnu" "2.26.1" "" "4.9.4" \
-                "$gccopts" "3.2.85" "2.25" "$glibcopts"
+                "$gccopts" "3.2.85" "2.25" "$glibcopts" "glibc-225-make44.patch"
             # build alsa-lib
             # we need to set the prefix to how it is on device (/usr) and then
             # tweak install dir at make install step
-            alsalib_ver="1.0.19"
+            alsalib_ver="1.0.26"
             gettool "alsa-lib" "$alsalib_ver"
             extract "alsa-lib-$alsalib_ver"
             prefix="/usr" buildtool "alsa-lib" "$alsalib_ver" \
                 "--host=$target --disable-python" "" "install DESTDIR=$prefix/$target/sysroot"
+            # build libffi
+	    libffi_ver="3.2.1"
+	    gettool "libffi" "$libffi_ver"
+	    extract "libffi-$libffi_ver"
+	    prefix="/usr" buildtool "libffi" "$libffi_ver" \
+               "--includedir=/usr/include --host=$target" "" "install DESTDIR=$prefix/$target/sysroot"
+            (cd $prefix/$target/sysroot/usr/include ; ln -sf ../lib/libffi-$libffi_ver/include/ffi.h . ;  ln -sf ../lib/libffi-$libffi_ver/include/ffitarget.h . )
+
+            # build zlib
+	    zlib_ver="1.2.13"  # Target uses 1.2.8!
+	    gettool "zlib" "$zlib_ver"
+	    extract "zlib-$zlib_ver"
+	    CHOST=$target prefix="/usr" buildtool "zlib" "$zlib_ver" \
+                "" "" "install DESTDIR=$prefix/$target/sysroot"
+
+            # build glib
+	    glib_ver="2.46.2"
+	    gettool "glib" "$glib_ver"
+	    extract "glib-$glib_ver"
+	    prefix="/usr" buildtool "glib" "$glib_ver" \
+               "--host=$target --with-sysroot=$prefix/$target/sysroot --disable-libelf glib_cv_stack_grows=no glib_cv_uscore=no ac_cv_func_posix_getpwuid_r=yes ac_cv_func_posix_getgrgid_r=yes" "" "install DESTDIR=$prefix/$target/sysroot"
+
+            # build expat
+	    expat_ver="2.1.0"
+	    gettool "expat" "$expat_ver"
+	    extract "expat-$expat_ver"
+	    prefix="/usr" buildtool "expat" "$expat_ver" \
+               "--host=$target --includedir=/usr/include --enable-abstract-sockets" "" "install DESTDIR=$prefix/$target/sysroot "
+
+            # build dbus
+	    dbus_ver="1.10.2"
+	    gettool "dbus" "$dbus_ver"
+	    extract "dbus-$dbus_ver"
+	    prefix="/usr" buildtool "dbus" "$dbus_ver" \
+               "--host=$target --with-sysroot=$prefix/$target/sysroot --includedir=/usr/include --enable-abstract-sockets ac_cv_lib_expat_XML_ParserCreate_MM=yes --disable-systemd --disable-launchd --enable-x11-autolaunch=no --with-x=no -disable-selinux --disable-apparmor --disable-doxygen-docs " "" "install DESTDIR=$prefix/$target/sysroot "
+
+
             ;;
         *)
             echo "ROCKBOXDEV: Unsupported architecture option: $arch"
