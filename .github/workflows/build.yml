@@ -1,0 +1,150 @@
+name: Rockbox build
+on: [workflow_dispatch, push, pull_request]
+ 
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Rocker
+            # Other arch targets https://github.com/bahusoid/rockbox/blob/992dfe0118f367533fe23170b1459c2818a629a1/tools/rockboxdev.sh#L697-L701
+            arch: y
+            # Other platform targets https://github.com/Rockbox/rockbox/blob/dd1fbd51fc7bb3fa7237b3bc34335e99bef29e35/tools/configure#L1560-L1615
+            platform: 240
+
+          - name: xDuoo X3II
+            arch: y
+            platform: 242
+
+          - name: Samsung YP-R0
+            arch: x
+            platform: 205
+
+          - name: clipZip
+            arch: a
+            platform: 65
+
+          - name: mRobe500
+            arch: a
+            platform: 70
+
+          - name: IriverH300
+            arch: m
+            platform: 11
+
+          - name: iriverh120_rtcmod
+            arch: m
+            platform: 10
+            type: AR
+
+          - name: ipod mini 2g
+            arch: a
+            platform: 26
+            type: AR
+
+    runs-on: ubuntu-22.04
+    name: ${{matrix.name}}
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: root suid tar
+      # workaround for caching system files
+      run: sudo chown root /bin/tar && sudo chmod u+s /bin/tar
+
+    - name: Restore toolchain dependencies
+      id: cache-before
+      uses: actions/cache/restore@v3
+      with:
+        path: |
+          /tmp/rbdev-dl
+          /tmp/local
+          /tmp/rbdev-build
+          /tmp/rockboxdev_path_modifications
+        key: ${{ runner.os }}-toolchain-${{ matrix.arch }}-${{ hashFiles('tools/rockboxdev.sh') }}
+        restore-keys: |
+          ${{ runner.os }}-toolchain-${{ matrix.arch }}-
+          ${{ runner.os }}-toolchain-
+
+    - name: Restore PATH from cached modifications
+      if: steps.cache-before.outputs.cache-hit == 'true'
+      run: |
+        # Append the cached PATH modifications to GITHUB_PATH
+        # cat /tmp/rockboxdev_path_modifications >> $GITHUB_PATH
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y automake bison build-essential ccache flex libc6-dev libgmp3-dev libmpfr-dev \
+        libsdl1.2-dev libtool-bin texinfo zip gawk wget libmpc-dev gettext
+
+    - name: Run rockboxdev.sh and save PATH modifications
+      if: steps.cache-before.outputs.cache-hit != 'true'
+      run: |
+        ORIGINAL_PATH="$PATH"
+        cd tools
+        chmod +x rockboxdev.sh
+        sudo ./rockboxdev.sh --target=${{matrix.arch}}
+        cd ..
+        
+        # Find the delta by removing the original PATH substring
+        MODIFIED_PATH="$PATH"
+        # Remove ORIGINAL_PATH from the beginning or middle of MODIFIED_PATH
+        DELTA_PATH=${MODIFIED_PATH//$ORIGINAL_PATH:/}
+        # Remove ORIGINAL_PATH from the end of MODIFIED_PATH, if present
+        DELTA_PATH=${DELTA_PATH%:$ORIGINAL_PATH}
+        echo "$DELTA_PATH" > /tmp/rockboxdev_path_modifications
+        
+        # Append the modifications to GITHUB_PATH
+        echo "$DELTA_PATH" >> $GITHUB_PATH
+        echo "DELTA_PATH: $DELTA_PATH"
+
+    - name: Add /tmp/local/bin to PATH
+      run: |
+        echo "/tmp/local/bin" >> $GITHUB_PATH
+
+    - name: Build Rockbox
+      run: |
+        mkdir build
+        cd build
+        ../tools/configure --target=${{matrix.platform}} --type=${{matrix.type || 'N'}}
+        make -j
+        make zip
+
+    - name: Cache toolchain dependencies
+      if: steps.cache-before.outputs.cache-hit != 'true'
+      uses: actions/cache@v3
+      with:
+        path: |
+          /tmp/rbdev-dl
+          /tmp/local
+          /tmp/rbdev-build
+          /tmp/rockboxdev_path_modifications
+        key: ${{ runner.os }}-toolchain-${{ matrix.arch }}-${{ hashFiles('tools/rockboxdev.sh') }}
+        restore-keys: |
+          ${{ runner.os }}-toolchain-${{ matrix.arch }}-
+
+    - name: Upload build
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{matrix.name}}.zip
+        path: build/rockbox.zip
+
+    - name: Upload debug files
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{matrix.name}}-debug
+        path: |
+          build/**/*.elf
+          build/**/*.map
+          build/**/*.log
+          build/**/*.dmp
+          build/**/*.dump
+
+    - name: Upload log
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: ${{matrix.name}}Logs
+        path: /tmp/rbdev-build/*.log
