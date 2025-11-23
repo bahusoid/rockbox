@@ -76,8 +76,13 @@
 #define IS_SYSEVENT(ev)           ((ev & SYS_EVENT) == SYS_EVENT)
 
 #define MAX_NUM_QUEUES 32
+#if (defined(HIBY_R3PROII) || defined(HIBY_R1)) && defined(HAVE_TOUCHSCREEN)
+#define QUEUE_LENGTH 32 /* MUST be a power of 2 */
+#else
 #define QUEUE_LENGTH 16 /* MUST be a power of 2 */
+#endif
 #define QUEUE_LENGTH_MASK (QUEUE_LENGTH - 1)
+
 
 struct queue_event
 {
