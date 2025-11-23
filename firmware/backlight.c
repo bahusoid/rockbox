@@ -41,6 +41,10 @@
 #include "lcd.h"
 #include "screendump.h"
 
+#if defined(HAVE_GENERAL_PURPOSE_LED)
+#include "led-general-purpose.h"
+#endif
+
 #ifdef HAVE_REMOTE_LCD
 #include "lcd-remote.h"
 #endif
@@ -821,6 +825,10 @@ void backlight_on(void)
     {
         queue_remove_from_head(&backlight_queue, BACKLIGHT_ON);
         queue_post(&backlight_queue, BACKLIGHT_ON, 0);
+
+#if defined(HAVE_GENERAL_PURPOSE_LED)
+        led_hw_on();
+#endif
     }
 }
 
@@ -833,6 +841,10 @@ void backlight_on_ignore(bool value, int timeout)
 void backlight_off(void)
 {
     queue_post(&backlight_queue, BACKLIGHT_OFF, 0);
+
+#if defined(HAVE_GENERAL_PURPOSE_LED)
+    led_hw_off();
+#endif
 }
 
 /* returns true when the backlight is on,
