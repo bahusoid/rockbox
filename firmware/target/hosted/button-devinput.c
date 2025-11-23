@@ -109,12 +109,20 @@ static enum
 #define EVENT_VALUE_TOUCHSCREEN_PRESS    1
 #define EVENT_VALUE_TOUCHSCREEN_RELEASE -1
 
-static int ts_enabled = 0;
+static int ts_enabled = 1;
 
 void touchscreen_enable_device(bool en)
 {
     ts_enabled = en;
 }
+
+/*
+ * Previously ABS_MT_TRACKING_ID events were used for tracking _last_touch_state, however this doesn't work great on some touchscreens
+ * _last_touch_state probably shouldn't be updated here tbh, but I don't want to refactor this code anymore.
+ *
+ * So we're using a fake event that is called on BUTTON_TOUCH. This will break any touchscreens which don't have this enabled. (Sorry!)
+ */
+#define ABS_FAKE_PRESSED 0x1337
 
 static bool handle_touchscreen_event(__u16 code, __s32 value)
 {
@@ -140,7 +148,7 @@ static bool handle_touchscreen_event(__u16 code, __s32 value)
             break;
         }
 
-        case ABS_MT_TRACKING_ID:
+        case ABS_FAKE_PRESSED:
         {
             if(value == EVENT_VALUE_TOUCHSCREEN_PRESS)
             {
@@ -218,7 +226,7 @@ int button_read_device(BDATA)
 #if defined(HAVE_TOUCHSCREEN) && defined(BUTTON_TOUCH)
                             /* Some touchscreens give us actual touch/untouch as a "key" */
                             if (bmap & BUTTON_TOUCH) {
-                                handle_touchscreen_event(ABS_MT_TRACKING_ID, EVENT_VALUE_TOUCHSCREEN_PRESS);
+                                handle_touchscreen_event(ABS_FAKE_PRESSED, EVENT_VALUE_TOUCHSCREEN_PRESS);
                                 bmap &= ~BUTTON_TOUCH;
                             }
 #endif
@@ -227,7 +235,7 @@ int button_read_device(BDATA)
 #if defined(HAVE_TOUCHSCREEN) && defined(BUTTON_TOUCH)
                             /* Some touchscreens give us actual touch/untouch as a "key" */
                             if (bmap & BUTTON_TOUCH) {
-                                handle_touchscreen_event(ABS_MT_TRACKING_ID, 0);
+                                handle_touchscreen_event(ABS_FAKE_PRESSED, EVENT_VALUE_TOUCHSCREEN_RELEASE);
                                 bmap &= ~BUTTON_TOUCH;
                             }
 #endif
