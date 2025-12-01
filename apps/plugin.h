@@ -1020,6 +1020,11 @@ struct plugin_api {
                                 const struct touchevent *ev);
     bool (*gesture_vel_get)(struct gesture_vel *gv, int *xvel, int *yvel);
 #endif
+#ifdef HAVE_TOUCHSCREEN
+    int (*gesture_flick_get_in_vp)(const struct gesture_event *gevt,
+                                   const struct viewport *vp);
+    int (*gesture_flick_get)(const struct gesture_event *gevt);
+#endif
 };
 
 /* plugin header */
