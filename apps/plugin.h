@@ -1032,6 +1032,11 @@ struct plugin_api {
     bool (*ogg_file_init)(struct ogg_file* file, int fd, int type, int remaining);
     ssize_t (*ogg_file_read)(struct ogg_file* file, void* buffer, size_t buffer_size);
 #endif
+#ifdef HAVE_TOUCHSCREEN
+    int (*gesture_flick_get_in_vp)(const struct gesture_event *gevt,
+                                   const struct viewport *vp);
+    int (*gesture_flick_get)(const struct gesture_event *gevt);
+#endif
 };
 
 /* plugin header */
