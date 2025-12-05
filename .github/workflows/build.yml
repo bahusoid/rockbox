@@ -43,6 +43,10 @@ jobs:
             platform: 26
             type: AR
 
+          - name: Hiby R1
+            arch: y
+            platform: hibyr1
+
     runs-on: ubuntu-22.04
     name: ${{matrix.name}}
 
