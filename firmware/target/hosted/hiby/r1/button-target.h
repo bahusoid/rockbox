@@ -26,12 +26,12 @@
 
 /* Main unit's buttons */
 #define BUTTON_POWER                0x00000001
-#define BUTTON_PREV                 0x00000002	/* there is no PREV */
-#define BUTTON_NEXT                 0x00000004
-#define BUTTON_PLAY                 0x00000008
-#define BUTTON_VOL_UP               0x00000010
-#define BUTTON_VOL_DOWN             0x00000020
-#define BUTTON_MAIN                 0x0000003f
+//#define BUTTON_PREV                 0x00000002	/* there is no PREV */
+#define BUTTON_RIGHT                 0x00000004 //Next
+#define BUTTON_LEFT                 0x00000008 //Play/Pause
+#define BUTTON_UP               0x00000010 //Volume Up
+#define BUTTON_DOWN             0x00000020 //Volume Down
+#define BUTTON_MAIN                (BUTTON_POWER|BUTTON_RIGHT|BUTTON_LEFT|BUTTON_UP|BUTTON_DOWN)
 
 #define BUTTON_TOUCH                0x00000040
 
@@ -49,12 +49,6 @@
 /* Software power-off */
 #define POWEROFF_BUTTON BUTTON_POWER
 #define POWEROFF_COUNT 25
-
-/* Make plugins compile for the simulator */
-#ifdef SIMULATOR
-#define BUTTON_LEFT        BUTTON_NEXT
-#define BUTTON_RIGHT       BUTTON_PREV
-#endif
 
 int button_map(int keycode);
 

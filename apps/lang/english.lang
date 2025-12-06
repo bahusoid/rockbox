@@ -344,6 +344,7 @@
     iriverh100,iriverh120,iriverh300: "NAVI = Yes"
     mrobe500: "PLAY, POWER, or top-right = Yes"
     vibe500: "OK = Yes"
+    hibyr1: "NEXT = Yes"
   </dest>
   <voice>
     *: ""
