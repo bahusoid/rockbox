@@ -41,15 +41,13 @@ int button_map(int keycode)
     switch(keycode)
     {
         case KEY_VOLUMEDOWN:
-            return BUTTON_VOL_DOWN;
+            return BUTTON_DOWN;
         case KEY_VOLUMEUP:
-            return BUTTON_VOL_UP;
+            return BUTTON_UP;
         case KEY_PLAYPAUSE:
-            return BUTTON_PLAY;
+            return BUTTON_LEFT;
         case KEY_NEXTSONG:
-            return BUTTON_NEXT;
-        case KEY_PREVIOUSSONG:
-            return BUTTON_PREV;
+            return BUTTON_RIGHT;
         case KEY_POWER:
             return BUTTON_POWER;
         case BTN_TOUCH:
@@ -61,7 +59,7 @@ int button_map(int keycode)
             // Ignore
             return 0;
 #else
-            return BUTTON_TOUCH
+            return BUTTON_TOUCH;
 #endif
         }
         default:

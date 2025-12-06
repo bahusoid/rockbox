@@ -312,4 +312,6 @@ keymaps/keymap-rgnano.c
 keymaps/keymap-ctru.c
 #elif CONFIG_KEYPAD == HIBY_R3PROII_PAD
 keymaps/keymap-hibyr3proii.c
+#elif CONFIG_KEYPAD == HIBY_R1_PAD
+keymaps/keymap-hibyr1.c
 #endif
