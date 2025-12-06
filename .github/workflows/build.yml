@@ -30,6 +30,7 @@ jobs:
         path: |
           /tmp/rbdev-dl
           /tmp/local
+          /usr/local
           /tmp/rbdev-build
           /tmp/rockboxdev_path_modifications
         key: ${{ runner.os }}-toolchain-${{ matrix.arch }}-${{ hashFiles('tools/rockboxdev.sh') }}
@@ -89,6 +90,7 @@ jobs:
         path: |
           /tmp/rbdev-dl
           /tmp/local
+          /usr/local
           /tmp/rbdev-build
           /tmp/rockboxdev_path_modifications
         key: ${{ runner.os }}-toolchain-${{ matrix.arch }}-${{ hashFiles('tools/rockboxdev.sh') }}
