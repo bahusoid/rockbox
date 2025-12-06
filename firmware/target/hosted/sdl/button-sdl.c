@@ -662,14 +662,14 @@ static void button_event(int key, bool pressed)
         }
 #endif
     default:
+            new_btn = key_to_button(key);
 #ifdef HAVE_TOUCHSCREEN
 # ifndef HAS_BUTTON_HOLD
         if(touchscreen_is_enabled())
 # endif
-            new_btn = key_to_touch(key, mouse_coords);
-        if (!new_btn)
+            if (!new_btn)
+                new_btn = key_to_touch(key, mouse_coords);
 #endif
-            new_btn = key_to_button(key);
 #ifdef HAVE_TOUCHPAD
         new_btn = touchpad_filter(new_btn);
 #endif
