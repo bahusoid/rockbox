@@ -32,7 +32,7 @@
 #define HAVE_HOTKEY
 
 #define HAVE_HEADPHONE_DETECTION
-#define NO_BUTTON_LR
+//#define NO_BUTTON_LR
 
 #ifndef BOOTLOADER
 #define HAVE_BUTTON_DATA
@@ -44,10 +44,10 @@
 #endif
 
 /* KeyPad configuration for plugins */
-#define CONFIG_KEYPAD HIBY_R3PROII_PAD
+#define CONFIG_KEYPAD HIBY_R1_PAD
 
 /* define this if the target has volume keys which can be used in the lists */
-#define HAVE_VOLUME_IN_LIST
+//#define HAVE_VOLUME_IN_LIST
 
 /* Battery */
 #define BATTERY_TYPES_COUNT  1
