@@ -89,7 +89,7 @@ jobs:
         ORIGINAL_PATH="$PATH"
         cd tools
         chmod +x rockboxdev.sh
-        sudo ./rockboxdev.sh --target=${{matrix.arch}}
+        sudo ./rockboxdev.sh --target=${{matrix.arch}} --prefix=/tmp/local
         cd ..
         
         # Find the delta by removing the original PATH substring
