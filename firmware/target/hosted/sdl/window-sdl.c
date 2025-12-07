@@ -157,12 +157,10 @@ void sdl_window_render(void)
             SDL_DestroyTexture(gui_texture);
         rebuild_gui_texture();
     }
-    else
-    {
-        SDL_RenderClear(sdlRenderer);
-        SDL_RenderCopy(sdlRenderer, gui_texture, NULL, NULL);
-        SDL_RenderPresent(sdlRenderer);
-    }
+
+    SDL_RenderClear(sdlRenderer);
+    SDL_RenderCopy(sdlRenderer, gui_texture, NULL, NULL);
+    SDL_RenderPresent(sdlRenderer);
 }
 
 bool sdl_window_adjust(void)
@@ -225,6 +223,9 @@ void sdl_window_setup(void)
 
     get_window_dimensions(&width, &height);
 
+    /* Set rendering scale quality hint before creating renderer/textures */
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, display_zoom == 1 ? "best" : "nearest");
+
     if ((sdlWindow = SDL_CreateWindow(UI_TITLE, SDL_WINDOWPOS_CENTERED,
                                    SDL_WINDOWPOS_CENTERED, width * display_zoom,
                                    height * display_zoom , flags)) == NULL)
@@ -245,7 +246,12 @@ void sdl_window_setup(void)
                                                 depth, 0, 0, 0, 0)) == NULL)
         panicf("%s", SDL_GetError());
 
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, display_zoom == 1 ? "best" : "nearest");
+    /* Ensure the GUI texture is created now that sim_lcd_surface exists.
+       This prevents race conditions where LCD updates occur before texture initialization.
+       Since SDL_SetHint was set before renderer creation, fonts will render correctly. */
+    new_gui_texture_needed = true;
+    sdl_window_render();
+
     display_zoom = 0; /* reset to 0 unless/until user requests a scale level change */
     window_mutex = SDL_CreateMutex();
 }
