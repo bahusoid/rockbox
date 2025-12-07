@@ -7,7 +7,7 @@
  *                     \/            \/     \/    \/            \/
  * $Id$
  *
- * Copyright (C) Barry Wardell 2006
+ * Copyright (C) Roman Artiukhin 2025
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -44,9 +44,13 @@ static const struct button_mapping button_context_standard[]  = {
 
     { ACTION_STD_OK,          BUTTON_RIGHT|BUTTON_REL,                      BUTTON_RIGHT },
     { ACTION_STD_CANCEL,      BUTTON_LEFT|BUTTON_REL,      BUTTON_LEFT },
-    { ACTION_STD_QUICKSCREEN,       BUTTON_QS_COMBO | BUTTON_REL,      BUTTON_QS_COMBO },
     { ACTION_STD_CONTEXT,     BUTTON_RIGHT|BUTTON_REPEAT,       BUTTON_RIGHT },
     { ACTION_STD_KEYLOCK,       BUTTON_POWER|BUTTON_UP,      BUTTON_NONE },
+
+    { ACTION_WPS_QUICKSCREEN,       BUTTON_QS_COMBO,      BUTTON_NONE },
+    { ACTION_STD_QUICKSCREEN,       BUTTON_POWER|BUTTON_DOWN,      BUTTON_POWER },
+    //{ ACTION_WPS_MENU,       BUTTON_POWER|BUTTON_LEFT,      BUTTON_POWER },
+    //{ ACTION_WPS_PITCHSCREEN,       BUTTON_POWER|BUTTON_RIGHT,      BUTTON_POWER },
 
     LAST_ITEM_IN_LIST
 }; /* button_context_standard */
@@ -72,17 +76,16 @@ static const struct button_mapping button_context_wps[]  = {
 
     { ACTION_WPS_PLAY,        BUTTON_POWER|BUTTON_REL,     BUTTON_POWER },
     { ACTION_STD_KEYLOCK,       BUTTON_POWER|BUTTON_UP,      BUTTON_NONE },
-    //TODO: { ACTION_WPS_MENU,       BUTTON_POWER|BUTTON_REL,  BUTTON_POWER },
 
-    { ACTION_WPS_QUICKSCREEN,       BUTTON_QS_COMBO | BUTTON_REL,      BUTTON_QS_COMBO },
-
-    //{ ACTION_WPS_MENU,          BUTTON_HOME|BUTTON_REL,      BUTTON_HOME },
+    { ACTION_WPS_QUICKSCREEN,       BUTTON_QS_COMBO,      BUTTON_NONE },
+    { ACTION_WPS_QUICKSCREEN,       BUTTON_POWER|BUTTON_DOWN,      BUTTON_POWER },
+    { ACTION_WPS_MENU,       BUTTON_POWER|BUTTON_LEFT,      BUTTON_POWER },
+    { ACTION_WPS_PITCHSCREEN,       BUTTON_POWER|BUTTON_RIGHT,      BUTTON_POWER },
 
    { ACTION_WPS_CONTEXT,   BUTTON_POWER|BUTTON_REPEAT,  BUTTON_POWER },
     //TODO: { ACTION_WPS_ID3SCREEN,     BUTTON_SELECT|BUTTON_DOWN,      BUTTON_SELECT },
 
     { ACTION_WPS_HOTKEY, BUTTON_DOWN|BUTTON_REL,      BUTTON_DOWN },
-
 
     LAST_ITEM_IN_LIST
 }; /* button_context_wps */
@@ -119,18 +122,18 @@ static const struct button_mapping button_context_tree[]  = {
 }; /* button_context_tree */
 
 static const struct button_mapping button_context_listtree_scroll_with_combo[]  = {
-    { ACTION_TREE_PGLEFT,   BUTTON_UP|BUTTON_LEFT,               BUTTON_NONE },
-    { ACTION_TREE_ROOT_INIT,BUTTON_UP|BUTTON_LEFT|BUTTON_REPEAT, BUTTON_UP|BUTTON_LEFT },
-    { ACTION_TREE_PGLEFT,   BUTTON_UP|BUTTON_LEFT|BUTTON_REPEAT, BUTTON_NONE },
-    { ACTION_TREE_PGRIGHT,  BUTTON_UP|BUTTON_RIGHT,              BUTTON_NONE },
-    { ACTION_TREE_PGRIGHT,  BUTTON_UP|BUTTON_RIGHT|BUTTON_REPEAT,BUTTON_NONE },
+    // { ACTION_TREE_PGLEFT,   BUTTON_UP|BUTTON_LEFT,               BUTTON_NONE },
+    // { ACTION_TREE_ROOT_INIT,BUTTON_UP|BUTTON_LEFT|BUTTON_REPEAT, BUTTON_UP|BUTTON_LEFT },
+    // { ACTION_TREE_PGLEFT,   BUTTON_UP|BUTTON_LEFT|BUTTON_REPEAT, BUTTON_NONE },
+    // { ACTION_TREE_PGRIGHT,  BUTTON_UP|BUTTON_RIGHT,              BUTTON_NONE },
+    // { ACTION_TREE_PGRIGHT,  BUTTON_UP|BUTTON_RIGHT|BUTTON_REPEAT,BUTTON_NONE },
 
     LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_CUSTOM|CONTEXT_TREE),
 }; /* button_context_listtree_scroll_with_combo */
 
 static const struct button_mapping button_context_yesno[]  = {
-    //TODO???
-    { ACTION_YESNO_ACCEPT,          BUTTON_POWER,              BUTTON_NONE },
+
+    { ACTION_YESNO_ACCEPT,          BUTTON_RIGHT|BUTTON_REL,              BUTTON_RIGHT },
 
     LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_STD),
 }; /* button_context_settings_yesno */
@@ -172,8 +175,9 @@ static const struct button_mapping button_context_pitchscreen[]  = {
         { ACTION_PS_NUDGE_LEFTOFF,  BUTTON_LEFT|BUTTON_REL,         BUTTON_NONE },
         { ACTION_PS_NUDGE_RIGHT,    BUTTON_RIGHT,                   BUTTON_NONE },
         { ACTION_PS_NUDGE_RIGHTOFF, BUTTON_RIGHT|BUTTON_REL,        BUTTON_NONE },
-        //TODO { ACTION_PS_TOGGLE_MODE,    BUTTON_SELECT|BUTTON_REL,       BUTTON_SELECT },
-        //TODO { ACTION_PS_RESET,          BUTTON_SELECT|BUTTON_REPEAT,    BUTTON_SELECT },
+        { ACTION_PS_TOGGLE_MODE,    BUTTON_POWER|BUTTON_REPEAT,       BUTTON_POWER },
+        { ACTION_PS_RESET,          BUTTON_POWER|BUTTON_DOWN,    BUTTON_POWER },
+        { ACTION_PS_RESET,          BUTTON_POWER|BUTTON_LEFT,    BUTTON_POWER },
         { ACTION_PS_EXIT,           BUTTON_POWER|BUTTON_REL,         BUTTON_POWER },
         { ACTION_PS_SLOWER,         BUTTON_LEFT|BUTTON_REPEAT,      BUTTON_NONE },
         { ACTION_PS_FASTER,         BUTTON_RIGHT|BUTTON_REPEAT,     BUTTON_NONE },
@@ -187,7 +191,6 @@ static const struct button_mapping button_context_keyboard[]  = {
     { ACTION_KBD_RIGHT,        BUTTON_RIGHT,                     BUTTON_NONE },
     { ACTION_KBD_RIGHT,        BUTTON_RIGHT|BUTTON_REPEAT,       BUTTON_NONE },
 
-    //TODO:
     // { ACTION_KBD_CURSOR_LEFT,  BUTTON_REC|BUTTON_LEFT,                BUTTON_NONE },
     // { ACTION_KBD_CURSOR_LEFT,  BUTTON_REC|BUTTON_LEFT|BUTTON_REPEAT,  BUTTON_NONE },
     // { ACTION_KBD_CURSOR_RIGHT, BUTTON_REC|BUTTON_RIGHT,               BUTTON_NONE },
@@ -198,20 +201,18 @@ static const struct button_mapping button_context_keyboard[]  = {
     { ACTION_KBD_DOWN,         BUTTON_DOWN,               BUTTON_NONE },
     { ACTION_KBD_DOWN,         BUTTON_DOWN|BUTTON_REPEAT, BUTTON_NONE },
     //TODO: { ACTION_KBD_PAGE_FLIP,    BUTTON_REC|BUTTON_SELECT,         BUTTON_REC },
-    { ACTION_KBD_BACKSPACE,    BUTTON_DOWN,                      BUTTON_NONE },
-    //TODO:
-    // { ACTION_KBD_BACKSPACE,    BUTTON_REC|BUTTON_REL,         BUTTON_REC },
-    // { ACTION_KBD_SELECT,       BUTTON_SELECT|BUTTON_REL,                    BUTTON_SELECT },
-    // { ACTION_KBD_DONE,         BUTTON_SELECT|BUTTON_REPEAT,                        BUTTON_SELECT },
-    // { ACTION_KBD_ABORT,        BUTTON_POWER,                     BUTTON_NONE },
-    //{ ACTION_KBD_MORSE_INPUT,  BUTTON_REC|BUTTON_REL,            BUTTON_REC },
-    //TODO: { ACTION_KBD_MORSE_SELECT, BUTTON_SELECT|BUTTON_REL,         BUTTON_NONE },
+    { ACTION_KBD_BACKSPACE,    BUTTON_POWER|BUTTON_DOWN,         BUTTON_POWER },
+    { ACTION_KBD_SELECT,       BUTTON_POWER|BUTTON_REL,                    BUTTON_POWER },
+    { ACTION_KBD_DONE,         BUTTON_POWER|BUTTON_LEFT,                        BUTTON_POWER },
+    { ACTION_KBD_ABORT,        BUTTON_POWER|BUTTON_RIGHT,                     BUTTON_NONE },
+    { ACTION_KBD_MORSE_INPUT,  BUTTON_POWER|BUTTON_UP,            BUTTON_POWER },
+    { ACTION_KBD_MORSE_SELECT, BUTTON_POWER|BUTTON_REL,         BUTTON_POWER },
 
     LAST_ITEM_IN_LIST
 }; /* button_context_keyboard */
 
 static const struct button_mapping button_context_bmark[]  = {
-    //TODO { ACTION_BMS_DELETE,       BUTTON_REC,        BUTTON_NONE },
+    // { ACTION_BMS_DELETE,       BUTTON_REC,        BUTTON_NONE },
 
     LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_LIST),
 }; /* button_context_bmark */
