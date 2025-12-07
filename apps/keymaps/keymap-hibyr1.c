@@ -24,7 +24,7 @@
 #include "button.h"
 #include "settings.h"
 
-#define BUTTON_QS_COMBO (BUTTON_UP | BUTTON_DOWN)
+#define BUTTON_QS_COMBO (BUTTON_DOWN | BUTTON_LEFT)
 
 /* {Action Code,    Button code,    Prereq button code } */
 
@@ -74,7 +74,7 @@ static const struct button_mapping button_context_wps[]  = {
     { ACTION_STD_KEYLOCK,       BUTTON_POWER|BUTTON_UP,      BUTTON_NONE },
     //TODO: { ACTION_WPS_MENU,       BUTTON_POWER|BUTTON_REL,  BUTTON_POWER },
 
-    { ACTION_WPS_QUICKSCREEN,       BUTTON_QS_COMBO,      BUTTON_NONE },
+    { ACTION_WPS_QUICKSCREEN,       BUTTON_QS_COMBO | BUTTON_REL,      BUTTON_QS_COMBO },
 
     //{ ACTION_WPS_MENU,          BUTTON_HOME|BUTTON_REL,      BUTTON_HOME },
 
