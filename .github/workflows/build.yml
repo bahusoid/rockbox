@@ -19,7 +19,7 @@ jobs:
 
           - name: Samsung YP-R0
             arch: x
-            platform: 205
+            platform: samsungypr0
 
           - name: clipZip
             arch: a
