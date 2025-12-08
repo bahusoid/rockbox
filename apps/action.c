@@ -930,9 +930,10 @@ static inline void do_softlock(action_last_t *last, action_cur_t *cur)
         }
      }/* keys_locked */
 
-#ifdef BUTTON_POWER /*always notify if power button pressed while keys locked*/
-    notify_user |= (has_flag(cur->button, BUTTON_POWER|BUTTON_REL)
-                    && last->keys_locked);
+#ifdef BUTTON_POWER /*always notify if power button pressed while keys locked, unless explicitly mapped to filtered action*/
+    if (!filtered)
+        notify_user |= (has_flag(cur->button, BUTTON_POWER|BUTTON_REL)
+                        && last->keys_locked);
 #endif
 
     if (notify_user)
