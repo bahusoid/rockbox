@@ -722,10 +722,16 @@ static inline void action_code_lookup(action_last_t *last, action_cur_t *cur)
 
             if (action == ACTION_UNKNOWN)
             {
+                int prev_context = context;
                 context = get_next_context(cur->items, i);
 
                 if (context != (int)CONTEXT_STOPSEARCHING)
                 {
+                    int new_context = context & ~CONTEXT_PREVIOUS;
+                    if (context != new_context)
+                    {
+                        context = new_context | prev_context;
+                    }
                     i = 0;
                     continue;
                 }
@@ -1471,7 +1477,11 @@ static int find_button_for_action(int context, int action)
         }
 
         /* get chained context, if none it will be CONTEXT_STOPSEARCHING */
+        int prev_context = context;
         context = items[i].action_code;
+        int new_context = context & ~CONTEXT_PREVIOUS;
+        if (context != new_context)
+            context = new_context | prev_context;
     } while (context != (int)CONTEXT_STOPSEARCHING);
 
     return BUTTON_NONE;
