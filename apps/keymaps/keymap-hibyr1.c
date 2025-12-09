@@ -88,7 +88,14 @@ static const struct button_mapping button_context_wps[]  = {
     { ACTION_WPS_HOTKEY, BUTTON_DOWN|BUTTON_REL,      BUTTON_DOWN },
 
     LAST_ITEM_IN_LIST
-}; /* button_context_wps */
+};
+/* button_context_wps */
+static const struct button_mapping button_context_wps_locked[] = {
+    { ACTION_WPS_VOLUP,     BUTTON_UP|BUTTON_REL,     BUTTON_UP },
+    { ACTION_WPS_VOLDOWN,   BUTTON_DOWN|BUTTON_REL,    BUTTON_DOWN },
+
+    LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_WPS)
+}; /* button_context_wps_locked */
 
 static const struct button_mapping button_context_settings[] = {
         { ACTION_STD_CANCEL,        BUTTON_POWER,               BUTTON_NONE },
@@ -224,7 +231,9 @@ const struct button_mapping* target_get_context_mapping(int context)
     {
         case CONTEXT_STD:
             return button_context_standard;
-            
+
+        case CONTEXT_WPS | CONTEXT_LOCKED:
+            return button_context_wps_locked;
         case CONTEXT_WPS:
             return button_context_wps;
 
