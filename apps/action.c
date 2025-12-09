@@ -722,10 +722,15 @@ static inline void action_code_lookup(action_last_t *last, action_cur_t *cur)
 
             if (action == ACTION_UNKNOWN)
             {
+                int prev_context = context;
                 context = get_next_context(cur->items, i);
 
                 if (context != (int)CONTEXT_STOPSEARCHING)
                 {
+                    if (context & CONTEXT_CUSTOM2 && prev_context & CONTEXT_LOCKED)
+                    {
+                        context |= CONTEXT_LOCKED;
+                    }
                     i = 0;
                     continue;
                 }
