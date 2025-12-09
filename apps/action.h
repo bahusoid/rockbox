@@ -37,7 +37,7 @@
 #define CONTEXT_REMAPPED 0x08000000 /* marker for key remap context table */
 #define CORE_CONTEXT_REMAP(context) (CONTEXT_REMAPPED | context)
 #define CONTEXT_LOCKED  0x04000000 /* flag to use alternate keymap when screen is locked */
-
+#define CONTEXT_PREVIOUS 0x02000000 /* flag to repeat search with previous context */
 
 #define LAST_ITEM_IN_LIST { CONTEXT_STOPSEARCHING, BUTTON_NONE, BUTTON_NONE }
 #define LAST_ITEM_IN_LIST__NEXTLIST(a) { a, BUTTON_NONE, BUTTON_NONE }
