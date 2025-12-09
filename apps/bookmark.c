@@ -82,6 +82,35 @@ static struct {
     int  speed;
 } bm;
 
+static char last_mount_path[15] = {0,};
+
+/* ----------------------------------------------------------------------- */
+/* Check if path has a specially named mount folder like /<microSD1>/       */
+/* Returns true if mount path exists in the path                           */
+/* ----------------------------------------------------------------------- */
+static bool is_mount_path(const char *path)
+{
+    return path && path[1] == '<' && path[0] == '/';
+}
+
+/* ----------------------------------------------------------------------- */
+/* Extract mount path from a path with special mount folder                */
+/* Returns true if mount path was extracted                                */
+/* ----------------------------------------------------------------------- */
+static bool extract_mount_path(const char *path)
+{
+    if (!is_mount_path(path))
+        return false;
+    const char *end = strchr(path + 2, '/');
+    if (!end)
+        return false;
+    size_t len = end - path;
+    if (len >= sizeof(last_mount_path))
+        return false;
+    strmemccpy(last_mount_path, path, len + 1);
+    return true;
+}
+
 static bool  add_bookmark(const char* bookmark_file_name, const char* bookmark,
                           bool most_recent);
 static char* create_bookmark(void);
@@ -500,7 +529,6 @@ int bookmark_autoload(const char* file)
 
     if(global_settings.autoloadbookmark == BOOKMARK_NO)
         return BOOKMARK_DONT_RESUME;
-
     /*Checking to see if a bookmark file exists.*/
     if(!generate_bookmark_file_name(file))
     {
@@ -546,6 +574,7 @@ bool bookmark_load(const char* file, bool autoload)
 {
     int  fd;
     char* bookmark = NULL;
+    extract_mount_path(file);
 
     if(autoload)
     {
@@ -1044,8 +1073,27 @@ static bool play_bookmark(const char* bookmark)
 #endif
         if (!warn_on_pl_erase())
             return false;
-        return bookmark_play(global_temp_buffer, bm.resume_index,
+        
+        char* resume_file = global_temp_buffer;
+        if ( (last_mount_path[0] != '\0' || is_mount_path(resume_file))
+            && !file_exists(resume_file))
+        {
+            if (is_mount_path(resume_file))
+            {
+                resume_file = strchr(resume_file+2,'/');
+            }
+            else
+            {
+                if (last_mount_path[0] != '\0')
+                {
+                    memmove(resume_file + strlen(last_mount_path), resume_file,strlen(resume_file) + 1);
+                    memcpy(resume_file, last_mount_path, strlen(last_mount_path));
+                }
+            }
+        }
+        bool result = bookmark_play(resume_file, bm.resume_index,
             bm.resume_time, bm.resume_offset, bm.resume_seed, global_filename);
+        return result;
     }
 
     return false;
