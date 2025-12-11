@@ -277,6 +277,15 @@ const struct button_mapping pla_main_ctx[] =
     { PLA_DOWN_REPEAT,      BUTTON_DOWN|BUTTON_REPEAT,          BUTTON_NONE },
     { PLA_LEFT_REPEAT,      BUTTON_LEFT|BUTTON_REPEAT,          BUTTON_NONE },
     { PLA_RIGHT_REPEAT,     BUTTON_RIGHT|BUTTON_REPEAT,         BUTTON_NONE },
+#elif (CONFIG_KEYPAD == HIBY_R1_PAD)
+    { PLA_UP,               BUTTON_UP,                          BUTTON_NONE },
+    { PLA_DOWN,             BUTTON_DOWN,                        BUTTON_NONE },
+    { PLA_LEFT,             BUTTON_LEFT,                        BUTTON_NONE },
+    { PLA_RIGHT,            BUTTON_RIGHT,                       BUTTON_NONE },
+    { PLA_UP_REPEAT,        BUTTON_UP|BUTTON_REPEAT,            BUTTON_NONE },
+    { PLA_DOWN_REPEAT,      BUTTON_DOWN|BUTTON_REPEAT,          BUTTON_NONE },
+    { PLA_LEFT_REPEAT,      BUTTON_LEFT|BUTTON_REPEAT,          BUTTON_NONE },
+    { PLA_RIGHT_REPEAT,     BUTTON_RIGHT|BUTTON_REPEAT,         BUTTON_NONE },
 #elif (CONFIG_KEYPAD == RG_NANO_PAD)
     { PLA_UP,               BUTTON_UP,                          BUTTON_NONE },
     { PLA_DOWN,             BUTTON_DOWN,                        BUTTON_NONE },
