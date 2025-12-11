@@ -36,7 +36,7 @@
 
 #ifndef BOOTLOADER
 #define HAVE_BUTTON_DATA
-#define HAVE_TOUCHSCREEN
+//#define HAVE_TOUCHSCREEN
 #endif
 
 #ifndef CONFIG_BACKLIGHT_FADING
