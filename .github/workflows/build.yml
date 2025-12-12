@@ -66,9 +66,7 @@ jobs:
       uses: actions/cache/restore@v3
       with:
         path: |
-          /tmp/rbdev-dl
           /tmp/local
-          /tmp/rbdev-build
         key: ${{ runner.os }}-toolchain-${{ matrix.arch }}-${{ hashFiles('tools/rockboxdev.sh') }}
         restore-keys: |
           ${{ runner.os }}-toolchain-${{ matrix.arch }}-
@@ -104,9 +102,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: |
-          /tmp/rbdev-dl
           /tmp/local
-          /tmp/rbdev-build
         key: ${{ runner.os }}-toolchain-${{ matrix.arch }}-${{ hashFiles('tools/rockboxdev.sh') }}
         restore-keys: |
           ${{ runner.os }}-toolchain-${{ matrix.arch }}-
