@@ -47,6 +47,10 @@ jobs:
             arch: y
             platform: hibyr1
 
+          - name: Sansa E200v2
+            arch: a
+            platform: sansae200v2
+
     runs-on: ubuntu-22.04
     name: ${{matrix.name}}
 
