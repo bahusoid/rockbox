@@ -112,6 +112,7 @@ int plugin_open(const char *plugin, const char *parameter);
 #include "menu.h"
 #include "rbunicode.h"
 #include "list.h"
+#include "statusbar-skinned.h"
 #include "tree.h"
 #include "color_picker.h"
 #include "buflib.h"
@@ -1025,6 +1026,7 @@ struct plugin_api {
                                    const struct viewport *vp);
     int (*gesture_flick_get)(const struct gesture_event *gevt);
 #endif
+    bool (*sb_set_title_text)(const char* title, enum themable_icons icon, enum screen_type screen);
     bool (*sb_set_persistent_title)(const char* title, enum themable_icons icon,
                                     enum screen_type screen);
     void (*gui_synclist_scroll_stop)(struct gui_synclist *lists);
