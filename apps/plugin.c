@@ -885,6 +885,7 @@ static const struct plugin_api rockbox_api = {
     gesture_flick_get_in_vp,
     gesture_flick_get,
 #endif
+    sb_set_title_text,
     sb_set_persistent_title,
     gui_synclist_scroll_stop,
     add_event_ex,
