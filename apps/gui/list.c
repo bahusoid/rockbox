@@ -964,7 +964,10 @@ bool simplelist_show_list(struct simplelist_info *info)
     }
 
     FOR_NB_SCREENS(i)
+    {
+        sb_set_persistent_title(info->title, info->title_icon, i);
         viewportmanager_theme_enable(i, !info->hide_theme, NULL);
+    }
 
     gui_synclist_init(&lists, getname,  info->callback_data,
                       info->scroll_all, info->selection_size, NULL);
@@ -1055,7 +1058,10 @@ bool simplelist_show_list(struct simplelist_info *info)
 #endif
 
     FOR_NB_SCREENS(i)
+    {
+        sb_set_persistent_title(info->title, info->title_icon, i);
         viewportmanager_theme_undo(i, false);
+    }
     return false;
 }
 

@@ -1037,6 +1037,8 @@ struct plugin_api {
                                    const struct viewport *vp);
     int (*gesture_flick_get)(const struct gesture_event *gevt);
 #endif
+    bool (*sb_set_persistent_title)(const char* title, enum themable_icons icon,
+                                    enum screen_type screen);
     void (*gui_synclist_scroll_stop)(struct gui_synclist *lists);
     bool (*add_event_ex)(unsigned short id, bool oneshot,
                          void (*handler)(unsigned short id,
