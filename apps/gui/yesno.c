@@ -31,6 +31,7 @@
 #include "appevents.h"
 #include "splash.h"
 #include "backlight.h"
+#include "statusbar-skinned.h"
 
 struct gui_yesno
 {
@@ -216,6 +217,7 @@ static void gui_yesno_ui_update(unsigned short id, void *event_data, void *user_
  *   no_message - displayed when YESNO_NO is choosen
 */
 enum yesno_res gui_syncyesno_run_w_tmo(int ticks, enum yesno_res tmo_default_res,
+                                       const char * title,
                                        const struct text_message * main_message,
                                        const struct text_message * yes_message,
                                        const struct text_message * no_message)
@@ -243,6 +245,9 @@ enum yesno_res gui_syncyesno_run_w_tmo(int ticks, enum yesno_res tmo_default_res
         screens[i].scroll_stop();
         sb_set_persistent_title(title, Icon_NOICON, i);
         viewportmanager_theme_enable(i, true, &(yn[i].vp));
+        if (sb_set_title_text(title, Icon_NOICON, i))
+            send_event(GUI_EVENT_ACTIONUPDATE, (void*)1);
+
         yn[i].vp_lines = viewport_get_nb_lines(&(yn[i].vp));
     }
 
@@ -365,8 +370,18 @@ enum yesno_res gui_syncyesno_run(const struct text_message * main_message,
                                  const struct text_message * yes_message,
                                  const struct text_message * no_message)
 {
-    return gui_syncyesno_run_w_tmo(TIMEOUT_BLOCK, YESNO_TMO,
-                             main_message, yes_message, no_message);
+    return gui_syncyesno_run_w_tmo(TIMEOUT_BLOCK, YESNO_TMO, NULL,
+                                   main_message, yes_message, no_message);
+}
+
+extern enum yesno_res gui_syncyesno_run_w_title(
+                                 const char * title,
+                                 const struct text_message * main_message,
+                                 const struct text_message * yes_message,
+                                 const struct text_message * no_message)
+{
+    return gui_syncyesno_run_w_tmo(TIMEOUT_BLOCK, YESNO_TMO, title,
+                                   main_message, yes_message, no_message);
 }
 
 static bool yesno_pop_lines(const char *lines[], int line_cnt)
