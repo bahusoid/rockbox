@@ -42,6 +42,7 @@ struct opt_items {
 /** Setting values defines **/
 #define MAX_FILENAME 32
 #define MAX_PATHNAME 80
+#define MAX_PATHLIST (MAX_PATHNAME*2)
 
 /* The values are assigned to the enums so that they correspond to */
 /* setting values in settings_list.c                               */
@@ -634,9 +635,9 @@ struct user_settings
     //bool alt_settings_enable;   /* enable auto-resume feature? */
     int autoresume_automatic; /* resume next track? 0=never, 1=always,
                                  2=custom */
-    unsigned char autoresume_paths[MAX_PATHNAME+1]; /* colon-separated list */
+    unsigned char autoresume_paths[MAX_PATHLIST+1]; /* colon-separated list */
     bool runtimedb;           /* runtime database active? */
-    unsigned char tagcache_scan_paths[MAX_PATHNAME+1];
+    unsigned char tagcache_scan_paths[MAX_PATHLIST+1];
     unsigned char tagcache_db_path[MAX_PATHNAME+1];
 #endif /* HAVE_TAGCACHE */
     bool alt_settings_enable; /* resume next track? 0=no, 1=custom */
