@@ -66,6 +66,10 @@ void hiby_set_usb_mode(int mode) {
     }
 
     switch(mode) {
+    case USB_MODE_ADB:
+        logf("Enabling ADB\n");
+        enable_adb();
+        break;
     case USB_MODE_MASS_STORAGE:
         logf("Enabling Mass Storage\n");
         enable_mass_storage();
