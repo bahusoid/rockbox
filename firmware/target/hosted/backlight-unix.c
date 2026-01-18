@@ -31,10 +31,6 @@
 #include "sysfs.h"
 #include "panic.h"
 #include "lcd.h"
-#ifdef HAVE_TOUCHSCREEN
-#include <sys/ioctl.h>
-#include <linux/input.h>
-#endif
 
 #if defined(BACKLIGHT_RG_NANO)
 static const char * const sysfs_bl_brightness =
@@ -56,10 +52,6 @@ static const char * const sysfs_bl_power =
     "/sys/class/backlight/pwm-backlight.0/bl_power";
 #endif
 
-#ifdef HAVE_TOUCHSCREEN
-static int touch_fd = -1;
-#endif
-
 bool backlight_hw_init(void)
 {
     backlight_hw_on();
@@ -70,12 +62,6 @@ bool backlight_hw_init(void)
     buttonlight_hw_brightness(DEFAULT_BRIGHTNESS_SETTING);
 #endif
 #endif
-
-#ifdef HAVE_TOUCHSCREEN
-    if (touch_fd < 0)
-        touch_fd = open("/dev/input/event1", O_RDONLY | O_NONBLOCK);
-#endif
-
     return true;
 }
 
@@ -94,11 +80,6 @@ void backlight_hw_on(void)
 #endif
         last_bl = BACKLIGHT_POWER_ON;
         sysfs_set_int(sysfs_bl_power, last_bl);
-#ifdef HAVE_TOUCHSCREEN
-        /* Added Touch Unlock */
-        if (touch_fd >= 0)
-            ioctl(touch_fd, EVIOCGRAB, (void*)0);
-#endif
     }
 }
 
@@ -109,10 +90,6 @@ void backlight_hw_off(void)
         sysfs_set_int(sysfs_bl_power, last_bl);
 #ifdef HAVE_LCD_ENABLE
         lcd_enable(false);
-#endif
-#ifdef HAVE_TOUCHSCREEN
-        if (touch_fd >= 0)
-            ioctl(touch_fd, EVIOCGRAB, (void*)1);
 #endif
     }
 }
