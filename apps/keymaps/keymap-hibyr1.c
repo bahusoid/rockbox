@@ -227,7 +227,7 @@ static const struct button_mapping button_context_bmark[]  = {
 /* get_context_mapping returns a pointer to one of the above defined arrays depending on the context */
 const struct button_mapping* target_get_context_mapping(int context)
 {
-    switch (context & ~BUTTON_TOUCH_MASK)
+    switch (context)
     {
         case CONTEXT_STD:
             return button_context_standard;
