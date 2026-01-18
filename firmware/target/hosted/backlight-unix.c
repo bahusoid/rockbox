@@ -43,7 +43,13 @@ static const char * const sysfs_bl_brightness =
     "/sys/class/backlight/backlight_pwm0/brightness";
 
 static const char * const sysfs_bl_power =
+#ifdef HAVE_TOUCHSCREEN
+    /* Framebuffer powers off both touch and screen */
+    "/sys/class/graphics/fb0/blank";
+#else
     "/sys/class/backlight/backlight_pwm0/bl_power";
+#endif
+
 #else
 static const char * const sysfs_bl_brightness =
     "/sys/class/backlight/pwm-backlight.0/brightness";
