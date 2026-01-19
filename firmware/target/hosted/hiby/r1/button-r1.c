@@ -52,7 +52,15 @@ int button_map(int keycode)
             return BUTTON_POWER;
         case BTN_TOUCH:
         {
+#ifdef HAVE_BACKLIGHT
+            if (is_backlight_on(true)) {
+                return BUTTON_TOUCH;
+            }
+            // Ignore
+            return 0;
+#else
             return BUTTON_TOUCH;
+#endif
         }
         default:
             return 0;
