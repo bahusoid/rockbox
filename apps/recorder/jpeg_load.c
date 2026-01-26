@@ -74,6 +74,8 @@ typedef uint8_t jpeg_pix_t;
 #endif
 #define IDCT_WS_SIZE (64 + TRANSPOSE_EXTRA_IDCT_WS + COLOR_EXTRA_IDCT_WS)
 
+#define MAX_BLOCKS 6
+
 /* This can't be in jpeg_load.h because plugin.h includes it, and it conflicts
  * with the definition in jpeg_decoder.h
  */
@@ -101,13 +103,13 @@ struct jpeg
     int x_mbl; /* x dimension of MBL */
     int y_mbl; /* y dimension of MBL */
     int blocks; /* blocks per MB */
+    int components; /* number of components in frame (from SOF) */
     int restart_interval; /* number of MCUs between RSTm markers */
     int restart; /* blocks until next restart marker */
     int mcu_row; /* current row relative to first row of this row of MCUs */
     unsigned char *out_ptr; /* pointer to current row to output */
     int cur_row; /* current row relative to top of image */
     int set_rows;
-    int store_pos[4]; /* for Y block ordering */
 #ifdef HAVE_LCD_COLOR
     int last_dc_val[3];
     int h_scale[2]; /* horizontal scalefactor = (2**N) / 8 */
@@ -132,10 +134,10 @@ struct jpeg
     struct frame_component frameheader[3]; /* Component descriptor */
     struct scan_component scanheader[3]; /* currently not used */
 
-    int mcu_membership[6]; /* info per block */
-    int tab_membership[6];
-    int subsample_x[3]; /* info per component */
-    int subsample_y[3];
+    int mcu_membership[MAX_BLOCKS]; /* info per block */
+    int tab_membership[MAX_BLOCKS];
+    int block_x[MAX_BLOCKS];
+    int block_y[MAX_BLOCKS];
     bool resize;
     unsigned char buf[JPEG_READ_BUF_SIZE];
     struct img_part part;
@@ -1051,6 +1053,7 @@ static int process_markers(struct jpeg* p_jpeg)
                     return -3; /* Unsupported SOF0 subsampling */
                 }
                 p_jpeg->blocks = n;
+                p_jpeg->components = n;
             }
             break;
 
@@ -1449,113 +1452,44 @@ static const unsigned char zig[] =
 /* Reformat some image header data so that the decoder can use it properly. */
 INLINE void fix_headers(struct jpeg* p_jpeg)
 {
-    int i;
+    /* Generic MCU setup handling any sampling factor combination */
+    int i, j;
+    int max_h = 0, max_v = 0;
+    int components = p_jpeg->blocks; /* Initially holds component count */
 
-    for (i=0; i<4; i++)
-        p_jpeg->store_pos[i] = i; /* default ordering */
-
-    /* assignments for the decoding of blocks */
-    if (p_jpeg->frameheader[0].horizontal_sampling == 2
-        && p_jpeg->frameheader[0].vertical_sampling == 1)
-    {   /* 4:2:2 */
-        p_jpeg->blocks = 4;
-        p_jpeg->x_mbl = (p_jpeg->x_size+15) / 16;
-        p_jpeg->x_phys = p_jpeg->x_mbl * 16;
-        p_jpeg->y_mbl = (p_jpeg->y_size+7) / 8;
-        p_jpeg->y_phys = p_jpeg->y_mbl * 8;
-        p_jpeg->mcu_membership[0] = 0; /* Y1=Y2=0, U=1, V=2 */
-        p_jpeg->mcu_membership[1] = 0;
-        p_jpeg->mcu_membership[2] = 1;
-        p_jpeg->mcu_membership[3] = 2;
-        p_jpeg->tab_membership[0] = 0; /* DC, DC, AC, AC */
-        p_jpeg->tab_membership[1] = 0;
-        p_jpeg->tab_membership[2] = 1;
-        p_jpeg->tab_membership[3] = 1;
-        p_jpeg->subsample_x[0] = 1;
-        p_jpeg->subsample_x[1] = 2;
-        p_jpeg->subsample_x[2] = 2;
-        p_jpeg->subsample_y[0] = 1;
-        p_jpeg->subsample_y[1] = 1;
-        p_jpeg->subsample_y[2] = 1;
-    }
-    if (p_jpeg->frameheader[0].horizontal_sampling == 1
-        && p_jpeg->frameheader[0].vertical_sampling == 2)
-    {   /* 4:2:2 vertically subsampled */
-        p_jpeg->store_pos[1] = 2; /* block positions are mirrored */
-        p_jpeg->store_pos[2] = 1;
-        p_jpeg->blocks = 4;
-        p_jpeg->x_mbl = (p_jpeg->x_size+7) / 8;
-        p_jpeg->x_phys = p_jpeg->x_mbl * 8;
-        p_jpeg->y_mbl = (p_jpeg->y_size+15) / 16;
-        p_jpeg->y_phys = p_jpeg->y_mbl * 16;
-        p_jpeg->mcu_membership[0] = 0; /* Y1=Y2=0, U=1, V=2 */
-        p_jpeg->mcu_membership[1] = 0;
-        p_jpeg->mcu_membership[2] = 1;
-        p_jpeg->mcu_membership[3] = 2;
-        p_jpeg->tab_membership[0] = 0; /* DC, DC, AC, AC */
-        p_jpeg->tab_membership[1] = 0;
-        p_jpeg->tab_membership[2] = 1;
-        p_jpeg->tab_membership[3] = 1;
-        p_jpeg->subsample_x[0] = 1;
-        p_jpeg->subsample_x[1] = 1;
-        p_jpeg->subsample_x[2] = 1;
-        p_jpeg->subsample_y[0] = 1;
-        p_jpeg->subsample_y[1] = 2;
-        p_jpeg->subsample_y[2] = 2;
-    }
-    else if (p_jpeg->frameheader[0].horizontal_sampling == 2
-        && p_jpeg->frameheader[0].vertical_sampling == 2)
-    {   /* 4:2:0 */
-        p_jpeg->blocks = 6;
-        p_jpeg->x_mbl = (p_jpeg->x_size+15) / 16;
-        p_jpeg->x_phys = p_jpeg->x_mbl * 16;
-        p_jpeg->y_mbl = (p_jpeg->y_size+15) / 16;
-        p_jpeg->y_phys = p_jpeg->y_mbl * 16;
-        p_jpeg->mcu_membership[0] = 0;
-        p_jpeg->mcu_membership[1] = 0;
-        p_jpeg->mcu_membership[2] = 0;
-        p_jpeg->mcu_membership[3] = 0;
-        p_jpeg->mcu_membership[4] = 1;
-        p_jpeg->mcu_membership[5] = 2;
-        p_jpeg->tab_membership[0] = 0;
-        p_jpeg->tab_membership[1] = 0;
-        p_jpeg->tab_membership[2] = 0;
-        p_jpeg->tab_membership[3] = 0;
-        p_jpeg->tab_membership[4] = 1;
-        p_jpeg->tab_membership[5] = 1;
-        p_jpeg->subsample_x[0] = 1;
-        p_jpeg->subsample_x[1] = 2;
-        p_jpeg->subsample_x[2] = 2;
-        p_jpeg->subsample_y[0] = 1;
-        p_jpeg->subsample_y[1] = 2;
-        p_jpeg->subsample_y[2] = 2;
-    }
-    else if (p_jpeg->frameheader[0].horizontal_sampling == 1
-        && p_jpeg->frameheader[0].vertical_sampling == 1)
-    {   /* 4:4:4 */
-        /* don't overwrite p_jpeg->blocks */
-        p_jpeg->x_mbl = (p_jpeg->x_size+7) / 8;
-        p_jpeg->x_phys = p_jpeg->x_mbl * 8;
-        p_jpeg->y_mbl = (p_jpeg->y_size+7) / 8;
-        p_jpeg->y_phys = p_jpeg->y_mbl * 8;
-        p_jpeg->mcu_membership[0] = 0;
-        p_jpeg->mcu_membership[1] = 1;
-        p_jpeg->mcu_membership[2] = 2;
-        p_jpeg->tab_membership[0] = 0;
-        p_jpeg->tab_membership[1] = 1;
-        p_jpeg->tab_membership[2] = 1;
-        p_jpeg->subsample_x[0] = 1;
-        p_jpeg->subsample_x[1] = 1;
-        p_jpeg->subsample_x[2] = 1;
-        p_jpeg->subsample_y[0] = 1;
-        p_jpeg->subsample_y[1] = 1;
-        p_jpeg->subsample_y[2] = 1;
-    }
-    else
-    {
-        /* error */
+    for (i = 0; i < components; i++) {
+        if (p_jpeg->frameheader[i].horizontal_sampling > max_h)
+            max_h = p_jpeg->frameheader[i].horizontal_sampling;
+        if (p_jpeg->frameheader[i].vertical_sampling > max_v)
+            max_v = p_jpeg->frameheader[i].vertical_sampling;
     }
 
+    if (max_h == 0) max_h = 1;
+    if (max_v == 0) max_v = 1;
+
+    p_jpeg->x_mbl = (p_jpeg->x_size + 8*max_h - 1) / (8*max_h);
+    p_jpeg->x_phys = p_jpeg->x_mbl * 8 * max_h;
+    p_jpeg->y_mbl = (p_jpeg->y_size + 8*max_v - 1) / (8*max_v);
+    p_jpeg->y_phys = p_jpeg->y_mbl * 8 * max_v;
+
+    int total_blocks = 0;
+    for (i = 0; i < components; i++) {
+        int h_samp = p_jpeg->frameheader[i].horizontal_sampling;
+        int v_samp = p_jpeg->frameheader[i].vertical_sampling;
+        int blocks = h_samp * v_samp;
+        for (j = 0; j < blocks; j++) {
+            if (total_blocks < MAX_BLOCKS)
+            {
+                p_jpeg->mcu_membership[total_blocks] = i;
+                p_jpeg->tab_membership[total_blocks] = (i == 0) ? 0 : 1;
+                p_jpeg->block_x[total_blocks] = j % h_samp;
+                p_jpeg->block_y[total_blocks] = j / h_samp;
+            }
+
+            ++total_blocks;
+        }
+    }
+    p_jpeg->blocks = total_blocks;
 }
 
 INLINE void fix_huff_tables(struct jpeg *p_jpeg)
@@ -1810,15 +1744,12 @@ static struct img_part *store_row_jpeg(void *jpeg_args)
     if (cb_progress && !cb_progress(++p_jpeg->cur_row, p_jpeg->set_rows))
         return NULL;
 
-#ifdef HAVE_LCD_COLOR
-    int mcu_hscale = p_jpeg->h_scale[1];
-    int mcu_vscale = p_jpeg->v_scale[1];
-#else
+    /* Use component 0 (Luma) to determine MCU size logic, assume it dominates */
     int mcu_hscale = (p_jpeg->h_scale[0] +
         p_jpeg->frameheader[0].horizontal_sampling - 1);
     int mcu_vscale = (p_jpeg->v_scale[0] +
         p_jpeg->frameheader[0].vertical_sampling - 1);
-#endif
+
     unsigned int width = p_jpeg->x_mbl << mcu_hscale;
     unsigned int b_width = width * JPEG_PIX_SZ;
     int height = BIT_N(mcu_vscale);
@@ -1826,16 +1757,11 @@ static struct img_part *store_row_jpeg(void *jpeg_args)
     if (!p_jpeg->mcu_row) /* Need to decode a new row of MCUs */
     {
         p_jpeg->out_ptr = (unsigned char *)p_jpeg->img_buf;
-        int store_offs[4];
 #ifdef HAVE_LCD_COLOR
         unsigned mcu_width = BIT_N(mcu_hscale);
 #endif
         int mcu_offset = JPEG_PIX_SZ << mcu_hscale;
         unsigned char *out = p_jpeg->out_ptr;
-        store_offs[p_jpeg->store_pos[0]] = 0;
-        store_offs[p_jpeg->store_pos[1]] = JPEG_PIX_SZ << p_jpeg->h_scale[0];
-        store_offs[p_jpeg->store_pos[2]] = b_width << p_jpeg->v_scale[0];
-        store_offs[p_jpeg->store_pos[3]] = store_offs[1] + store_offs[2];
         /* decoded DCT coefficients */
         int16_t block[IDCT_WS_SIZE] __attribute__((aligned(8)));
         for (x = 0; x < p_jpeg->x_mbl; x++)
@@ -1931,7 +1857,14 @@ block_end:
                 {
                     int idct_cols = BIT_N(MIN(p_jpeg->h_scale[!!ci], 3));
                     int idct_rows = BIT_N(p_jpeg->v_scale[!!ci]);
-                    unsigned char *b_out = out + (ci ? ci : store_offs[blkn]);
+                    
+                    unsigned char *b_out = out;
+                    if (ci) b_out += ci;
+                    
+                    /* Use calculated relative positions for all blocks */
+                    b_out += p_jpeg->block_y[blkn] << p_jpeg->v_scale[!!ci];
+                    b_out += p_jpeg->block_x[blkn] << p_jpeg->h_scale[!!ci];
+
                     if (idct_tbl[p_jpeg->v_scale[!!ci]].v_idct)
 #ifdef JPEG_IDCT_TRANSPOSE
                         idct_tbl[p_jpeg->v_scale[!!ci]].v_idct(block,
@@ -1954,7 +1887,8 @@ block_end:
             unsigned int xp;
             int yp;
             unsigned char *row = out;
-            if (p_jpeg->blocks == 1)
+            /* Grayscale images (single component) need Y replication */
+            if (p_jpeg->components == 1)
             {
                 for (yp = 0; yp < height; yp++, row += b_width)
                 {
@@ -2145,7 +2079,10 @@ int clip_jpeg_fd(int fd, int flags,
     if (!(status & DHT)) /* if no Huffman table present: */
         default_huff_tbl(p_jpeg); /* use default */
     fix_headers(p_jpeg); /* derive Huffman and other lookup-tables */
-
+    if (p_jpeg->blocks > MAX_BLOCKS)
+    {
+        return -2;
+    }
     /*the dim array in rockbox is limited to 2^15-1 pixels, so we cannot resize
       images larger than this without overflowing */
     if(p_jpeg->x_size > 32767 || p_jpeg->y_size > 32767)
@@ -2184,10 +2121,24 @@ int clip_jpeg_fd(int fd, int flags,
         (p_jpeg->y_size << p_jpeg->v_scale[0]) >> 3 == bm->height)
         resize = false;
 #ifdef HAVE_LCD_COLOR
-    p_jpeg->h_scale[1] = p_jpeg->h_scale[0] +
-        p_jpeg->frameheader[0].horizontal_sampling - 1;
-    p_jpeg->v_scale[1] = p_jpeg->v_scale[0] +
-        p_jpeg->frameheader[0].vertical_sampling - 1;
+    /* Calculate ratio of Y sampling to C sampling to adjust scale.
+       This ensures that C blocks are scaled properly to match Y blocks 
+       in physical size if they cover same area. 
+    */
+    int r_h = 0;
+    int r_v = 0;
+
+    if (p_jpeg->components > 1)
+    {
+        r_h = p_jpeg->frameheader[0].horizontal_sampling / p_jpeg->frameheader[1].horizontal_sampling;
+        r_v = p_jpeg->frameheader[0].vertical_sampling / p_jpeg->frameheader[1].vertical_sampling;
+    }
+    
+    /* If Ratio is 1, scale is same. If Ratio is 2, scale is +1 step (2x). */
+    /* Assumes power of 2 subsampling which is standard for JPEG */
+    p_jpeg->h_scale[1] = p_jpeg->h_scale[0] + ((r_h >= 4) ? 2 : ((r_h >= 2) ? 1 : 0));
+    p_jpeg->v_scale[1] = p_jpeg->v_scale[0] + ((r_v >= 4) ? 2 : ((r_v >= 2) ? 1 : 0));
+
     JDEBUGF("chroma IDCT size: %dx%d\n", BIT_N(p_jpeg->h_scale[1]),
         BIT_N(p_jpeg->v_scale[1]));
 #endif
@@ -2196,6 +2147,7 @@ int clip_jpeg_fd(int fd, int flags,
         (p_jpeg->y_size << p_jpeg->v_scale[0]) >> 3,
         bm->width, bm->height);
     fix_quant_tables(p_jpeg);
+
     int decode_w = BIT_N(p_jpeg->h_scale[0]) - 1;
     int decode_h = BIT_N(p_jpeg->v_scale[0]) - 1;
     src_dim.width = (p_jpeg->x_size << p_jpeg->h_scale[0]) >> 3;
@@ -2238,16 +2190,15 @@ int clip_jpeg_fd(int fd, int flags,
     buf_start += sizeof(struct jpeg);
 #endif
     maxsize = buf_end - buf_start;
-#ifdef HAVE_LCD_COLOR
-    int decode_buf_size = (p_jpeg->x_mbl << p_jpeg->h_scale[1])
-        << p_jpeg->v_scale[1];
-#else
-    int decode_buf_size = (p_jpeg->x_mbl << p_jpeg->h_scale[0])
-        << p_jpeg->v_scale[0];
-    decode_buf_size <<= p_jpeg->frameheader[0].horizontal_sampling +
-        p_jpeg->frameheader[0].vertical_sampling - 2;
-#endif
-    decode_buf_size *= JPEG_PIX_SZ;
+
+    /* Buffer must hold a full row of MCUs. 
+       Dimensions are determined by Luma (Component 0) sampling factors. 
+       Even if Chroma blocks are smaller, they fit within this space. */
+    int mcu_hscale = p_jpeg->h_scale[0] + p_jpeg->frameheader[0].horizontal_sampling - 1;
+    int mcu_vscale = p_jpeg->v_scale[0] + p_jpeg->frameheader[0].vertical_sampling - 1;
+    
+    int b_width = (p_jpeg->x_mbl << mcu_hscale) * JPEG_PIX_SZ;
+    int decode_buf_size = b_width << mcu_vscale;
     JDEBUGF("decode buffer size: %d\n", decode_buf_size);
     if (return_size)
     {
@@ -2266,6 +2217,13 @@ int clip_jpeg_fd(int fd, int flags,
 
     if (buf_end - buf_start < decode_buf_size)
         return -1;
+
+    /* Precalculate block offset */
+    for (int i = 0; i < p_jpeg->blocks; i++)
+    {
+        p_jpeg->block_y[i] *= b_width;
+        p_jpeg->block_x[i] *= JPEG_PIX_SZ;
+    }
 
     fix_huff_tables(p_jpeg);
 
@@ -2313,7 +2271,7 @@ int clip_jpeg_fd(int fd, int flags,
                 return -1;
 
 #ifdef HAVE_LCD_COLOR
-            if (p_jpeg->blocks > 1)
+            if (p_jpeg->components > 1)
             {
                 struct uint8_rgb *qp = part->buf;
                 struct uint8_rgb *end = qp + bm->width;
