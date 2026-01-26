@@ -120,11 +120,9 @@
 #define ICON_HEIGHT 130
 #define ICON_NAME bm_hibyicon
 #define OF_NAME "HIBY PLAYER"
-#define BUTTON_UP     BUTTON_PREV
-#define BUTTON_DOWN   BUTTON_NEXT
-#define BUTTON_SELECT BUTTON_PLAY
-#define BUTTON_LEFT   BUTTON_VOL_DOWN
-#define BUTTON_RIGHT  BUTTON_VOL_UP
+#define LEFT_RIGHT_FOR_SELECT
+#define CHARGE_WITH_OF
+#define DEF_BOOT_ROCKBOX
 #include "bitmaps/hibyicon.h"
 #else
 #error "must define ICON_WIDTH/HEIGHT"
@@ -266,35 +264,75 @@ static void save_boot_mode(enum boot_mode mode)
     }
 }
 
+static int is_btn_back(int btn)
+{
+    return btn == BUTTON_POWER
+#ifdef LEFT_RIGHT_FOR_SELECT
+    || btn == BUTTON_LEFT
+#endif
+    ;
+}
+
+static int is_btn_ok(int btn)
+{
+    return btn ==
+#ifdef LEFT_RIGHT_FOR_SELECT
+   BUTTON_RIGHT;
+#else
+    BUTTON_SELECT;
+#endif
+}
+
+static int is_btn_next(int btn)
+{
+    return btn == BUTTON_DOWN
+#ifndef LEFT_RIGHT_FOR_SELECT
+    || btn == BUTTON_RIGHT
+#endif
+    ;
+}
+
+static int is_btn_prev(int btn)
+{
+    return btn == BUTTON_UP
+#ifndef LEFT_RIGHT_FOR_SELECT
+    || btn == BUTTON_LEFT
+#endif
+    ;
+}
+
 static enum boot_mode get_boot_mode(void)
 {
+#if defined(CHARGE_IN_OF) || defined(CHARGE_WITH_OF)
+    /* on usb detect, immediately boot OF */
+    if (power_input_status() !=  POWER_INPUT_NONE)
+    {
+        return BOOT_OF;
+    }
+#endif
+
+#ifdef DEF_BOOT_ROCKBOX
+    /* Check if boot with no pressed control buttons.
+     * Allow a short period for input devices to initialise by waiting
+     * briefly for button state instead of a non-blocking sample.
+     */
+    if ((button_get_w_tmo(HZ/10) & (BUTTON_DOWN | BUTTON_UP | BUTTON_LEFT | BUTTON_RIGHT)) == 0)
+    {
+        return BOOT_ROCKBOX;
+    }
+#endif
+
     /* load previous mode, or start with rockbox if none */
     enum boot_mode init_mode = load_boot_mode(BOOT_CANARY);
     /* wait for user action */
     enum boot_mode mode = (init_mode == BOOT_CANARY) ? BOOT_ROCKBOX : init_mode;
     int last_activity = current_tick;
+    int timeout = last_activity + get_inactivity_tmo(init_mode == mode);
 #if defined(HAS_BUTTON_HOLD)
     bool hold_status = button_hold();
 #endif
     while(true)
     {
-        /* on usb detect, immediately boot with last choice */
-#if !defined(HIBY_R3PROII) && !defined(HIBY_R1)
-        if(!adb_running && power_input_status() & POWER_INPUT_USB_CHARGER)
-        {
-            /* save last choice */
-            save_boot_mode(mode);
-            return mode;
-        }
-#endif
-        /* inactivity detection */
-        int timeout = last_activity + get_inactivity_tmo(init_mode == mode);
-        if(TIME_AFTER(current_tick, timeout))
-        {
-            /* save last choice */
-            save_boot_mode(mode);
-            return inactivity_action(mode);
-        }
         /* redraw */
         lcd_clear_display();
         /* display top text */
@@ -335,7 +373,8 @@ static enum boot_mode get_boot_mode(void)
             (timeout - current_tick + HZ - 1) / HZ);
 
         lcd_update();
-
+        //TODO: wait for release if boot with button pressed
+        //button_clear_pressed()
         /* wait for a key  */
         int btn = button_get_w_tmo(HZ / 10);
 
@@ -355,16 +394,25 @@ static enum boot_mode get_boot_mode(void)
         if(btn & BUTTON_REPEAT)
             btn &= ~BUTTON_REPEAT;
         /* play -> stop loop and return mode */
-        if(btn == BUTTON_SELECT)
+        if(is_btn_ok(btn))
             break;
         /* left/right/up/down: change mode */
-        if(btn == BUTTON_LEFT || btn == BUTTON_DOWN) {
+        if (is_btn_next(btn)) {
             mode = (mode + BOOT_COUNT - 1) % BOOT_COUNT;
             init_mode = BOOT_CANARY;
         }
-        if(btn == BUTTON_RIGHT || btn == BUTTON_UP) {
+        if (is_btn_prev(btn)) {
             mode = (mode + 1) % BOOT_COUNT;
             init_mode = BOOT_CANARY;
+        }
+
+        /* inactivity detection */
+        timeout = last_activity + get_inactivity_tmo(init_mode == mode);
+        if(TIME_AFTER(current_tick, timeout))
+        {
+            /* save last choice */
+            save_boot_mode(mode);
+            return inactivity_action(mode);
         }
     }
 
@@ -439,17 +487,18 @@ int choice_screen(const char *title, bool center, int nr_choices, const char *ch
             continue;
         if(btn & BUTTON_REPEAT)
             btn &= ~BUTTON_REPEAT;
-        /* play -> stop loop and return mode */
-        if (btn == BUTTON_SELECT)
-        {
-            free(buf);
-            return btn == BUTTON_SELECT ? choice : -1;
-        }
+
         /* left/right/up/down: change mode */
-        if (btn == BUTTON_UP || btn == BUTTON_LEFT)
+        if (is_btn_next(btn))
             choice = (choice + nr_choices - 1) % nr_choices;
         if(btn == BUTTON_DOWN || btn == BUTTON_RIGHT)
             choice = (choice + 1) % nr_choices;
+        /* play -> stop loop and return mode */
+        if (is_btn_ok(btn) || is_btn_back(btn))
+        {
+            free(buf);
+            return is_btn_ok(btn) ? choice : -1;
+        }
     }
 }
 
