@@ -109,9 +109,17 @@ jobs:
 
     - name: Upload build
       uses: actions/upload-artifact@v4
+      if: matrix.type != 'B'
       with:
         name: ${{matrix.name}}.zip
         path: build/rockbox.zip
+
+    - name: Upload bootloader
+      uses: actions/upload-artifact@v4
+      if: matrix.type == 'B'
+      with:
+        name: ${{matrix.name}}.zip
+        path: build/bootloader*
 
     - name: Upload debug files
       uses: actions/upload-artifact@v4
