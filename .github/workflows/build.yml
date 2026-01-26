@@ -47,6 +47,11 @@ jobs:
             arch: y
             platform: hibyr1
 
+          - name: Hiby R1 bootloader
+            arch: y
+            platform: hibyr1
+            type: B
+
           - name: Sansa E200v2
             arch: a
             platform: sansae200v2
