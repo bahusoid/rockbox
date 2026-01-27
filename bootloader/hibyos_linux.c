@@ -122,7 +122,6 @@
 #define OF_NAME "HIBY PLAYER"
 #define LEFT_RIGHT_FOR_SELECT
 #define CHARGE_WITH_OF
-#define DEF_BOOT_ROCKBOX
 #include "bitmaps/hibyicon.h"
 #else
 #error "must define ICON_WIDTH/HEIGHT"
@@ -208,7 +207,7 @@ static int get_inactivity_tmo(int same_as_last)
     else
 #endif
         if (same_as_last)
-            return 1 * HZ; /* Timeout when mode is the same as the previous mode */
+            return 3 * HZ; /* Timeout when mode is the same as the previous mode */
         else
             return 10 * HZ; /* Default timeout */
 }
@@ -231,7 +230,7 @@ static void mount_storage(int enable)
     if (enable && !mounted) {
         system("/bin/mkdir -p " BASE_DIR);
         if (system("/bin/mount /dev/mmcblk0 " BASE_DIR))
-            system("/bin/mount /dev/mmcblk0p1 " BASE_DIR);
+            enable = !system("/bin/mount /dev/mmcblk0p1 " BASE_DIR);
         // XXX possibly invoke sys_serv -> "MOUNT:MOUNT:%s %s", blkdev, mntpoint
     } else if (!enable && mounted) {
         system("/bin/unmount " BASE_DIR);
@@ -266,7 +265,7 @@ static void save_boot_mode(enum boot_mode mode)
 
 static int is_btn_back(int btn)
 {
-    return btn == BUTTON_POWER
+    return 0
 #ifdef LEFT_RIGHT_FOR_SELECT
     || btn == BUTTON_LEFT
 #endif
@@ -275,7 +274,8 @@ static int is_btn_back(int btn)
 
 static int is_btn_ok(int btn)
 {
-    return btn ==
+    return btn == BUTTON_POWER ||
+    btn ==
 #ifdef LEFT_RIGHT_FOR_SELECT
    BUTTON_RIGHT;
 #else
@@ -303,26 +303,7 @@ static int is_btn_prev(int btn)
 
 static enum boot_mode get_boot_mode(void)
 {
-#if defined(CHARGE_IN_OF) || defined(CHARGE_WITH_OF)
-    /* on usb detect, immediately boot OF */
-    if (power_input_status() !=  POWER_INPUT_NONE)
-    {
-        return BOOT_OF;
-    }
-#endif
-
-#ifdef DEF_BOOT_ROCKBOX
-    /* Check if boot with no pressed control buttons.
-     * Allow a short period for input devices to initialise by waiting
-     * briefly for button state instead of a non-blocking sample.
-     */
-    if ((button_get_w_tmo(HZ/10) & (BUTTON_DOWN | BUTTON_UP | BUTTON_LEFT | BUTTON_RIGHT)) == 0)
-    {
-        return BOOT_ROCKBOX;
-    }
-#endif
-
-    /* load previous mode, or start with rockbox if none */
+    int skip_usb_boot = 0;
     enum boot_mode init_mode = load_boot_mode(BOOT_CANARY);
     /* wait for user action */
     enum boot_mode mode = (init_mode == BOOT_CANARY) ? BOOT_ROCKBOX : init_mode;
@@ -373,8 +354,6 @@ static enum boot_mode get_boot_mode(void)
             (timeout - current_tick + HZ - 1) / HZ);
 
         lcd_update();
-        //TODO: wait for release if boot with button pressed
-        //button_clear_pressed()
         /* wait for a key  */
         int btn = button_get_w_tmo(HZ / 10);
 
@@ -386,7 +365,10 @@ static enum boot_mode get_boot_mode(void)
         hold_status = button_hold();
 #else
         if(btn & BUTTON_MAIN)
+        {
+            skip_usb_boot = true;
             last_activity = current_tick;
+        }
 #endif
         /* ignore release, allow repeat */
         if(btn & BUTTON_REL)
@@ -406,13 +388,26 @@ static enum boot_mode get_boot_mode(void)
             init_mode = BOOT_CANARY;
         }
 
+         /* on usb detect, immediately boot with last choice */
+        if (adb_running || (!skip_usb_boot && power_input_status() & POWER_INPUT_USB_CHARGER))
+        {
+#ifdef CHARGE_WITH_OF
+            return BOOT_OF;
+#else
+            /* save last choice */
+            save_boot_mode(mode);
+            return mode;
+#endif
+        }
+
         /* inactivity detection */
         timeout = last_activity + get_inactivity_tmo(init_mode == mode);
         if(TIME_AFTER(current_tick, timeout))
         {
             /* save last choice */
             save_boot_mode(mode);
-            return inactivity_action(mode);
+            mode = inactivity_action(mode);
+            return mode == BOOT_ROCKBOX && !mounted ? BOOT_OF : mode;
         }
     }
 
