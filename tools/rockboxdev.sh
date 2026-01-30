@@ -642,7 +642,7 @@ build_linux_toolchain () {
     prefix="/usr" \
     buildtool "glibc" "$glibc_ver" "--target=$target --host=$target --build=$MACHTYPE \
         --with-__thread --with-headers=$sysroot/usr/include $glibc_opts" \
-        "$glibc_make_opts" "install install_root=$sysroot"
+        "$glibc_make_opts" "install-headers install-lib install_root=$sysroot"
     # build stage 2 compiler
     RESTART_STEP="gcc-stage2" \
     buildtool "gcc" "$gcc_ver" "$gcc_opts --enable-languages=c,c++ --target=$target \
