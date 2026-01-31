@@ -81,7 +81,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y automake bison build-essential ccache flex libc6-dev libgmp3-dev libmpfr-dev \
-        libsdl1.2-dev libtool-bin texinfo zip gawk wget libmpc-dev gettext
+        libsdl1.2-dev libtool-bin texinfo zip gawk wget libmpc-dev gettext gtk-doc-tools
 
     - name: Run rockboxdev.sh
       if: steps.cache-before.outputs.cache-hit != 'true'
