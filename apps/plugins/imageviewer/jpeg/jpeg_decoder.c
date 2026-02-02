@@ -1351,7 +1351,8 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
             }
         } /* for x */
         if (pf_progress != NULL)
-            pf_progress(y, p_jpeg->y_mbl-1); /* notify about decoding progress */
+            if (!pf_progress(y, p_jpeg->y_mbl-1)) /* notify about decoding progress */
+                return -1;
     } /* for y */
 
     return 0; /* success */
@@ -1360,7 +1361,7 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
 
 /* a JPEG decoder specialized in decoding only the luminance (b&w) */
 int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
-                void (*pf_progress)(int current, int total))
+                bool (*pf_progress)(int current, int total))
 {
     struct bitstream bs; /* bitstream "object" */
     int block[64]; /* decoded DCT coefficients */
@@ -1517,7 +1518,8 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
             }
         } /* for x */
         if (pf_progress != NULL)
-            pf_progress(y, p_jpeg->y_mbl-1); /* notify about decoding progress */
+            if (!pf_progress(y, p_jpeg->y_mbl-1)) /* notify about decoding progress */
+                return -1;
     } /* for y */
 
     return 0; /* success */
