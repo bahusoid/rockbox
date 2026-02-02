@@ -29,6 +29,11 @@
 
 #include "jpeg_decoder.h"
 
+#ifdef ROCKBOX_DEBUG_JPEG
+#define JDEBUGF DEBUGF
+#else
+#define JDEBUGF(...)
+
 /* for portability of below JPEG code */
 #define MEMSET(p,v,c) rb->memset(p,v,c)
 #define MEMCPY(d,s,c) rb->memcpy(d,s,c)
@@ -484,56 +489,139 @@ static void idct8x8(unsigned char* p_byte, int* inptr, int* quantptr, int skip_l
 /* JPEG decoder implementation */
 
 /* Preprocess the JPEG JFIF file */
-int process_markers(unsigned char* p_src, long size, struct jpeg* p_jpeg)
+
+INLINE void fill_buf(struct jpeg* p_jpeg)
 {
-    unsigned char* p_end = p_src + size;
+    p_jpeg->buf_left = p_jpeg->read_buf(p_jpeg, MIN(JPEG_READ_BUF_SIZE, p_jpeg->len));
+    p_jpeg->buf_index = 0;
+    if (p_jpeg->buf_left > 0)
+        p_jpeg->len -= p_jpeg->buf_left;
+}
+
+/* when pjpeg->read_buf involves additional data processing (like base64 decoding)
+ * we can't use lseek and have to call pjpeg->read_buf for proper seek */
+bool skip_bytes_read_buf(struct jpeg* p_jpeg)
+{
+    do
+    {
+        int count = -p_jpeg->buf_left;
+        fill_buf(p_jpeg);
+        if (p_jpeg->buf_left < 0)
+            return false;
+        p_jpeg->buf_left -= count;
+        p_jpeg->buf_index += count;
+    } while (p_jpeg->buf_left < 0);
+    return true;
+}
+
+static unsigned char *jpeg_getc(struct jpeg* p_jpeg)
+{
+    if (UNLIKELY(p_jpeg->buf_left < 1))
+        fill_buf(p_jpeg);
+    if (UNLIKELY(p_jpeg->buf_left < 1))
+        return NULL;
+    p_jpeg->buf_left--;
+    return (p_jpeg->buf_index++) + p_jpeg->buf;
+}
+
+
+
+static bool skip_bytes(struct jpeg* p_jpeg, int count)
+{
+    p_jpeg->buf_left -= count;
+    p_jpeg->buf_index += count;
+    return p_jpeg->buf_left >= 0 || p_jpeg->skip_bytes_seek(p_jpeg);
+}
+
+static void jpeg_putc(struct jpeg* p_jpeg)
+{
+    p_jpeg->buf_left++;
+    p_jpeg->buf_index--;
+}
+#endif
+
+#define e_skip_bytes(jpeg, count) \
+do {\
+    if (UNLIKELY(!skip_bytes((jpeg),(count)))) \
+        return -1; \
+} while (0)
+
+#define e_getc(jpeg, code) \
+({ \
+    unsigned char *c; \
+    if (UNLIKELY(!(c = jpeg_getc(jpeg)))) \
+        return (code); \
+    *c; \
+})
+
+#define d_getc(jpeg, def) \
+({ \
+    unsigned char *cp = jpeg_getc(jpeg); \
+    unsigned char c = LIKELY(cp) ? *cp : (def); \
+    c; \
+})
+
+/* Preprocess the JPEG JFIF file */
+int process_markers(struct jpeg* p_jpeg)
+{
+    unsigned char c;
     int marker_size; /* variable length of marker segment */
     int i, j, n;
     int ret = 0; /* returned flags */
+    bool done = false;
 
-    p_jpeg->p_entropy_end = p_end;
-
-    while (p_src < p_end)
+    while (!done)
     {
-        if (*p_src++ != 0xFF) /* no marker? */
+        c = e_getc(p_jpeg, -1);
+        if (c != 0xFF) /* no marker? */
         {
+            JDEBUGF("Non-marker data\n");
             continue; /* discard */
         }
 
-        switch (*p_src++)
+        c = e_getc(p_jpeg, -1);
+        JDEBUGF("marker value %X\n",c);
+        switch (c)
         {
         case 0xFF: /* Previous FF was fill byte */
-            p_src--; /* This FF could be start of a marker */
+            jpeg_putc(p_jpeg); /* This FF could be start of a marker */
             continue;
-        case 0x00: /* Zero stuffed byte - discard */
-            break;
+        case 0x00: /* Zero stuffed byte */
+            break; /* discard */
 
         case 0xC0: /* SOF Huff  - Baseline DCT */
             {
+                JDEBUGF("SOF marker ");
                 ret |= SOF0;
-                marker_size = *p_src++ << 8; /* Highbyte */
-                marker_size |= *p_src++; /* Lowbyte */
-                n = *p_src++; /* sample precision (= 8 or 12) */
+                marker_size = e_getc(p_jpeg, -1) << 8; /* Highbyte */
+                marker_size |= e_getc(p_jpeg, -1); /* Lowbyte */
+                JDEBUGF("len: %d\n", marker_size);
+                n = e_getc(p_jpeg, -1); /* sample precision (= 8 or 12) */
                 if (n != 8)
                 {
                     return(-1); /* Unsupported sample precision */
                 }
-                p_jpeg->y_size = *p_src++ << 8; /* Highbyte */
-                p_jpeg->y_size |= *p_src++; /* Lowbyte */
-                p_jpeg->x_size = *p_src++ << 8; /* Highbyte */
-                p_jpeg->x_size |= *p_src++; /* Lowbyte */
+                p_jpeg->y_size = e_getc(p_jpeg, -1) << 8; /* Highbyte */
+                p_jpeg->y_size |= e_getc(p_jpeg, -1); /* Lowbyte */
+                p_jpeg->x_size = e_getc(p_jpeg, -1) << 8; /* Highbyte */
+                p_jpeg->x_size |= e_getc(p_jpeg, -1); /* Lowbyte */
+                JDEBUGF("  dimensions: %dx%d\n", p_jpeg->x_size,
+                    p_jpeg->y_size);
 
                 n = (marker_size-2-6)/3;
-                if (*p_src++ != n || (n != 1 && n != 3))
+                if (e_getc(p_jpeg, -1) != n || (n != 1 && n != 3))
                 {
                     return(-2); /* Unsupported SOF0 component specification */
                 }
                 for (i=0; i<n; i++)
                 {
-                    p_jpeg->frameheader[i].ID = *p_src++; /* Component info */
-                    p_jpeg->frameheader[i].horizontal_sampling = *p_src >> 4;
-                    p_jpeg->frameheader[i].vertical_sampling = *p_src++ & 0x0F;
-                    p_jpeg->frameheader[i].quanttable_select = *p_src++;
+                    /* Component info */
+                    p_jpeg->frameheader[i].ID = e_getc(p_jpeg, -1);
+                    p_jpeg->frameheader[i].horizontal_sampling =
+                        (c = e_getc(p_jpeg, -1)) >> 4;
+                    p_jpeg->frameheader[i].vertical_sampling = c & 0x0F;
+                    p_jpeg->frameheader[i].quanttable_select =
+                        e_getc(p_jpeg, -1);
                     if (p_jpeg->frameheader[i].horizontal_sampling > 2
                      || p_jpeg->frameheader[i].vertical_sampling > 2)
                     return -3; /* Unsupported SOF0 subsampling */
@@ -561,49 +649,62 @@ int process_markers(unsigned char* p_src, long size, struct jpeg* p_jpeg)
 
         case 0xC4: /* Define Huffman Table(s) */
             {
-                unsigned char* p_temp;
-
                 ret |= DHT;
-                marker_size = *p_src++ << 8; /* Highbyte */
-                marker_size |= *p_src++; /* Lowbyte */
+                marker_size = e_getc(p_jpeg, -1) << 8; /* Highbyte */
+                marker_size |= e_getc(p_jpeg, -1); /* Lowbyte */
+                marker_size -= 2;
 
-                p_temp = p_src;
-                while (p_src < p_temp+marker_size-2-17) /* another table */
+                while (marker_size > 17) /* another table */
                 {
+                    c = e_getc(p_jpeg, -1);
+                    marker_size--;
                     int sum = 0;
-                    i = *p_src & 0x0F; /* table index */
+                    i = c & 0x0F; /* table index */
                     if (i > 1)
                     {
                         return (-5); /* Huffman table index out of range */
-                    }
-                    else if (*p_src++ & 0xF0) /* AC table */
-                    {
-                        for (j=0; j<16; j++)
+                    } else {
+                        if (c & 0xF0) /* AC table */
                         {
-                            sum += *p_src;
-                            p_jpeg->hufftable[i].huffmancodes_ac[j] = *p_src++;
-                        }
-                        if(16 + sum > AC_LEN)
-                            return -10; /* longer than allowed */
+                            for (j=0; j<16; j++)
+                            {
+                                p_jpeg->hufftable[i].huffmancodes_ac[j] =
+                                    (c = e_getc(p_jpeg, -1));
+                                sum += c;
+                                marker_size -= 1;
+                            }
+                            if(16 + sum > AC_LEN)
+                                return -10; /* longer than allowed */
 
-                        for (; j < 16 + sum; j++)
-                            p_jpeg->hufftable[i].huffmancodes_ac[j] = *p_src++;
-                    }
-                    else /* DC table */
-                    {
-                        for (j=0; j<16; j++)
+                            for (; j < 16 + sum; j++)
+                            {
+                                p_jpeg->hufftable[i].huffmancodes_ac[j] =
+                                    e_getc(p_jpeg, -1);
+                                marker_size--;
+                            }
+                        }
+                        else /* DC table */
                         {
-                            sum += *p_src;
-                            p_jpeg->hufftable[i].huffmancodes_dc[j] = *p_src++;
-                        }
-                        if(16 + sum > DC_LEN)
-                            return -11; /* longer than allowed */
+                            for (j=0; j<16; j++)
+                            {
+                                p_jpeg->hufftable[i].huffmancodes_dc[j] =
+                                    (c = e_getc(p_jpeg, -1));
+                                sum += c;
+                                marker_size--;
+                            }
+                            if(16 + sum > DC_LEN)
+                                return -11; /* longer than allowed */
 
-                        for (; j < 16 + sum; j++)
-                            p_jpeg->hufftable[i].huffmancodes_dc[j] = *p_src++;
+                            for (; j < 16 + sum; j++)
+                            {
+                                p_jpeg->hufftable[i].huffmancodes_dc[j] =
+                                    e_getc(p_jpeg, -1);
+                                marker_size--;
+                            }
+                        }
                     }
                 } /* while */
-                p_src = p_temp+marker_size - 2; /* skip possible residue */
+                e_skip_bytes(p_jpeg, marker_size);
             }
             break;
 
@@ -611,61 +712,78 @@ int process_markers(unsigned char* p_src, long size, struct jpeg* p_jpeg)
             return(-6); /* Arithmetic coding not supported */
 
         case 0xD8: /* Start of Image */
+            JDEBUGF("SOI\n");
+            break;
         case 0xD9: /* End of Image */
+            JDEBUGF("EOI\n");
+            break;
         case 0x01: /* for temp private use arith code */
+            JDEBUGF("private\n");
             break; /* skip parameterless marker */
-
 
         case 0xDA: /* Start of Scan */
             {
                 ret |= SOS;
-                marker_size = *p_src++ << 8; /* Highbyte */
-                marker_size |= *p_src++; /* Lowbyte */
+                marker_size = e_getc(p_jpeg, -1) << 8; /* Highbyte */
+                marker_size |= e_getc(p_jpeg, -1); /* Lowbyte */
+                marker_size -= 2;
 
-                n = (marker_size-2-1-3)/2;
-                if (*p_src++ != n || (n != 1 && n != 3))
+                n = (marker_size-1-3)/2;
+                if (e_getc(p_jpeg, -1) != n || (n != 1 && n != 3))
                 {
                     return (-7); /* Unsupported SOS component specification */
                 }
+                marker_size--;
                 for (i=0; i<n; i++)
                 {
-                    p_jpeg->scanheader[i].ID = *p_src++;
-                    p_jpeg->scanheader[i].DC_select = *p_src >> 4;
-                    p_jpeg->scanheader[i].AC_select = *p_src++ & 0x0F;
+                    p_jpeg->scanheader[i].ID = e_getc(p_jpeg, -1);
+                    p_jpeg->scanheader[i].DC_select = (c = e_getc(p_jpeg, -1))
+                        >> 4;
+                    p_jpeg->scanheader[i].AC_select = c & 0x0F;
+                    marker_size -= 2;
                 }
-                p_src += 3; /* skip spectral information */
-                p_jpeg->p_entropy_data = p_src;
-                p_end = p_src; /* exit while loop */
+                /* skip spectral information */
+                e_skip_bytes(p_jpeg, marker_size);
+                done = true;
             }
             break;
 
         case 0xDB: /* Define quantization Table(s) */
             {
                 ret |= DQT;
-                marker_size = *p_src++ << 8; /* Highbyte */
-                marker_size |= *p_src++; /* Lowbyte */
-                n = (marker_size-2)/(QUANT_TABLE_LENGTH+1); /* # of tables */
+                marker_size = e_getc(p_jpeg, -1) << 8; /* Highbyte */
+                marker_size |= e_getc(p_jpeg, -1); /* Lowbyte */
+                marker_size -= 2;
+
+                n = (marker_size)/(QUANT_TABLE_LENGTH+1); /* # of tables */
                 for (i=0; i<n; i++)
                 {
-                    int id = *p_src++; /* ID */
+                    int id = e_getc(p_jpeg, -1); /* ID */
+                    marker_size--;
                     if (id >= 4)
                     {
                         return (-8); /* Unsupported quantization table */
                     }
                     /* Read Quantisation table: */
                     for (j=0; j<QUANT_TABLE_LENGTH; j++)
-                        p_jpeg->quanttable[id][j] = *p_src++;
+                    {
+                        p_jpeg->quanttable[id][j] = e_getc(p_jpeg, -1);
+                        marker_size--;
+                    }
                 }
+                e_skip_bytes(p_jpeg, marker_size);
             }
             break;
 
         case 0xDD: /* Define Restart Interval */
             {
-                marker_size = *p_src++ << 8; /* Highbyte */
-                marker_size |= *p_src++; /* Lowbyte */
-                p_jpeg->restart_interval = *p_src++ << 8; /* Highbyte */
-                p_jpeg->restart_interval |= *p_src++; /* Lowbyte */
-                p_src += marker_size-4; /* skip segment */
+                marker_size = e_getc(p_jpeg, -1) << 8; /* Highbyte */
+                marker_size |= e_getc(p_jpeg, -1); /* Lowbyte */
+                marker_size -= 4;
+                /* Highbyte */
+                p_jpeg->restart_interval = e_getc(p_jpeg, -1) << 8;
+                p_jpeg->restart_interval |= e_getc(p_jpeg, -1); /* Lowbyte */
+                e_skip_bytes(p_jpeg, marker_size); /* skip segment */
             }
             break;
 
@@ -690,9 +808,11 @@ int process_markers(unsigned char* p_src, long size, struct jpeg* p_jpeg)
         case 0xEF: /* Application Field 15*/
         case 0xFE: /* Comment */
             {
-                marker_size = *p_src++ << 8; /* Highbyte */
-                marker_size |= *p_src++; /* Lowbyte */
-                p_src += marker_size-2; /* skip segment */
+                marker_size = e_getc(p_jpeg, -1) << 8; /* Highbyte */
+                marker_size |= e_getc(p_jpeg, -1); /* Lowbyte */
+                marker_size -= 2;
+                JDEBUGF("unhandled marker len %d\n", marker_size);
+                e_skip_bytes(p_jpeg, marker_size); /* skip segment */
             }
             break;
 
@@ -716,6 +836,19 @@ int process_markers(unsigned char* p_src, long size, struct jpeg* p_jpeg)
         } /* switch */
     } /* while */
 
+    if (ret >=0)
+    {
+        p_jpeg->entropy_pos = rb->lseek(p_jpeg->fd, 0, SEEK_CUR);
+        p_jpeg->entropy_len = p_jpeg->len;
+        p_jpeg->entropy_buf_left = p_jpeg->buf_left;
+        p_jpeg->entropy_buf_index = p_jpeg->buf_index;
+        if (p_jpeg->custom_param_size)
+            memcpy(p_jpeg->entropy_custom_param, p_jpeg->custom_param, p_jpeg->custom_param_size);
+        else
+            p_jpeg->entropy_custom_param = p_jpeg->custom_param;
+
+        memcpy(p_jpeg->entropy_buf, p_jpeg->buf, sizeof(p_jpeg->buf));
+    }
     return (ret); /* return flags with seen markers */
 }
 
@@ -1003,7 +1136,22 @@ void build_lut(struct jpeg* p_jpeg)
 
 }
 
+/* Figure F.12: extend sign bit. */
+#define HUFF_EXTEND(x,s)  ((x) < extend_test[s] ? (x) + extend_offset[s] : (x))
 
+static const int extend_test[16] =   /* entry n is 2**(n-1) */
+{
+    0, 0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0080,
+    0x0100, 0x0200, 0x0400, 0x0800, 0x1000, 0x2000, 0x4000
+};
+
+static const int extend_offset[16] = /* entry n is (-1 << n) + 1 */
+{
+    0, ((-1)<<1) + 1, ((-1)<<2) + 1, ((-1)<<3) + 1, ((-1)<<4) + 1,
+    ((-1)<<5) + 1, ((-1)<<6) + 1, ((-1)<<7) + 1, ((-1)<<8) + 1,
+    ((-1)<<9) + 1, ((-1)<<10) + 1, ((-1)<<11) + 1, ((-1)<<12) + 1,
+    ((-1)<<13) + 1, ((-1)<<14) + 1, ((-1)<<15) + 1
+};
 /*
 * These functions/macros provide the in-line portion of bit fetching.
 * Use check_bit_buffer to ensure there are N bits in get_buffer
@@ -1020,171 +1168,204 @@ void build_lut(struct jpeg* p_jpeg)
 * is evaluated multiple times.
 */
 
-INLINE void check_bit_buffer(struct bitstream* pb, int nbits)
+static void fill_bit_buffer(struct jpeg* p_jpeg)
 {
-    if (pb->bits_left < nbits)
-    {   /* nbits is <= 16, so I can always refill 2 bytes in this case */
-        unsigned char byte;
+    unsigned char byte, marker;
 
-        byte = *pb->next_input_byte++;
-        if (byte == 0xFF) /* legal marker can be byte stuffing or RSTm */
-        {   /* simplification: just skip the (one-byte) marker code */
-            pb->next_input_byte++;
+    if (p_jpeg->marker_val)
+        p_jpeg->marker_ind += 16;
+    byte = d_getc(p_jpeg, 0);
+    if (UNLIKELY(byte == 0xFF)) /* legal marker can be byte stuffing or RSTm */
+    {   /* simplification: just skip the (one-byte) marker code */
+        marker = d_getc(p_jpeg, 0);
+        if ((marker & ~7) == 0xD0)
+        {
+            p_jpeg->marker_val = marker;
+            p_jpeg->marker_ind = 8;
         }
-        pb->get_buffer = (pb->get_buffer << 8) | byte;
-
-        byte = *pb->next_input_byte++;
-        if (byte == 0xFF) /* legal marker can be byte stuffing or RSTm */
-        {   /* simplification: just skip the (one-byte) marker code */
-            pb->next_input_byte++;
-        }
-        pb->get_buffer = (pb->get_buffer << 8) | byte;
-
-        pb->bits_left += 16;
     }
+    p_jpeg->bitbuf = (p_jpeg->bitbuf << 8) | byte;
+
+    byte = d_getc(p_jpeg, 0);
+    if (UNLIKELY(byte == 0xFF)) /* legal marker can be byte stuffing or RSTm */
+    {   /* simplification: just skip the (one-byte) marker code */
+        marker = d_getc(p_jpeg, 0);
+        if ((marker & ~7) == 0xD0)
+        {
+            p_jpeg->marker_val = marker;
+            p_jpeg->marker_ind = 0;
+        }
+    }
+    p_jpeg->bitbuf = (p_jpeg->bitbuf << 8) | byte;
+    p_jpeg->bitbuf_bits += 16;
+#ifdef JPEG_BS_DEBUG
+    DEBUGF("read in: %04X\n", p_jpeg->bitbuf & 0xFFFF);
+#endif
 }
 
-INLINE int get_bits(struct bitstream* pb, int nbits)
+INLINE void check_bit_buffer(struct jpeg *p_jpeg, int nbits)
 {
-    return ((int) (pb->get_buffer >> (pb->bits_left -= nbits))) & (BIT_N(nbits)-1);
+    if (nbits > p_jpeg->bitbuf_bits)
+        fill_bit_buffer(p_jpeg);
 }
 
-INLINE int peek_bits(struct bitstream* pb, int nbits)
+INLINE int get_bits(struct jpeg *p_jpeg, int nbits)
 {
-    return ((int) (pb->get_buffer >> (pb->bits_left - nbits))) & (BIT_N(nbits)-1);
+#ifdef JPEG_BS_DEBUG
+    if (nbits > p_jpeg->bitbuf_bits)
+        DEBUGF("bitbuffer underrun\n");
+    int mask = BIT_N(p_jpeg->bitbuf_bits - 1);
+    int i;
+    DEBUGF("get %d bits: ", nbits);
+    for (i = 0; i < nbits; i++)
+        DEBUGF("%d",!!(p_jpeg->bitbuf & (mask >>= 1)));
+    DEBUGF("\n");
+#endif
+    return ((int) (p_jpeg->bitbuf >> (p_jpeg->bitbuf_bits -= nbits))) &
+        (BIT_N(nbits)-1);
 }
 
-INLINE void drop_bits(struct bitstream* pb, int nbits)
+INLINE int peek_bits(struct jpeg *p_jpeg, int nbits)
 {
-    pb->bits_left -= nbits;
+#ifdef JPEG_BS_DEBUG
+    int mask = BIT_N(p_jpeg->bitbuf_bits - 1);
+    int i;
+    DEBUGF("peek %d bits: ", nbits);
+    for (i = 0; i < nbits; i++)
+        DEBUGF("%d",!!(p_jpeg->bitbuf & (mask >>= 1)));
+    DEBUGF("\n");
+#endif
+    return ((int) (p_jpeg->bitbuf >> (p_jpeg->bitbuf_bits - nbits))) &
+        (BIT_N(nbits)-1);
+}
+
+INLINE void drop_bits(struct jpeg *p_jpeg, int nbits)
+{
+#ifdef JPEG_BS_DEBUG
+    int mask = BIT_N(p_jpeg->bitbuf_bits - 1);
+    int i;
+    DEBUGF("drop %d bits: ", nbits);
+    for (i = 0; i < nbits; i++)
+        DEBUGF("%d",!!(p_jpeg->bitbuf & (mask >>= 1)));
+    DEBUGF("\n");
+#endif
+    p_jpeg->bitbuf_bits -= nbits;
 }
 
 /* re-synchronize to entropy data (skip restart marker) */
-static void search_restart(struct bitstream* pb)
+static void search_restart(struct jpeg *p_jpeg)
 {
-    pb->next_input_byte--; /* we may have overread it, taking 2 bytes */
-    /* search for a non-byte-padding marker, has to be RSTm or EOS */
-    while (pb->next_input_byte < pb->input_end &&
-        (pb->next_input_byte[-2] != 0xFF || pb->next_input_byte[-1] == 0x00))
+    if (p_jpeg->marker_val)
     {
-        pb->next_input_byte++;
+        p_jpeg->marker_val = 0;
+        p_jpeg->bitbuf_bits = p_jpeg->marker_ind;
+        p_jpeg->marker_ind = 0;
+        return;
     }
-    pb->bits_left = 0;
+    unsigned char byte;
+    p_jpeg->bitbuf_bits = 0;
+    while ((byte = d_getc(p_jpeg, 0xFF)))
+    {
+        if (byte == 0xff)
+        {
+            byte = d_getc(p_jpeg, 0xD0);
+            if ((byte & ~7) == 0xD0)
+            {
+                return;
+            }
+            else
+                jpeg_putc(p_jpeg);
+        }
+    }
 }
 
 /* Figure F.12: extend sign bit. */
-#define HUFF_EXTEND(x,s)  ((x) < extend_test[s] ? (x) + extend_offset[s] : (x))
-
-static const int extend_test[16] =   /* entry n is 2**(n-1) */
-{
-    0, 0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0080,
-    0x0100, 0x0200, 0x0400, 0x0800, 0x1000, 0x2000, 0x4000
-};
-
-#if (__GNUC__ >= 6)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wshift-negative-value"
-#endif
-
-static const int extend_offset[16] = /* entry n is (-1 << n) + 1 */
-{
-    0, ((-1)<<1) + 1, ((-1)<<2) + 1, ((-1)<<3) + 1, ((-1)<<4) + 1,
-    ((-1)<<5) + 1, ((-1)<<6) + 1, ((-1)<<7) + 1, ((-1)<<8) + 1,
-    ((-1)<<9) + 1, ((-1)<<10) + 1, ((-1)<<11) + 1, ((-1)<<12) + 1,
-    ((-1)<<13) + 1, ((-1)<<14) + 1, ((-1)<<15) + 1
-};
-#if (__GNUC__ >= 6)
-#pragma GCC diagnostic pop
-#endif
+/* This saves some code and data size, benchmarks about the same on RAM */
+#define c(x,s) \
+({ \
+    int x__ = x; \
+    int s__ = s; \
+    x__ & BIT_N(s__- 1) ? x__ : x__ + (-1 << s__) + 1; \
+})
 
 /* Decode a single value */
-INLINE int huff_decode_dc(struct bitstream* bs, struct derived_tbl* tbl)
-{
-    int nb, look, s, r;
-
-    check_bit_buffer(bs, HUFF_LOOKAHEAD);
-    look = peek_bits(bs, HUFF_LOOKAHEAD);
-    if ((nb = tbl->look_nbits[look]) != 0)
-    {
-        drop_bits(bs, nb);
-        s = tbl->look_sym[look];
-        check_bit_buffer(bs, s);
-        r = get_bits(bs, s);
-        s = HUFF_EXTEND(r, s);
-    }
-    else
-    {   /*  slow_DECODE(s, HUFF_LOOKAHEAD+1)) < 0); */
-        long code;
-        nb=HUFF_LOOKAHEAD+1;
-        check_bit_buffer(bs, nb);
-        code = get_bits(bs, nb);
-        while (code > tbl->maxcode[nb])
-        {
-            code <<= 1;
-            check_bit_buffer(bs, 1);
-            code |= get_bits(bs, 1);
-            nb++;
-        }
-        if (nb > 16) /* error in Huffman */
-        {
-            s=0; /* fake a zero, this is most safe */
-        }
-        else
-        {
-            s = tbl->pub[16 + tbl->valptr[nb] + ((int) (code - tbl->mincode[nb])) ];
-            check_bit_buffer(bs, s);
-            r = get_bits(bs, s);
-            s = HUFF_EXTEND(r, s);
-        }
-    } /* end slow decode */
-    return s;
+#define huff_decode_dc(p_jpeg, tbl, s, r) \
+{ \
+    int nb, look; \
+\
+    check_bit_buffer((p_jpeg), HUFF_LOOKAHEAD); \
+    look = peek_bits((p_jpeg), HUFF_LOOKAHEAD); \
+    if ((nb = (tbl)->look_nbits[look]) != 0) \
+    { \
+        drop_bits((p_jpeg), nb); \
+        s = (tbl)->look_sym[look]; \
+        check_bit_buffer((p_jpeg), s); \
+        r = get_bits((p_jpeg), s); \
+    } else { \
+        /*  slow_DECODE(s, HUFF_LOOKAHEAD+1)) < 0); */ \
+        long code; \
+        nb=HUFF_LOOKAHEAD+1; \
+        check_bit_buffer((p_jpeg), nb); \
+        code = get_bits((p_jpeg), nb); \
+        while (code > (tbl)->maxcode[nb]) \
+        { \
+            code <<= 1; \
+            check_bit_buffer((p_jpeg), 1); \
+            code |= get_bits((p_jpeg), 1); \
+            nb++; \
+        } \
+        if (nb > 16) /* error in Huffman */ \
+        { \
+            r = 0; s = 0; /* fake a zero, this is most safe */ \
+        } else { \
+            s = (tbl)->pub[16 + (tbl)->valptr[nb] + \
+                ((int) (code - (tbl)->mincode[nb]))]; \
+            check_bit_buffer((p_jpeg), s); \
+            r = get_bits((p_jpeg), s); \
+        } \
+    } /* end slow decode */ \
 }
 
-INLINE int huff_decode_ac(struct bitstream* bs, struct derived_tbl* tbl)
-{
-    int nb, look, s;
-
-    check_bit_buffer(bs, HUFF_LOOKAHEAD);
-    look = peek_bits(bs, HUFF_LOOKAHEAD);
-    if ((nb = tbl->look_nbits[look]) != 0)
-    {
-        drop_bits(bs, nb);
-        s = tbl->look_sym[look];
-    }
-    else
-    {   /*  slow_DECODE(s, HUFF_LOOKAHEAD+1)) < 0); */
-        long code;
-        nb=HUFF_LOOKAHEAD+1;
-        check_bit_buffer(bs, nb);
-        code = get_bits(bs, nb);
-        while (code > tbl->maxcode[nb])
-        {
-            code <<= 1;
-            check_bit_buffer(bs, 1);
-            code |= get_bits(bs, 1);
-            nb++;
-        }
-        if (nb > 16) /* error in Huffman */
-        {
-            s=0; /* fake a zero, this is most safe */
-        }
-        else
-        {
-            s = tbl->pub[16 + tbl->valptr[nb] + ((int) (code - tbl->mincode[nb])) ];
-        }
-    } /* end slow decode */
-    return s;
+#define huff_decode_ac(p_jpeg, tbl, s) \
+{ \
+    int nb, look; \
+\
+    check_bit_buffer((p_jpeg), HUFF_LOOKAHEAD); \
+    look = peek_bits((p_jpeg), HUFF_LOOKAHEAD); \
+    if ((nb = (tbl)->look_nbits[look]) != 0) \
+    { \
+        drop_bits((p_jpeg), nb); \
+        s = (tbl)->look_sym[look]; \
+    } else { \
+        /*  slow_DECODE(s, HUFF_LOOKAHEAD+1)) < 0); */ \
+        long code; \
+        nb=HUFF_LOOKAHEAD+1; \
+        check_bit_buffer((p_jpeg), nb); \
+        code = get_bits((p_jpeg), nb); \
+        while (code > (tbl)->maxcode[nb]) \
+        { \
+            code <<= 1; \
+            check_bit_buffer((p_jpeg), 1); \
+            code |= get_bits((p_jpeg), 1); \
+            nb++; \
+        } \
+        if (nb > 16) /* error in Huffman */ \
+        { \
+            s = 0; /* fake a zero, this is most safe */ \
+        } else { \
+            s = (tbl)->pub[16 + (tbl)->valptr[nb] + \
+                ((int) (code - (tbl)->mincode[nb]))]; \
+        } \
+    } /* end slow decode */ \
 }
-
 
 #ifdef HAVE_LCD_COLOR
 
 /* JPEG decoder variant for YUV decoding, into 3 different planes */
 /*  Note: it keeps the original color subsampling, even if resized. */
 int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
-                int downscale, void (*pf_progress)(int current, int total))
+                int downscale, bool (*pf_progress)(int current, int total))
 {
-    struct bitstream bs; /* bitstream "object" */
     int block[64]; /* decoded DCT coefficients */
 
     int width, height;
@@ -1231,12 +1412,6 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
     }
     else return -1; /* not supported */
 
-    /* init bitstream, fake a restart to make it start */
-    bs.get_buffer = 0;
-    bs.next_input_byte = p_jpeg->p_entropy_data;
-    bs.bits_left = 0;
-    bs.input_end = p_jpeg->p_entropy_end;
-
     width  = p_jpeg->x_phys / downscale;
     height = p_jpeg->y_phys / downscale;
     for (i=0; i<3; i++) /* calculate some strides */
@@ -1253,7 +1428,7 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
     store_offs[p_jpeg->store_pos[2]] = width * 8 / downscale; /* below */
     store_offs[p_jpeg->store_pos[3]] = store_offs[1] + store_offs[2]; /* r+b */
 
-    for(y=0; y<p_jpeg->y_mbl && bs.next_input_byte <= bs.input_end; y++)
+    for(y=0; y<p_jpeg->y_mbl && p_jpeg->len > 0; y++)
     {
         for (i=0; i<3; i++) /* scan line init */
         {
@@ -1275,7 +1450,8 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
                 struct derived_tbl* actbl = &p_jpeg->ac_derived_tbls[ti];
 
                 /* Section F.2.2.1: decode the DC coefficient difference */
-                s = huff_decode_dc(&bs, dctbl);
+                huff_decode_dc(p_jpeg, dctbl, s, r);
+                s = HUFF_EXTEND(r, s);
 
                 last_dc_val[ci] += s;
                 block[0] = last_dc_val[ci]; /* output it (assumes zag[0] = 0) */
@@ -1286,15 +1462,15 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
                 /* Section F.2.2.2: decode the AC coefficients */
                 for (; k < k_need; k++)
                 {
-                    s = huff_decode_ac(&bs, actbl);
+                    huff_decode_ac(p_jpeg, actbl, s);
                     r = s >> 4;
                     s &= 15;
 
                     if (s)
                     {
                         k += r;
-                        check_bit_buffer(&bs, s);
-                        r = get_bits(&bs, s);
+                        check_bit_buffer(p_jpeg, s);
+                        r = get_bits(p_jpeg, s);
                         block[zag[k]] = HUFF_EXTEND(r, s);
                     }
                     else
@@ -1310,15 +1486,15 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
                 /* In this path we just discard the values */
                 for (; k < 64; k++)
                 {
-                    s = huff_decode_ac(&bs, actbl);
+                    huff_decode_ac(p_jpeg, actbl, s);
                     r = s >> 4;
                     s &= 15;
 
                     if (s)
                     {
                         k += r;
-                        check_bit_buffer(&bs, s);
-                        drop_bits(&bs, s);
+                        check_bit_buffer(p_jpeg, s);
+                        drop_bits(p_jpeg, s);
                     }
                     else
                     {
@@ -1345,7 +1521,7 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
             if (p_jpeg->restart_interval && --restart == 0)
             {   /* if a restart marker is due: */
                 restart = p_jpeg->restart_interval; /* count again */
-                search_restart(&bs); /* align the bitstream */
+                search_restart(p_jpeg); /* align the bitstream */
                 last_dc_val[0] = last_dc_val[1] =
                                  last_dc_val[2] = 0; /* reset decoder */
             }
@@ -1363,7 +1539,6 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[3],
 int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
                 bool (*pf_progress)(int current, int total))
 {
-    struct bitstream bs; /* bitstream "object" */
     int block[64]; /* decoded DCT coefficients */
 
     int width, height;
@@ -1411,10 +1586,10 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
     else return -1; /* not supported */
 
     /* init bitstream, fake a restart to make it start */
-    bs.get_buffer = 0;
-    bs.next_input_byte = p_jpeg->p_entropy_data;
-    bs.bits_left = 0;
-    bs.input_end = p_jpeg->p_entropy_end;
+    // bs.get_buffer = 0;
+    // bs.next_input_byte = p_jpeg->p_entropy_data;
+    // bs.bits_left = 0;
+    // bs.input_end = p_jpeg->p_entropy_end;
 
     width  = p_jpeg->x_phys / downscale;
     height = p_jpeg->y_phys / downscale;
@@ -1428,7 +1603,7 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
     store_offs[p_jpeg->store_pos[2]] = width * 8 / downscale; /* below */
     store_offs[p_jpeg->store_pos[3]] = store_offs[1] + store_offs[2]; /* r+b */
 
-    for(y=0; y<p_jpeg->y_mbl && bs.next_input_byte <= bs.input_end; y++)
+    for(y=0; y<p_jpeg->y_mbl && p_jpeg->len > 0; y++)
     {
         p_byte = p_line;
         p_line += skip_strip;
@@ -1447,7 +1622,8 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
                 struct derived_tbl* actbl = &p_jpeg->ac_derived_tbls[ti];
 
                 /* Section F.2.2.1: decode the DC coefficient difference */
-                s = huff_decode_dc(&bs, dctbl);
+                huff_decode_dc(p_jpeg, dctbl, s, r);
+                s = HUFF_EXTEND(r, s);
 
                 if (ci == 0) /* only for Y component */
                 {
@@ -1460,15 +1636,15 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
                     /* Section F.2.2.2: decode the AC coefficients */
                     for (; k < k_need; k++)
                     {
-                        s = huff_decode_ac(&bs, actbl);
+                        huff_decode_ac(p_jpeg, actbl, s);
                         r = s >> 4;
                         s &= 15;
 
                         if (s)
                         {
                             k += r;
-                            check_bit_buffer(&bs, s);
-                            r = get_bits(&bs, s);
+                            check_bit_buffer(p_jpeg, s);
+                            r = get_bits(p_jpeg, s);
                             block[zag[k]] = HUFF_EXTEND(r, s);
                         }
                         else
@@ -1485,15 +1661,15 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
                 /* In this path we just discard the values */
                 for (; k < 64; k++)
                 {
-                    s = huff_decode_ac(&bs, actbl);
+                    huff_decode_ac(p_jpeg, actbl, s);
                     r = s >> 4;
                     s &= 15;
 
                     if (s)
                     {
                         k += r;
-                        check_bit_buffer(&bs, s);
-                        drop_bits(&bs, s);
+                        check_bit_buffer(p_jpeg, s);
+                        drop_bits(p_jpeg, s);
                     }
                     else
                     {
@@ -1513,7 +1689,7 @@ int jpeg_decode(struct jpeg* p_jpeg, unsigned char* p_pixel[1], int downscale,
             if (p_jpeg->restart_interval && --restart == 0)
             {   /* if a restart marker is due: */
                 restart = p_jpeg->restart_interval; /* count again */
-                search_restart(&bs); /* align the bitstream */
+                search_restart(p_jpeg); /* align the bitstream */
                 last_dc_val = 0; /* reset decoder */
             }
         } /* for x */
