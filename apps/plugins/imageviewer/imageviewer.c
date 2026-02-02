@@ -80,7 +80,7 @@ static struct configdata config[] =
         { .int_p = &settings.ss_timeout }, "Slideshow Time", NULL },
 };
 
-static void cb_progress(int current, int total);
+static bool cb_progress(int current, int total);
 
 static struct imgdec_api iv_api = {
     .settings = &settings,
@@ -445,17 +445,20 @@ static int ask_and_get_audio_buffer(const char *filename)
 #endif /* USE_PLUG_BUF */
 
 /* callback updating a progress meter while image decoding */
-static void cb_progress(int current, int total)
+static bool cb_progress(int current, int total)
 {
     /* do not yield or update the progress bar if we did so too recently */
     long now = *rb->current_tick;
     if(!TIME_AFTER(now, next_progress_tick))
-        return;
+        return true;
 
-    /* limit to 20fps */
-    next_progress_tick = now + HZ/20;
     /* limit to 1/3 sec */
     next_progress_tick = now + HZ/3;
+    if (rb->action_userabort(TIMEOUT_NOBLOCK))
+    {
+        //rb->splash(HZ, ID2P(LANG_ABORTING));
+        return false;
+    }
 
 #ifndef USEGSLIB
     /* in slideshow mode, keep gui interference to a minimum */
@@ -472,6 +475,7 @@ static void cb_progress(int current, int total)
     }
 
     rb->yield(); /* be nice to the other threads */
+    return true;
 }
 
 #define VSCROLL (LCD_HEIGHT/8)

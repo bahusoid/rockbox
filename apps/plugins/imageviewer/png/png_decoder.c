@@ -2055,7 +2055,7 @@ void LodePNG_inspect(LodePNG_Decoder* decoder, uint8_t *in, size_t inlength)
 void LodePNG_decode(LodePNG_Decoder* decoder,
                     uint8_t* in,
                     size_t insize,
-                    void (*pf_progress)(int current, int total))
+                    bool (*pf_progress)(int current, int total))
 {
     size_t line_buf_size;
     /* parse header */

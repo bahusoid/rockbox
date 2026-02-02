@@ -101,7 +101,7 @@ struct imgdec_api {
 #endif
 
     /* callback updating a progress meter while image decoding */
-    void (*cb_progress)(int current, int total);
+    bool (*cb_progress)(int current, int total);
 
 #ifdef USEGSLIB
     void (*gray_bitmap_part)(const unsigned char *src, int src_x, int src_y,
