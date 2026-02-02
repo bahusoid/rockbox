@@ -29,6 +29,7 @@
 
 #include "../imageviewer.h"
 #include "jpeg_decoder.h"
+#include "metadata_common.h"  // Added to complete definition of struct ogg_file
 
 #ifdef HAVE_LCD_COLOR
 #include "yuv2rgb.h"
@@ -109,12 +110,49 @@ static int img_mem(int ds)
     return size;
 }
 
+
+static int read_buf(struct jpeg* p_jpeg, size_t count)
+{
+    return rb->read(p_jpeg->fd, p_jpeg->buf, count);
+}
+
+static bool skip_bytes_seek(struct jpeg* p_jpeg)
+{
+    if (UNLIKELY(rb->lseek(p_jpeg->fd, -p_jpeg->buf_left, SEEK_CUR) < 0))
+        return false;
+    p_jpeg->buf_left = 0;
+    return true;
+}
+
+#ifdef HAVE_ALBUMART
+static int read_buf_id3_unsync(struct jpeg* p_jpeg, size_t count)
+{
+    count = rb->read(p_jpeg->fd, p_jpeg->buf, count);
+    return rb->id3_unsynchronize(p_jpeg->buf, count, (bool*) &p_jpeg->custom_param);
+}
+
+static int read_buf_vorbis_base64(struct jpeg* p_jpeg, size_t count)
+{
+    struct ogg_file* ogg = p_jpeg->custom_param;
+    unsigned char* buf = p_jpeg->buf;
+    count = rb->ogg_file_read(ogg, buf, count);
+    if (count == (size_t) -1)
+    {
+        p_jpeg->len = 0;
+        return 0;
+    }
+
+    return rb->base64_decode(buf, count, buf);
+}
+#endif /* HAVE_ALBUMART */
+
+static char* filepath;
 static int load_image(char *filename, struct image_info *info,
     unsigned char *buf, ssize_t *buf_size,
     int offset, int filesize, int flags)
 {
+    filepath = filename;
     int fd;
-    unsigned char* buf_jpeg; /* compressed JPEG image */
     int status;
     struct jpeg *p_jpg = &jpg;
 
@@ -136,14 +174,56 @@ static int load_image(char *filename, struct image_info *info,
     {
         filesize = rb->filesize(fd);
     }
+    p_jpg->fd = fd;
+    p_jpg->len = filesize;
+    p_jpg->read_buf = read_buf;
+    p_jpg->skip_bytes_seek = skip_bytes_seek;
 
-    /* allocate JPEG buffer */
-    buf_jpeg = buf;
+    
+#ifdef HAVE_ALBUMART
+    if (flags & AA_FLAG_ID3_UNSYNC)
+    {
+        p_jpg->read_buf = read_buf_id3_unsync;
+        p_jpg->custom_param = false;
+    }
+    else if (flags & AA_FLAG_VORBIS_BASE64)
+    {
+        struct ogg_file* ogg = (void*)buf;
+        buf += sizeof(*ogg);
+        p_jpg->entropy_custom_param = buf;
+        buf += sizeof(*ogg);
+        *buf_size -= 2*sizeof(*ogg);
 
+        off_t pic_pos = rb->lseek(fd, 0, SEEK_CUR);
+
+        // we need 92 bytes for format probing, reuse some available space
+        unsigned char* buf_format = (unsigned char*) p_jpg->quanttable;
+        int type = rb->get_ogg_format_and_move_to_comments(fd, buf_format);
+
+        rb->ogg_file_init(ogg, fd, type, 0);
+        bool packet_found;
+        do
+        {
+            int seek_from_cur_pos = pic_pos - rb->lseek(fd, 0, SEEK_CUR);
+            packet_found = seek_from_cur_pos <= ogg->packet_remaining;
+            if (rb->ogg_file_read(ogg, NULL, packet_found ? seek_from_cur_pos : ogg->packet_remaining) < 0)
+                return -1;
+        }
+        while (!packet_found);
+
+        p_jpg->read_buf = read_buf_vorbis_base64;
+        p_jpg->skip_bytes_seek = skip_bytes_read_buf;
+        p_jpg->custom_param = ogg;
+        p_jpg->custom_param_size = sizeof(*ogg);
+        
+    }
+#else
     (void)flags;
+#endif /* HAVE_ALBUMART */
+    
     /* we can start the decompressed images behind it */
-    buf_images = buf_root = buf + filesize;
-    buf_images_size = root_size = *buf_size - filesize;
+    buf_images = buf_root = buf;
+    buf_images_size = root_size = *buf_size;
 
     if (buf_images_size <= 0)
     {
@@ -158,9 +238,6 @@ static int load_image(char *filename, struct image_info *info,
         rb->lcd_update();
     }
 
-    rb->read(fd, buf_jpeg, filesize);
-    rb->close(fd);
-
     if(!iv->running_slideshow)
     {
         rb->lcd_puts(0, 2, "decoding markers");
@@ -174,8 +251,12 @@ static int load_image(char *filename, struct image_info *info,
     }
 #endif
 
+
     /* process markers, unstuffing */
-    status = process_markers(buf_jpeg, filesize, p_jpg);
+    status = process_markers(p_jpg);
+
+    rb->close(fd);
+     p_jpg->fd = -1;
 
     if (status < 0 || (status & (DQT | SOF0)) != (DQT | SOF0))
     {   /* bad format or minimum components not contained */
@@ -275,6 +356,26 @@ static int get_image(struct image_info *info, int frame, int ds)
 
     /* the actual decoding */
     time = *rb->current_tick;
+
+    if (p_jpg->fd < 0)
+    {
+        p_jpg->fd = rb->open(filepath, O_RDONLY);
+        rb->lseek(p_jpg->fd, p_jpg->entropy_pos, SEEK_SET);
+        p_jpg->len = p_jpg->entropy_len;
+        p_jpg->buf_index = p_jpg->entropy_buf_index;
+        memcpy(p_jpg->buf, p_jpg->entropy_buf, sizeof(p_jpg->buf));
+        p_jpg->buf_left = p_jpg->entropy_buf_left;
+
+        if (p_jpg->custom_param_size)
+            memcpy(p_jpg->custom_param, p_jpg->entropy_custom_param, p_jpg->custom_param_size);
+        else
+            p_jpg->custom_param = p_jpg->entropy_custom_param;
+
+
+        p_jpg->bitbuf_bits = 0;
+        p_jpg->marker = 0;
+        p_jpg->marker_val = 0;
+    }
 #ifdef HAVE_ADJUSTABLE_CPU_FREQ
     rb->cpu_boost(true);
     status = jpeg_decode(p_jpg, p_disp->bitmap, ds, iv->cb_progress);
@@ -282,6 +383,9 @@ static int get_image(struct image_info *info, int frame, int ds)
 #else
     status = jpeg_decode(p_jpg, p_disp->bitmap, ds, iv->cb_progress);
 #endif
+
+    rb->close(p_jpg->fd);
+    p_jpg->fd = -1;
     if (status)
     {
         rb->splashf(HZ, "decode error %d", status);
@@ -309,3 +413,4 @@ const struct image_decoder image_decoder = {
 };
 
 IMGDEC_HEADER
+
