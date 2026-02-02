@@ -100,10 +100,10 @@ static int img_mem(int ds)
 }
 
 static int load_image(char *filename, struct image_info *info,
-                      unsigned char *buf, ssize_t *buf_size,
-                      int offset, int filesize)
+    unsigned char *buf, ssize_t *buf_size,
+    int offset, int filesize, int flags)
 {
-    (void)filesize;
+    (void)filesize;(void)flags;
     int w, h; /* used to center output */
     long time; /* measured ticks */
     int fd;

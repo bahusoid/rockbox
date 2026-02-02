@@ -110,8 +110,8 @@ static int img_mem(int ds)
 }
 
 static int load_image(char *filename, struct image_info *info,
-                      unsigned char *buf, ssize_t *buf_size,
-                      int offset, int filesize)
+    unsigned char *buf, ssize_t *buf_size,
+    int offset, int filesize, int flags)
 {
     int fd;
     unsigned char* buf_jpeg; /* compressed JPEG image */
@@ -140,6 +140,7 @@ static int load_image(char *filename, struct image_info *info,
     /* allocate JPEG buffer */
     buf_jpeg = buf;
 
+    (void)flags;
     /* we can start the decompressed images behind it */
     buf_images = buf_root = buf + filesize;
     buf_images_size = root_size = *buf_size - filesize;

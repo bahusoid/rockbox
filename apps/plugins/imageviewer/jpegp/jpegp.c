@@ -96,10 +96,10 @@ static void scaled_dequantization_and_idct(void)
 }
 
 static int load_image(char *filename, struct image_info *info,
-                      unsigned char *buf, ssize_t *buf_size,
-                      int offset, int filesize)
+    unsigned char *buf, ssize_t *buf_size,
+    int offset, int filesize, int flags)
 {
-    (void)filesize;
+    (void)filesize;(void)flags;
     int status;
     struct JPEGD *p_jpg = &jpg;
 
