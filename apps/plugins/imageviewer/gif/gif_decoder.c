@@ -146,7 +146,7 @@ static void set_canvas_background(pixel_t *out, GifFileType *GifFile)
 
 /* var names adhere to giflib coding style */
 void gif_decode(struct gif_decoder *d,
-                void (*pf_progress)(int current, int total))
+                bool (*pf_progress)(int current, int total))
 {
     int i, j;
 
