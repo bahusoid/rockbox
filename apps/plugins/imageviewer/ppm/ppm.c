@@ -75,8 +75,8 @@ static int img_mem(int ds)
 }
 
 static int load_image(char *filename, struct image_info *info,
-                      unsigned char *buf, ssize_t *buf_size,
-                      int offset, int filesize)
+    unsigned char *buf, ssize_t *buf_size,
+    int offset, int filesize, int flags)
 {
     int fd;
     int rc = PLUGIN_OK;

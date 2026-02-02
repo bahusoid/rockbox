@@ -861,7 +861,7 @@ static void get_view(struct image_info *info, int *p_cx, int *p_cy)
 
 /* load, decode, display the image */
 static int load_and_show(char *filename, struct image_info *info,
-                         int offset, int filesize, int status)
+                         int offset, int filesize, int status, int flags)
 {
     int cx, cy;
     ssize_t remaining;
@@ -901,7 +901,7 @@ reload_decoder:
     if (rb->button_get(false) == IMGVIEW_MENU)
         status = PLUGIN_ABORT;
     else
-        status = imgdec->load_image(filename, info, buf, &remaining, offset, filesize);
+        status = imgdec->load_image(filename, info, buf, &remaining, offset, filesize, flags);
 
     if (status == PLUGIN_JPEG_PROGRESSIVE)
     {
@@ -1054,7 +1054,7 @@ reload_decoder:
     return status;
 }
 
-static bool find_album_art(char *path, int *offset, int *filesize, int *status)
+static bool find_album_art(char *path, int *offset, int *filesize, int *status, int *flags)
 {
 #ifndef HAVE_ALBUMART
     (void)offset;(void)filesize;(void)status;
@@ -1066,6 +1066,8 @@ static bool find_album_art(char *path, int *offset, int *filesize, int *status)
         return false;
     }
     struct mp3entry *current_track = &track;
+    *flags = current_track->albumart.type;
+
     switch (current_track->albumart.type)
     {
         case AA_TYPE_BMP:
@@ -1089,8 +1091,12 @@ static bool find_album_art(char *path, int *offset, int *filesize, int *status)
             (*status) = get_image_type(np_file, false);
             return true;
         }
-
-        if (*status == IMAGE_UNKNOWN)
+        //Only non-progressive JPEG supports special album art (vorbis, unsync mp3)
+        if ((*flags & AA_CLEAR_FLAGS_MASK) == AA_TYPE_JPG)
+        {
+            (*status) = IMAGE_JPEG;
+        }
+        else if (*status == IMAGE_UNKNOWN)
             return false;
     }
     rb->strcpy(np_file, current_track->path);
@@ -1109,7 +1115,7 @@ enum plugin_status plugin_start(const void* parameter)
     long greysize; /* helper */
 #endif
 
-    int offset = 0, filesize = 0, status;
+    int offset = 0, filesize = 0, flags = 0, status;
 
     bool is_album_art = false;
     if (!parameter)
@@ -1122,7 +1128,7 @@ enum plugin_status plugin_start(const void* parameter)
         rb->strcpy(np_file, parameter);
         if ((status = get_image_type(np_file, false)) == IMAGE_UNKNOWN)
         {
-            if (!find_album_art(np_file, &offset, &filesize, &status))
+            if (!find_album_art(np_file, &offset, &filesize, &status, &flags))
             {
                 rb->splash(HZ * 2, "Unsupported file");
                 return PLUGIN_ERROR;
@@ -1177,7 +1183,7 @@ enum plugin_status plugin_start(const void* parameter)
 
     do
     {
-        condition = load_and_show(np_file, &image_info, offset, filesize, status);
+        condition = load_and_show(np_file, &image_info, offset, filesize, status, flags);
         if (condition >= PLUGIN_OTHER)
         {
             if(!is_album_art)
