@@ -79,6 +79,15 @@ typedef uint8_t jpeg_pix_t;
 /* This can't be in jpeg_load.h because plugin.h includes it, and it conflicts
  * with the definition in jpeg_decoder.h
  */
+struct jpeg_decode_ctx
+{
+    int16_t quanttable[4][QUANT_TABLE_LENGTH];/* raw quantization tables 0-3 */
+
+    struct huffman_table hufftable[2]; /* Huffman tables  */
+    struct derived_tbl dc_derived_tbls[2]; /* Huffman-LUTs */
+    struct derived_tbl ac_derived_tbls[2];
+};
+
 struct jpeg
 {
 #ifdef JPEG_FROM_MEM
@@ -125,12 +134,8 @@ struct jpeg
 #endif
     jpeg_pix_t *img_buf;
 
-    int16_t quanttable[4][QUANT_TABLE_LENGTH];/* raw quantization tables 0-3 */
-
-    struct huffman_table hufftable[2]; /* Huffman tables  */
-    struct derived_tbl dc_derived_tbls[2]; /* Huffman-LUTs */
-    struct derived_tbl ac_derived_tbls[2];
-
+    struct jpeg_decode_ctx *ctx;
+    
     struct frame_component frameheader[3]; /* Component descriptor */
     struct scan_component scanheader[3]; /* currently not used */
 
@@ -145,6 +150,7 @@ struct jpeg
 
 #ifdef JPEG_FROM_MEM
 static struct jpeg jpeg;
+static struct jpeg_decode_ctx jpeg_ctx;
 #endif
 
 INLINE unsigned range_limit(int value)
@@ -1081,6 +1087,11 @@ static int process_markers(struct jpeg* p_jpeg)
                 marker_size |= e_getc(p_jpeg, -1); /* Lowbyte */
                 marker_size -= 2;
 
+                if (!p_jpeg->ctx) {
+                    e_skip_bytes(p_jpeg, marker_size);
+                    break;
+                }
+
                 while (marker_size > 17) /* another table */
                 {
                     c = e_getc(p_jpeg, -1);
@@ -1095,7 +1106,7 @@ static int process_markers(struct jpeg* p_jpeg)
                         {
                             for (j=0; j<16; j++)
                             {
-                                p_jpeg->hufftable[i].huffmancodes_ac[j] =
+                                p_jpeg->ctx->hufftable[i].huffmancodes_ac[j] =
                                     (c = e_getc(p_jpeg, -1));
                                 sum += c;
                                 marker_size -= 1;
@@ -1105,7 +1116,7 @@ static int process_markers(struct jpeg* p_jpeg)
 
                             for (; j < 16 + sum; j++)
                             {
-                                p_jpeg->hufftable[i].huffmancodes_ac[j] =
+                                p_jpeg->ctx->hufftable[i].huffmancodes_ac[j] =
                                     e_getc(p_jpeg, -1);
                                 marker_size--;
                             }
@@ -1114,7 +1125,7 @@ static int process_markers(struct jpeg* p_jpeg)
                         {
                             for (j=0; j<16; j++)
                             {
-                                p_jpeg->hufftable[i].huffmancodes_dc[j] =
+                                p_jpeg->ctx->hufftable[i].huffmancodes_dc[j] =
                                     (c = e_getc(p_jpeg, -1));
                                 sum += c;
                                 marker_size--;
@@ -1124,7 +1135,7 @@ static int process_markers(struct jpeg* p_jpeg)
 
                             for (; j < 16 + sum; j++)
                             {
-                                p_jpeg->hufftable[i].huffmancodes_dc[j] =
+                                p_jpeg->ctx->hufftable[i].huffmancodes_dc[j] =
                                     e_getc(p_jpeg, -1);
                                 marker_size--;
                             }
@@ -1183,6 +1194,11 @@ static int process_markers(struct jpeg* p_jpeg)
                 marker_size |= e_getc(p_jpeg, -1); /* Lowbyte */
                 marker_size -= 2;
 
+                if (!p_jpeg->ctx) {
+                    e_skip_bytes(p_jpeg, marker_size);
+                    break;
+                }
+
                 n = (marker_size)/(QUANT_TABLE_LENGTH+1); /* # of tables */
                 for (i=0; i<n; i++)
                 {
@@ -1195,7 +1211,7 @@ static int process_markers(struct jpeg* p_jpeg)
                     /* Read Quantisation table: */
                     for (j=0; j<QUANT_TABLE_LENGTH; j++)
                     {
-                        p_jpeg->quanttable[id][j] = e_getc(p_jpeg, -1);
+                        p_jpeg->ctx->quanttable[id][j] = e_getc(p_jpeg, -1);
                         marker_size--;
                     }
                 }
@@ -1315,9 +1331,10 @@ static const struct huffman_table chroma_table =
 
 static void default_huff_tbl(struct jpeg* p_jpeg)
 {
+    if (!p_jpeg->ctx) return;
 
-    MEMCPY(&p_jpeg->hufftable[0], &luma_table, sizeof(luma_table));
-    MEMCPY(&p_jpeg->hufftable[1], &chroma_table, sizeof(chroma_table));
+    MEMCPY(&p_jpeg->ctx->hufftable[0], &luma_table, sizeof(luma_table));
+    MEMCPY(&p_jpeg->ctx->hufftable[1], &chroma_table, sizeof(chroma_table));
 
     return;
 }
@@ -1494,14 +1511,15 @@ INLINE void fix_headers(struct jpeg* p_jpeg)
 
 INLINE void fix_huff_tables(struct jpeg *p_jpeg)
 {
-    fix_huff_tbl(p_jpeg->hufftable[0].huffmancodes_dc,
-        &p_jpeg->dc_derived_tbls[0]);
-    fix_huff_tbl(p_jpeg->hufftable[0].huffmancodes_ac,
-        &p_jpeg->ac_derived_tbls[0]);
-    fix_huff_tbl(p_jpeg->hufftable[1].huffmancodes_dc,
-        &p_jpeg->dc_derived_tbls[1]);
-    fix_huff_tbl(p_jpeg->hufftable[1].huffmancodes_ac,
-        &p_jpeg->ac_derived_tbls[1]);
+    if (!p_jpeg->ctx) return;
+    fix_huff_tbl(p_jpeg->ctx->hufftable[0].huffmancodes_dc,
+        &p_jpeg->ctx->dc_derived_tbls[0]);
+    fix_huff_tbl(p_jpeg->ctx->hufftable[0].huffmancodes_ac,
+        &p_jpeg->ctx->ac_derived_tbls[0]);
+    fix_huff_tbl(p_jpeg->ctx->hufftable[1].huffmancodes_dc,
+        &p_jpeg->ctx->dc_derived_tbls[1]);
+    fix_huff_tbl(p_jpeg->ctx->hufftable[1].huffmancodes_ac,
+        &p_jpeg->ctx->ac_derived_tbls[1]);
 }
 
 /* Because some of the IDCT routines never multiply by any constants, and
@@ -1512,6 +1530,8 @@ INLINE void fix_huff_tables(struct jpeg *p_jpeg)
 INLINE void fix_quant_tables(struct jpeg *p_jpeg)
 {
     int shift, i, j;
+    
+    if (!p_jpeg->ctx) return;
 
 #ifdef HAVE_LCD_COLOR
     const int k = 2;
@@ -1525,7 +1545,7 @@ INLINE void fix_quant_tables(struct jpeg *p_jpeg)
         if (shift)
         {
             for (j = 0; j < 64; j++)
-                p_jpeg->quanttable[i][j] <<= shift;
+                p_jpeg->ctx->quanttable[i][j] <<= shift;
         }
     }
 }
@@ -1776,8 +1796,8 @@ static struct img_part *store_row_jpeg(void *jpeg_args)
 #endif
                 int k = 1; /* coefficient index */
                 int s, r; /* huffman values */
-                struct derived_tbl* dctbl = &p_jpeg->dc_derived_tbls[ti];
-                struct derived_tbl* actbl = &p_jpeg->ac_derived_tbls[ti];
+                struct derived_tbl* dctbl = &p_jpeg->ctx->dc_derived_tbls[ti];
+                struct derived_tbl* actbl = &p_jpeg->ctx->ac_derived_tbls[ti];
 
                 /* Section F.2.2.1: decode the DC coefficient difference */
                 huff_decode_dc(p_jpeg, dctbl, s, r);
@@ -1791,12 +1811,12 @@ static struct img_part *store_row_jpeg(void *jpeg_args)
                     p_jpeg->last_dc_val[ci] += s;
                     /* output it (assumes zag[0] = 0) */
                     block[0] = MULTIPLY16(p_jpeg->last_dc_val[ci],
-                        p_jpeg->quanttable[!!ci][0]);
+                        p_jpeg->ctx->quanttable[!!ci][0]);
 #else
                     p_jpeg->last_dc_val += s;
                     /* output it (assumes zag[0] = 0) */
                     block[0] = MULTIPLY16(p_jpeg->last_dc_val,
-                        p_jpeg->quanttable[0][0]);
+                        p_jpeg->ctx->quanttable[0][0]);
 #endif
                     /* coefficient buffer must be cleared */
                     MEMSET(block+1, 0, p_jpeg->zero_need[!!ci] * sizeof(int));
@@ -1814,7 +1834,7 @@ static struct img_part *store_row_jpeg(void *jpeg_args)
                                 goto skip_rest;
                             r = get_bits(p_jpeg, s);
                             r = HUFF_EXTEND(r, s);
-                            r = MULTIPLY16(r, p_jpeg->quanttable[!!ci][k]);
+                            r = MULTIPLY16(r, p_jpeg->ctx->quanttable[!!ci][k]);
 #ifdef JPEG_IDCT_TRANSPOSE
                             block[zag[transpose ? k : k + 64]] = r ;
 #else
@@ -2010,17 +2030,36 @@ int clip_jpeg_fd(int fd, int flags,
     struct dim src_dim;
     int status;
     int bm_size;
+    bool return_size = format & FORMAT_RETURN_SIZE;
+
 #ifdef JPEG_FROM_MEM
     struct jpeg *p_jpeg = &jpeg;
 #else
-    struct jpeg *p_jpeg = (struct jpeg*)bm->data;
-    int tmp_size = maxsize;
-    ALIGN_BUFFER(p_jpeg, tmp_size, sizeof(long));
-    /* not enough memory for our struct jpeg */
-    if ((size_t)tmp_size < sizeof(struct jpeg))
-        return -1;
+    struct jpeg stack_jpeg;
+    struct jpeg *p_jpeg;
+
+    if (return_size)
+    {
+        p_jpeg = &stack_jpeg;
+    } 
+    else
+    {
+        p_jpeg = (struct jpeg*)bm->data;
+        int tmp_size = maxsize;
+        ALIGN_BUFFER(p_jpeg, tmp_size, sizeof(long));
+        /* not enough memory for our struct jpeg */
+        if ((size_t)tmp_size < sizeof(struct jpeg) + sizeof(struct jpeg_decode_ctx))
+            return -1;
+    }
 #endif
     memset(p_jpeg, 0, sizeof(struct jpeg));
+#ifdef JPEG_FROM_MEM
+    p_jpeg->ctx = &jpeg_ctx;
+#else
+    if (!return_size)
+        p_jpeg->ctx = (struct jpeg_decode_ctx *)(p_jpeg + 1);
+#endif
+
     p_jpeg->len = len;
 #ifdef JPEG_FROM_MEM
     p_jpeg->data = data;
@@ -2043,8 +2082,8 @@ int clip_jpeg_fd(int fd, int flags,
         struct ogg_file* ogg = alloca(sizeof(*ogg));
         off_t pic_pos = lseek(fd, 0, SEEK_CUR);
 
-        // we need 92 bytes for format probing, reuse some available space
-        unsigned char* buf_format = (unsigned char*) p_jpeg->quanttable;
+        // we need 92 bytes for format probing
+        unsigned char buf_format[92];
         int type = get_ogg_format_and_move_to_comments(fd, buf_format);
 
         ogg_file_init(ogg, fd, type, 0);
@@ -2177,17 +2216,19 @@ int clip_jpeg_fd(int fd, int flags,
 
     char *buf_start = (char *)bm->data + bm_size;
     char *buf_end = (char *)bm->data + maxsize;
-    bool return_size = format & FORMAT_RETURN_SIZE;
+
 #ifndef JPEG_FROM_MEM
     ALIGN_BUFFER(buf_start, maxsize, sizeof(long));
+    size_t struct_size = sizeof(struct jpeg) + sizeof(struct jpeg_decode_ctx);
     if (!return_size)
     {
-        if (maxsize < (int)sizeof(struct jpeg))
+        if (maxsize < (int)struct_size)
             return -1;
-        memmove(buf_start, p_jpeg, sizeof(struct jpeg));
+        memmove(buf_start, p_jpeg, struct_size);
         p_jpeg = (struct jpeg *)buf_start;
+        p_jpeg->ctx = (struct jpeg_decode_ctx *)(p_jpeg + 1);
     }
-    buf_start += sizeof(struct jpeg);
+    buf_start += struct_size;
 #endif
     maxsize = buf_end - buf_start;
 
@@ -2315,7 +2356,7 @@ const size_t JPEG_DECODE_OVERHEAD =
 #ifndef JPEG_FROM_MEM
     /* Unless the struct jpeg is defined statically, we need to allocate
      * it in the bitmap buffer as well */
-    + sizeof(struct jpeg)
+    + sizeof(struct jpeg) + sizeof(struct jpeg_decode_ctx)
 #endif
     ;
 
