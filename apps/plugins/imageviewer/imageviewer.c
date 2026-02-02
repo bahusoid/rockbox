@@ -454,6 +454,8 @@ static void cb_progress(int current, int total)
 
     /* limit to 20fps */
     next_progress_tick = now + HZ/20;
+    /* limit to 1/3 sec */
+    next_progress_tick = now + HZ/3;
 
 #ifndef USEGSLIB
     /* in slideshow mode, keep gui interference to a minimum */
