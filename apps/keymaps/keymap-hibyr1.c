@@ -146,8 +146,8 @@ static const struct button_mapping button_context_yesno[]  = {
 }; /* button_context_settings_yesno */
 
 static const struct button_mapping button_context_quickscreen[]  = {
-    { ACTION_STD_CANCEL, BUTTON_POWER|BUTTON_REL,       BUTTON_NONE },
     { ACTION_STD_CANCEL, BUTTON_POWER|BUTTON_REL,       BUTTON_POWER },
+    { ACTION_QS_SHORTCUTS, BUTTON_POWER|BUTTON_REPEAT,       BUTTON_POWER },
     { ACTION_QS_TOP,     BUTTON_UP|BUTTON_REL,          BUTTON_UP },
     { ACTION_QS_TOP,     BUTTON_UP|BUTTON_REPEAT,       BUTTON_NONE },
     { ACTION_QS_DOWN,    BUTTON_DOWN|BUTTON_REL,        BUTTON_DOWN },
