@@ -39,7 +39,11 @@
 #define CODEC_SIZE 0x100000
 
 /* The number of bytes reserved for loadable plugins */
+#if defined(HIBY_R1)
+#define PLUGIN_BUFFER_SIZE 0x200000
+#else
 #define PLUGIN_BUFFER_SIZE 0x80000
+#endif
 
 #define CONFIG_LCD LCD_INGENIC_LINUX
 
