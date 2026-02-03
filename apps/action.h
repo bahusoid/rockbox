@@ -260,6 +260,7 @@ enum {
     ACTION_QS_TOP,
     ACTION_QS_VOLUP,
     ACTION_QS_VOLDOWN,
+    ACTION_QS_SHORTCUTS,
 
     /* pitchscreen */
     /* obviously ignore if you dont have thise screen */
