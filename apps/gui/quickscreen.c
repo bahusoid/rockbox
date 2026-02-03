@@ -383,6 +383,7 @@ static int gui_syncquickscreen_run(struct gui_quickscreen * qs, int button_enter
 #ifdef HAVE_TOUCHSCREEN
     action_gesture_reset();
 #endif
+    action_wait_for_release();
     while (true) {
         if (redraw)
         {
@@ -419,7 +420,7 @@ static int gui_syncquickscreen_run(struct gui_quickscreen * qs, int button_enter
             FOR_NB_SCREENS(i)
                 skin_update(CUSTOM_STATUSBAR, i, SKIN_REFRESH_NON_STATIC);
         }
-        else if (button == ACTION_STD_CONTEXT)
+        else if (button == ACTION_STD_CONTEXT || button == ACTION_QS_SHORTCUTS)
         {
             ret |= QUICKSCREEN_GOTO_SHORTCUTS_MENU;
             break;
