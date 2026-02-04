@@ -154,25 +154,7 @@ const char* setting_get_cfgvals(const struct settings_list *setting)
 /* calculates and stores crc of settings, returns true if settings have changed */
 static bool settings_crc_changed(void)
 {
-    char value[MAX_PATH];
-    uint32_t custom_crc = 0xFFFFFFFF;
-    for(int i=0; i<nb_settings; i++)
-    {
-        const struct settings_list *setting = &settings[i];
-        if (!(setting->flags & F_CUSTOM_SETTING))
-            continue;
-        cfg_to_string(setting, value, sizeof(value));
-        custom_crc = crc_32(value, strlen(value), custom_crc);
-    }
-
-    uint32_t crc = crc_32(&global_settings, sizeof(global_settings), custom_crc);
-    if (crc != user_settings_crc)
-    {
-        user_settings_crc = crc;
-        return true;
-    }
-
-    return false;
+    return true;
 }
 
 /** Reading from a config file **/
