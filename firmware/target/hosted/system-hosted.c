@@ -91,7 +91,7 @@ static void sig_handler(int sig, siginfo_t *siginfo, void *context)
 
 void power_off(void)
 {
-    backlight_hw_off();
+    backlight_hw_on();
     sync();
 
     /* Try direct kernel syscall first (no memory overhead) */
