@@ -591,7 +591,12 @@ static bool settings_write_config(const char* filename, int options)
         cfg_to_string(setting, value, MAX_PATH);
         logf("Written: '%s: %s'\r\n",setting->cfg_name, value);
 
-        fdprintf(fd,"%s: %s\r\n",setting->cfg_name,value);
+        if (fdprintf(fd,"%s: %s\r\n",setting->cfg_name,value) < 0)
+        {
+            //continue;
+            close(fd);
+            return false;
+        }
     } /* for(...) */
     close(fd);
     return true;
