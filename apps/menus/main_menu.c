@@ -395,6 +395,8 @@ static int info_action_callback(int action, struct gui_synclist *lists)
     output_dyn_value(s1, sizeof(s1), kib, kibyte_units, 3, true);
     simplelist_addline("%s %s", str(LANG_BUFFER_STAT), s1);
 
+    simplelist_addline("RAM: %d MB", MEMORYSIZE);
+
 #ifdef HAVE_RECORDING
 /* INFO_REC_DIR_TITLE*/
     simplelist_setline(str(LANG_REC_DIR));
