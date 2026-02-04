@@ -597,6 +597,15 @@ static bool settings_write_config(const char* filename, int options)
     return true;
 }
 
+static void write_system_status(void)
+{
+    logf("Writing system_status to disk");
+    if (settings_write_config(RESUMEFILE_TEMP, SETTINGS_SAVE_RESUMEINFO))
+    {
+        rename_temp_file(RESUMEFILE_TEMP, RESUMEFILE);
+    }
+}
+
 static void flush_global_status_callback(void)
 {
     if (TIME_AFTER(current_tick, next_status_update_tick))
@@ -604,13 +613,7 @@ static void flush_global_status_callback(void)
         next_status_update_tick = current_tick + SYSTEM_STATUS_UPDATE_TICKS;
         update_runtime();
 
-        DEBUGF("Writing system_status to disk\n");
-        logf("Writing system_status to disk");
-
-        if (settings_write_config(RESUMEFILE_TEMP, SETTINGS_SAVE_RESUMEINFO))
-        {
-            rename_temp_file(RESUMEFILE_TEMP, RESUMEFILE);
-        }
+        write_system_status();
     }
 }
 
@@ -672,7 +675,7 @@ void status_save(bool force)
 {
     if(force)
     {
-        settings_save(); /* will force a status flush */
+        write_system_status();
     }
     else
         register_storage_idle_func(flush_global_status_callback);
