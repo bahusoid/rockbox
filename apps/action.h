@@ -66,6 +66,7 @@
 #define SEL_ACTION_ALOCK_OK   0x400U/*autolock only active after key lock once*/
 #define SEL_ACTION_FFKEYPRESS 0x400U/* backlight Filter First Keypress active*/
 #define SEL_ACTION_ENABLED    0x800U
+#define SEL_ACTION_START_STOP  0x1000U
 /* Selective Actions flags */
 
 #if !defined(HAS_BUTTON_HOLD)
