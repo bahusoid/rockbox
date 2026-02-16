@@ -33,8 +33,10 @@ int key_to_button(int keyboard_button)
     {
         case SDLK_KP_ENTER:
         case SDLK_RETURN:
+        case SDLK_ESCAPE:
         case SDLK_SPACE:
         case SDLK_KP_5:
+        case SDLK_BACKSPACE:
             new_btn = BUTTON_POWER;
             break;
         case SDLK_UP:
