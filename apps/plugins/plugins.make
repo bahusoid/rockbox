@@ -15,11 +15,15 @@ ifneq ($(APP_TYPE),sdl-sim)
 endif
 endif
 
+ifdef SELECTED_PLUGINS_SRC
+PLUGINS_SRC = $(SELECTED_PLUGINS_SRC)
+else
 ifdef is_app_build
 PLUGINS_SRC = $(call preprocess, $(APPSDIR)/plugins/SOURCES.app_build)
 else
 PLUGINS_SRC = $(call preprocess, $(APPSDIR)/plugins/SOURCES)
 endif
+endif # ifdef SELECTED_PLUGINS_SRC
 OTHER_SRC += $(PLUGINS_SRC)
 ROCKS1 := $(PLUGINS_SRC:.c=.rock)
 ROCKS1 := $(call full_path_subst,$(ROOTDIR)/%,$(BUILDDIR)/%,$(ROCKS1))
@@ -53,11 +57,15 @@ endif
 OTHER_SRC += $(ROOTDIR)/apps/plugins/plugin_crt0.c
 PLUGIN_CRT0 := $(BUILDDIR)/apps/plugins/plugin_crt0.o
 # multifile plugins (subdirs):
+ifdef SELECTED_PLUGINS_SUBDIRS
+PLUGINSUBDIRS := $(SELECTED_PLUGINS_SUBDIRS)
+else
 ifdef is_app_build
 PLUGINSUBDIRS := $(call preprocess, $(APPSDIR)/plugins/SUBDIRS.app_build)
 else
 PLUGINSUBDIRS := $(call preprocess, $(APPSDIR)/plugins/SUBDIRS)
 endif
+endif # ifdef SELECTED_PLUGINS_SUBDIRS
 
 PLUGIN_LIBS := $(PLUGINLIB) $(PLUGINBITMAPLIB) $(SETJMPLIB) $(FIXEDPOINTLIB)
 
