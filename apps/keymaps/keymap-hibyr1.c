@@ -93,6 +93,7 @@ static const struct button_mapping button_context_wps[]  = {
 static const struct button_mapping button_context_wps_locked[] = {
     { ACTION_WPS_VOLUP,     BUTTON_UP|BUTTON_REL,     BUTTON_UP },
     { ACTION_WPS_VOLDOWN,   BUTTON_DOWN|BUTTON_REL,    BUTTON_DOWN },
+    { ACTION_WPS_STOP,   BUTTON_POWER|BUTTON_REPEAT,    BUTTON_POWER },
 
     LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_WPS)
 }; /* button_context_wps_locked */
