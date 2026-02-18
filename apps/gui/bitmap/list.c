@@ -72,7 +72,8 @@ void gui_synclist_scroll_stop(struct gui_synclist *lists)
     {
         screens[i].scroll_stop_viewport(&list_text[i]);
         screens[i].scroll_stop_viewport(&title_text[i]);
-        screens[i].scroll_stop_viewport(lists->parent[i]);
+        if (lists->parent[i])
+            screens[i].scroll_stop_viewport(lists->parent[i]);
     }
 }
 
