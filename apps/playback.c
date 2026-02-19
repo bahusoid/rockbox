@@ -2767,6 +2767,16 @@ static void audio_finalise_track_change(void)
     {
         buf_read_cuesheet(info.cuesheet_hid);
         track_id3 = bufgetid3(info.id3_hid);
+
+        /* When pause_on_track_change is calculated, next track_info may be missing
+         * (due to a low buffer or an automatic direction change),
+         * so we need to recalculate it. */
+        if (pause_on_track_change || single_mode_do_pause(info.id3_hid))
+        {
+            play_status = PLAY_PAUSED;
+            pcmbuf_pause(true);
+            pause_on_track_change = false;
+        }
     }
     /* Sync the next track information */
     have_info = track_list_current(1, &info);
@@ -2984,13 +2994,6 @@ static void audio_on_codec_seek_complete(void)
    (Q_AUDIO_TRACK_CHANGED) */
 static void audio_on_track_changed(void)
 {
-    if (pause_on_track_change)
-    {
-        play_status = PLAY_PAUSED;
-        pcmbuf_pause(true);
-        pause_on_track_change = false;
-    }
-
     /* Finish whatever is pending so that the WPS is in sync */
     audio_finalise_track_change();
 
