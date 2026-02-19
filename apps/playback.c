@@ -2843,11 +2843,16 @@ static void audio_monitor_end_of_playlist(void)
 }
 
 /* Does this track have an entry allocated? */
-static bool audio_can_change_track(int *trackstat, int *id3_hid)
+static bool audio_can_change_track(int *trackstat, enum pcm_track_change_type *type)
 {
     struct track_info info;
     bool have_track = track_list_advance_current(1, &info);
-    *id3_hid = info.id3_hid;
+
+    pause_on_track_change = have_track && single_mode_do_pause(info.id3_hid);
+    *type = pause_on_track_change
+                ? TRACK_CHANGE_END_OF_DATA
+                : TRACK_CHANGE_AUTO;
+
     if (!have_track || info.audio_hid < 0)
     {
         bool end_of_playlist = false;
@@ -2856,8 +2861,8 @@ static bool audio_can_change_track(int *trackstat, int *id3_hid)
         {
             if (filling == STATE_STOPPED)
             {
-                audio_begin_track_change(TRACK_CHANGE_END_OF_DATA, *trackstat);
-                return false;
+                *type = TRACK_CHANGE_END_OF_DATA;
+                return true;
             }
 
             /* Track load is not complete - it might have stopped on a
@@ -2959,14 +2964,10 @@ static void audio_on_codec_complete(int status)
     track_event_flags = TEF_AUTO_SKIP;
     skip_pending = TRACK_SKIP_AUTO;
 
-    int id3_hid = 0;
-    if (audio_can_change_track(&trackstat, &id3_hid))
+    enum pcm_track_change_type type;
+    if (audio_can_change_track(&trackstat, &type))
     {
-        pause_on_track_change = single_mode_do_pause(id3_hid);
-        audio_begin_track_change(
-                pause_on_track_change
-                ? TRACK_CHANGE_END_OF_DATA
-                : TRACK_CHANGE_AUTO, trackstat);
+        audio_begin_track_change(type, trackstat);
     }
 }
 
@@ -2986,6 +2987,7 @@ static void audio_on_track_changed(void)
     if (pause_on_track_change)
     {
         play_status = PLAY_PAUSED;
+        pcmbuf_pause(true);
         pause_on_track_change = false;
     }
 
