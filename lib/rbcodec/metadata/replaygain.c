@@ -38,6 +38,9 @@
 #define FP_ONE          (1 << FP_BITS)
 #define FP_MIN          (-48 * FP_ONE)
 #define FP_MAX          ( 17 * FP_ONE)
+#define FP_OPUS_BOOST   (  5 * FP_ONE)
+#define OPUS_FP_BITS    (8)
+#define FP_OPUS_SCALE   (FP_BITS - OPUS_FP_BITS)
 
 void replaygain_itoa(char* buffer, int length, long int_gain)
 {
@@ -119,6 +122,54 @@ static long fp_atof(const char* s, int precision)
         + (((int64_t) frac_part * int_one) / frac_max_int));
 }
 
+/* Attempts to convert a string to an int16_t.
+ * Returns 0 and sets the result to 0 if the conversion failed.
+ *
+ *  str       The string to attempt to convert to an int16_t.
+ *  result    A pointer to the result. Set to 0 on failure to convert.
+ */
+static int atoi16_chk(const char* str, int16_t* result)
+{
+    /* Use int32_t for the intermediate value to avoid overflow. */
+    int32_t value = 0;
+    int sign = 1;
+    char cur_char = '\0';
+
+    *result = 0;
+
+    if (!str)
+        return 0;
+
+    cur_char = *str++;
+    while (isspace(cur_char))
+        cur_char = *str++;
+
+    switch (cur_char)
+    {
+        case '-':
+            sign = -1;
+            /* Intentional fallthrough. */
+        case '+':
+            cur_char = *str++;
+            break;
+        default:
+            if (!isdigit(cur_char))
+                return 0;
+    }
+
+    while (isdigit(cur_char) && value < INT16_MAX)
+    {
+        value = (value * 10) + (cur_char - '0');
+        cur_char = *str++;
+    }
+
+    if (value > INT16_MAX || (sign == -1 && value > -INT16_MIN))
+        return 0;
+    
+    *result = (int16_t)(value * sign);
+    return 1;
+}
+
 static long convert_gain(long gain)
 {
     /* Don't allow unreasonably low or high gain changes.
@@ -137,6 +188,25 @@ static long convert_gain(long gain)
 static long get_replaygain(const char* str)
 {
     return fp_atof(str, FP_BITS);
+}
+
+/* Get the sample scale factor in Q19.12 format from a gain value as used
+ * in the Ogg Opus format. Also, compensate for the -23 dB target used in
+ * Opus, adjusting it to match the -18 dB target used in ReplayGain.
+ *
+ * str  Gain as a Q7.8 decimal string. E.g., "-883"; approximatly -3.45 dB.
+ */
+static long get_replaygain_opus(const char* str)
+{
+    int16_t file_gain;
+    long fp_gain;
+    int success = atoi16_chk(str, &file_gain);
+
+    if (!success)
+        return 0;
+    
+    fp_gain = ((long)file_gain) << FP_OPUS_SCALE;
+    return fp_gain + FP_OPUS_BOOST;
 }
 
 /* Get the peak volume in Q7.24 format.
@@ -192,6 +262,34 @@ void parse_replaygain(const char* key, const char* value,
     else if ((rg_op == 6) && !entry->album_peak)
     { /*replaygain_album_peak*/
         entry->album_peak = get_replaypeak(value);
+    }
+}
+
+/* Parse Ogg Opus's R128_TRACK_GAIN and R128_ALBUM_GAIN tags. If a valid
+ * tag is found, update mp3entry struct accordingly. Existing values are
+ * not overwritten. Note that RFC7845 specifies no peak tag is included.
+ *
+ * key     Name of the tag.
+ * value   Value of the tag.
+ * entry   mp3entry struct to update.
+ */
+void parse_replaygain_opus(const char* key, const char* value, 
+                      struct mp3entry* entry)
+{
+    static const char *rg_options[] = {"R128_TRACK_GAIN", "R128_ALBUM_GAIN", 
+                                       NULL};
+
+    int rg_op = string_option(key, rg_options, true);
+
+    if (rg_op == 0 && !entry->track_gain)
+    {
+        entry->track_level = get_replaygain_opus(value);
+        entry->track_gain  = convert_gain(entry->track_level);
+    }
+    else if (rg_op == 1 && !entry->album_gain)
+    {
+        entry->album_level = get_replaygain_opus(value);
+        entry->album_gain  = convert_gain(entry->album_level);
     }
 }
 
