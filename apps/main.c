@@ -25,6 +25,7 @@
 #include "gcc_extensions.h"
 #include "storage.h"
 #include "disk.h"
+#include "fat.h"
 #include "file_internal.h"
 #include "lcd.h"
 #include "rtc.h"
@@ -292,6 +293,22 @@ int show_logo_boot( void )
 }
 
 #ifdef HAVE_DIRCACHE
+static bool INIT_ATTR dircache_has_exfat_volume(void)
+{
+#ifdef HAVE_MULTIVOLUME
+    for (int i = 0; i < NUM_VOLUMES; i++)
+    {
+        if (fat_ismounted(i) && fat_is_exfat(i))
+            return true;
+    }
+#else
+    if (fat_ismounted() && fat_is_exfat())
+        return true;
+#endif
+
+    return false;
+}
+
 static int INIT_ATTR init_dircache(bool preinit)
 {
     if (preinit)
@@ -299,6 +316,11 @@ static int INIT_ATTR init_dircache(bool preinit)
 
     if (!global_settings.dircache)
         return -1;
+
+    if (dircache_has_exfat_volume())
+    {
+        return -1;
+    }
 
     int result = -1;
 
