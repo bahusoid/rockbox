@@ -175,8 +175,34 @@ union raw_dirent
 #define DIR_ENTRY_SIZE              32
 #define FAT_BAD_MARK                0x0ffffff7
 #define FAT_EOF_MARK                0x0ffffff8
+#define EXFAT_EOF_MARK              0xfffffff8
 #define FAT16_BAD_MARK              0xfff7
 #define FAT16_EOF_MARK              0xfff8
+
+/* exFAT boot sector offsets */
+#define EXFAT_PARTOFF               64
+#define EXFAT_VOLLEN                72
+#define EXFAT_FATOFF                80
+#define EXFAT_FATLENGTH             84
+#define EXFAT_CLUSTER_HEAP_OFF      88
+#define EXFAT_CLUSTER_COUNT         92
+#define EXFAT_ROOTCLUSTER           96
+#define EXFAT_BYTES_PER_SEC_SHIFT   108
+#define EXFAT_SEC_PER_CLUS_SHIFT    109
+#define EXFAT_NUMFATS               110
+#define EXFAT_PERCENT_INUSE         112
+
+/* exFAT directory entry types */
+#define EXFAT_ENTRY_FILE            0x85
+#define EXFAT_ENTRY_BITMAP          0x81
+#define EXFAT_ENTRY_STREAM          0xc0
+#define EXFAT_ENTRY_FILENAME        0xc1
+
+#define EXFAT_STREAM_ALLOCATION_POSSIBLE 0x01
+#define EXFAT_STREAM_NO_FATCHAIN    0x02
+
+#define EXFAT_NOFAT_FLAG            0x80000000u
+#define EXFAT_ENTRY_COUNT_MASK      0x0000ffffu
 
 struct fsinfo
 {
@@ -213,6 +239,18 @@ struct fsinfo
 #endif /* HAVE_FAT16SUPPORT */
 struct bpb;
 static void update_fsinfo32(struct bpb *fat_bpb);
+static long get_next_cluster32(struct bpb *fat_bpb, long startcluster);
+static inline unsigned long fat_eof_mark(const struct bpb *fat_bpb);
+static inline unsigned int exfat_entry_count(const struct fat_file *file);
+static inline unsigned int exfat_first_entry(const struct fat_file *file);
+static bool exfat_file_has_nofat_chain(const struct bpb *fat_bpb,
+                                       const struct fat_file *file);
+static unsigned long cluster2sec(struct bpb *fat_bpb, long cluster);
+static union raw_dirent * cache_direntry(struct bpb *fat_bpb,
+                                         struct fat_filestr *filestr,
+                                         unsigned int entry);
+static void fat_open_internal(IF_MV(int volume,) long startcluster,
+                              struct fat_file *file);
 
 /* Note: This struct doesn't hold the raw values after mounting if
  * bpb_bytspersec isn't the same as the underlying device's logical
@@ -237,6 +275,10 @@ static struct bpb
     unsigned long bpb_fatsz32;
     unsigned long bpb_fsinfo;
 
+    /* exFAT-specific system files */
+    long          exfat_bitmap_clus;
+    uint64_t      exfat_bitmap_size;
+
     /* variables for internal use */
     unsigned long fatsize;
     unsigned long totalsectors;
@@ -258,6 +300,7 @@ static struct bpb
 #ifdef HAVE_FAT16SUPPORT
     uint8_t is_fat16; /* true if we mounted a FAT16 partition, false if FAT32 */
 #endif
+    uint8_t is_exfat; /* true if we mounted an exFAT partition */
 #ifdef HAVE_MULTIDRIVE
     uint8_t drive;    /* on which physical device is this located */
 #endif
@@ -332,12 +375,212 @@ struct fatlong_parse_state
     uint8_t chksum;
 };
 
+struct exfat_file_meta
+{
+#ifdef HAVE_MULTIVOLUME
+    uint8_t volume;
+#endif
+    long dircluster;
+    unsigned int endentry;
+    uint32_t size;
+    uint8_t flags;
+    uint8_t valid;
+};
+
+#define EXFAT_META_FLAG_NOFAT 0x01
+#define EXFAT_META_SLOTS 64
+static struct exfat_file_meta exfat_meta[EXFAT_META_SLOTS];
+
+static struct exfat_file_meta * exfat_meta_find(const struct fat_file *file)
+{
+    for (unsigned int i = 0; i < EXFAT_META_SLOTS; i++)
+    {
+        struct exfat_file_meta *m = &exfat_meta[i];
+        if (!m->valid)
+            continue;
+
+        if (m->dircluster != file->dircluster)
+            continue;
+
+        if (m->endentry != file->e.entry)
+            continue;
+
+#ifdef HAVE_MULTIVOLUME
+        if (m->volume != file->volume)
+            continue;
+#endif
+        return m;
+    }
+
+    return NULL;
+}
+
+static void exfat_meta_store(const struct fat_file *file,
+                             uint32_t size, bool nofat)
+{
+    struct exfat_file_meta *slot = exfat_meta_find(file);
+
+    if (!slot)
+    {
+        for (unsigned int i = 0; i < EXFAT_META_SLOTS; i++)
+        {
+            if (exfat_meta[i].valid)
+                continue;
+
+            slot = &exfat_meta[i];
+            break;
+        }
+
+        if (!slot)
+            slot = &exfat_meta[file->e.entry % EXFAT_META_SLOTS];
+    }
+
+    slot->valid = 1;
+#ifdef HAVE_MULTIVOLUME
+    slot->volume = file->volume;
+#endif
+    slot->dircluster = file->dircluster;
+    slot->endentry = file->e.entry;
+    slot->size = size;
+    slot->flags = nofat ? EXFAT_META_FLAG_NOFAT : 0;
+}
+
+static void exfat_meta_remove(const struct fat_file *file)
+{
+    struct exfat_file_meta *slot = exfat_meta_find(file);
+    if (slot)
+        slot->valid = 0;
+}
+
+static void exfat_meta_invalidate_volume(IF_MV_NONVOID(int volume))
+{
+    for (unsigned int i = 0; i < EXFAT_META_SLOTS; i++)
+    {
+        struct exfat_file_meta *slot = &exfat_meta[i];
+        if (!slot->valid)
+            continue;
+
+#ifdef HAVE_MULTIVOLUME
+        if (slot->volume != volume)
+            continue;
+#else
+        (void)volume;
+#endif
+
+        slot->valid = 0;
+    }
+}
+
+static uint32_t exfat_file_size_cached(const struct fat_file *file)
+{
+    struct exfat_file_meta *slot = exfat_meta_find(file);
+    return slot ? slot->size : 0;
+}
+
+static int exfat_update_set_checksum(struct bpb *fat_bpb,
+                                     struct fat_filestr *parentstr,
+                                     unsigned int first,
+                                     unsigned int entries);
+
+static int exfat_set_nofat_flag(struct bpb *fat_bpb,
+                                struct fat_file *file, bool nofat)
+{
+    if (!fat_bpb->is_exfat || !file->dircluster)
+        return 0;
+
+    struct fat_file parent;
+    fat_open_internal(IF_MV(file->volume,) file->dircluster, &parent);
+
+    struct fat_filestr parentstr;
+    fat_filestr_init(&parentstr, &parent);
+
+    unsigned int first = exfat_first_entry(file);
+
+    dc_lock_cache();
+    union raw_dirent *sent = cache_direntry(fat_bpb, &parentstr, first + 1);
+    if (!sent || sent->data[0] != EXFAT_ENTRY_STREAM)
+    {
+        dc_unlock_cache();
+        return -1;
+    }
+
+    if (nofat)
+        sent->data[1] |= EXFAT_STREAM_NO_FATCHAIN;
+    else
+        sent->data[1] &= ~EXFAT_STREAM_NO_FATCHAIN;
+
+    sent->data[1] |= EXFAT_STREAM_ALLOCATION_POSSIBLE;
+
+    dc_dirty_buf(sent);
+
+    if (exfat_update_set_checksum(fat_bpb, &parentstr, first,
+                                  exfat_entry_count(file)) < 0)
+    {
+        dc_unlock_cache();
+        return -1;
+    }
+
+    dc_unlock_cache();
+
+    /* Keep the per-instance fast-path flag in sync. */
+    if (nofat)
+        file->e.entries |= EXFAT_NOFAT_FLAG;
+    else
+        file->e.entries &= EXFAT_ENTRY_COUNT_MASK;
+
+    exfat_meta_store(file, exfat_file_size_cached(file), nofat);
+    return 0;
+}
+
+static unsigned long exfat_allocated_clusters(struct bpb *fat_bpb,
+                                              const struct fat_file *file,
+                                              long upto_cluster)
+{
+    unsigned long clussize = fat_bpb->bpb_secperclus * LOG_SECTOR_SIZE(fat_bpb);
+    uint32_t size = exfat_file_size_cached(file);
+    unsigned long by_size = size ? (size + clussize - 1) / clussize : 0;
+    unsigned long by_pos = 0;
+
+    if (file->firstcluster)
+        by_size = MAX(by_size, 1);
+
+    if (upto_cluster >= file->firstcluster)
+        by_pos = (unsigned long)(upto_cluster - file->firstcluster + 1);
+
+    return MAX(by_size, by_pos);
+}
+
+static int exfat_materialize_chain(struct bpb *fat_bpb,
+                                   struct fat_file *file,
+                                   long upto_cluster)
+{
+    if (!exfat_file_has_nofat_chain(fat_bpb, file) || !file->firstcluster)
+        return 0;
+
+    unsigned long count = exfat_allocated_clusters(fat_bpb, file, upto_cluster);
+    if (!count)
+        return 0;
+
+    for (unsigned long i = 0; i < count; i++)
+    {
+        unsigned long c = file->firstcluster + i;
+        unsigned long n = (i + 1 < count) ? c + 1 : fat_eof_mark(fat_bpb);
+        int rc = update_fat_entry(fat_bpb, c, n);
+        if (rc < 0)
+            return rc;
+    }
+
+    return exfat_set_nofat_flag(fat_bpb, file, false);
+}
+
 static void cache_commit(struct bpb *fat_bpb)
 {
     dc_lock_cache();
+    bool update_fsinfo = !fat_bpb->is_exfat;
 #ifdef HAVE_FAT16SUPPORT
-    if (!fat_bpb->is_fat16)
+    update_fsinfo = update_fsinfo && !fat_bpb->is_fat16;
 #endif
+    if (update_fsinfo)
         update_fsinfo32(fat_bpb);
     dc_commit_all(IF_MV(fat_bpb->volume));
     dc_unlock_cache();
@@ -412,6 +655,188 @@ static void raw_dirent_set_fstclus(union raw_dirent *ent, long fstclus)
 {
     ent->fstclushi = htole16(fstclus >> 16);
     ent->fstcluslo = htole16(fstclus & 0xffff);
+}
+
+static bool is_exfat_volume(const uint8_t *buf)
+{
+    return !memcmp(&buf[BS_OEMNAME], "EXFAT   ", 8);
+}
+
+static bool exfat_file_has_nofat_chain(const struct bpb *fat_bpb,
+                                       const struct fat_file *file)
+{
+    if (!fat_bpb->is_exfat)
+        return false;
+
+    /* Fast path: flag cached directly in the fat_file struct (set during
+     * dirscan or after a nofat-state transition). */
+    if (file->e.entries & EXFAT_NOFAT_FLAG)
+        return true;
+
+    /* Fallback: check the meta table (covers files opened via fat_open()
+     * without a preceding dirscan). */
+    struct exfat_file_meta *slot = exfat_meta_find(file);
+    return slot && (slot->flags & EXFAT_META_FLAG_NOFAT);
+}
+
+static inline long exfat_next_contig_cluster(const struct bpb *fat_bpb,
+                                             long cluster)
+{
+    if (cluster >= (long)fat_bpb->dataclusters + 1)
+        return 0;
+
+    return cluster + 1;
+}
+
+static inline unsigned long fat_eof_mark(const struct bpb *fat_bpb)
+{
+    return fat_bpb->is_exfat ? EXFAT_EOF_MARK : FAT_EOF_MARK;
+}
+
+static int exfat_load_stream_info(struct bpb *fat_bpb,
+                                  const struct fat_file *file,
+                                  bool *nofat_out,
+                                  uint32_t *size_out)
+{
+    if (!fat_bpb->is_exfat || !file->dircluster || exfat_entry_count(file) < 2)
+        return -1;
+
+    struct fat_file parent;
+    fat_open_internal(IF_MV(file->volume,) file->dircluster, &parent);
+
+    struct fat_filestr parentstr;
+    fat_filestr_init(&parentstr, &parent);
+
+    unsigned int first = exfat_first_entry(file);
+
+    dc_lock_cache();
+    union raw_dirent *sent = cache_direntry(fat_bpb, &parentstr, first + 1);
+    if (!sent || sent->data[0] != EXFAT_ENTRY_STREAM)
+    {
+        dc_unlock_cache();
+        return -1;
+    }
+
+    bool nofat = !!(sent->data[1] & EXFAT_STREAM_NO_FATCHAIN);
+    uint32_t size = BYTES2INT32(sent->data, 24);
+    dc_unlock_cache();
+
+    exfat_meta_store(file, size, nofat);
+
+    if (nofat_out)
+        *nofat_out = nofat;
+    if (size_out)
+        *size_out = size;
+
+    return 0;
+}
+
+static int exfat_bitmap_read(struct bpb *fat_bpb, unsigned long cluster,
+                             uint8_t **byte_out, uint8_t **sector_out,
+                             uint8_t *mask_out)
+{
+    if (cluster < 2 || cluster > fat_bpb->dataclusters + 1 ||
+        fat_bpb->exfat_bitmap_clus < 2)
+    {
+        return -1;
+    }
+
+    unsigned long bit = cluster - 2;
+    unsigned long byte = bit >> 3;
+
+    if (byte >= fat_bpb->exfat_bitmap_size)
+        return -2;
+
+    unsigned long sec = byte / LOG_SECTOR_SIZE(fat_bpb);
+    unsigned long sec_off = byte % LOG_SECTOR_SIZE(fat_bpb);
+    unsigned long start = cluster2sec(fat_bpb, fat_bpb->exfat_bitmap_clus);
+    if (!start)
+        return -3;
+
+    uint8_t *secbuf = cache_sector(fat_bpb, start + sec);
+    if (!secbuf)
+        return -4;
+
+    *byte_out = &secbuf[sec_off];
+    *sector_out = secbuf;
+    *mask_out = 1u << (bit & 7);
+    return 0;
+}
+
+static int exfat_bitmap_set(struct bpb *fat_bpb, unsigned long cluster,
+                            bool allocated)
+{
+    uint8_t *bytep;
+    uint8_t *sectorp;
+    uint8_t mask;
+    int rc = exfat_bitmap_read(fat_bpb, cluster, &bytep, &sectorp, &mask);
+    if (rc < 0)
+        return rc;
+
+    bool was_alloc = !!(*bytep & mask);
+    if (allocated)
+        *bytep |= mask;
+    else
+        *bytep &= ~mask;
+
+    dc_dirty_buf(sectorp);
+
+    if (allocated != was_alloc)
+    {
+        if (allocated)
+        {
+            if (fat_bpb->fsinfo.freecount > 0)
+                fat_bpb->fsinfo.freecount--;
+        }
+        else
+        {
+            fat_bpb->fsinfo.freecount++;
+        }
+    }
+
+    return 0;
+}
+
+static int exfat_find_bitmap(struct bpb *fat_bpb)
+{
+    long cluster = fat_bpb->bpb_rootclus;
+    unsigned long max_entries = MAX_DIRENTRIES;
+
+    while (cluster && max_entries)
+    {
+        unsigned long sec = cluster2sec(fat_bpb, cluster);
+        if (!sec)
+            return -1;
+
+        for (unsigned long s = 0; s < fat_bpb->bpb_secperclus && max_entries;
+             s++)
+        {
+            union raw_dirent *ent = cache_sector(fat_bpb, sec + s);
+            if (!ent)
+                return -2;
+
+            for (unsigned int i = 0; i < DIR_ENTRIES_PER_SECTOR && max_entries;
+                 i++, max_entries--)
+            {
+                uint8_t type = ent[i].data[0];
+                if (type == 0x00)
+                    return -3;
+
+                if (type == EXFAT_ENTRY_BITMAP)
+                {
+                    fat_bpb->exfat_bitmap_clus = BYTES2INT32(ent[i].data, 20);
+                    fat_bpb->exfat_bitmap_size = BYTES2INT32(ent[i].data, 24);
+                    fat_bpb->exfat_bitmap_size |=
+                        ((uint64_t)BYTES2INT32(ent[i].data, 28) << 32);
+                    return (fat_bpb->exfat_bitmap_clus >= 2) ? 0 : -4;
+                }
+            }
+        }
+
+        cluster = get_next_cluster32(fat_bpb, cluster);
+    }
+
+    return -5;
 }
 
 static int bpb_is_sane(struct bpb *fat_bpb)
@@ -1028,10 +1453,18 @@ static long get_next_cluster32(struct bpb *fat_bpb, long startcluster)
         return -1;
     }
 
-    long next = letoh32(sec[offset]) & 0x0fffffff;
+    uint32_t value = letoh32(sec[offset]);
+    long next = fat_bpb->is_exfat ? value : (value & 0x0fffffff);
+    uint32_t eof_mark = fat_bpb->is_exfat ? EXFAT_EOF_MARK : FAT_EOF_MARK;
+
+    if (next == startcluster || next < 2 ||
+        (unsigned long)next > fat_bpb->dataclusters + 1)
+    {
+        next = 0;
+    }
 
     /* is this last cluster in chain? */
-    if (next >= FAT_EOF_MARK)
+    if ((uint32_t)next >= eof_mark)
         next = 0;
 
     dc_unlock_cache();
@@ -1040,6 +1473,39 @@ static long get_next_cluster32(struct bpb *fat_bpb, long startcluster)
 
 static long find_free_cluster32(struct bpb *fat_bpb, long startcluster)
 {
+    if (fat_bpb->is_exfat)
+    {
+        unsigned long first = startcluster < 2 ? 2 : (unsigned long)startcluster;
+        unsigned long last = fat_bpb->dataclusters + 1;
+
+        for (unsigned long pass = 0; pass < 2; pass++)
+        {
+            unsigned long begin = pass == 0 ? first : 2;
+            unsigned long end = pass == 0 ? last + 1 : first;
+
+            for (unsigned long c = begin; c < end; c++)
+            {
+                uint8_t *bytep;
+                uint8_t *sectorp;
+                uint8_t mask;
+                int rc = exfat_bitmap_read(fat_bpb, c, &bytep, &sectorp, &mask);
+                if (rc < 0)
+                    return 0;
+
+                if (*bytep & mask)
+                    continue;
+
+                (void)sectorp;
+                fat_bpb->fsinfo.nextfree = c;
+                DEBUGF("%s(%lx) == %lx\n", __func__, startcluster, c);
+                return c;
+            }
+        }
+
+        DEBUGF("%s(%lx) == 0\n", __func__, startcluster);
+        return 0;
+    }
+
     unsigned long entry = startcluster;
     unsigned long sector = entry / CLUSTERS_PER_FAT_SECTOR;
     unsigned long offset = entry % CLUSTERS_PER_FAT_SECTOR;
@@ -1055,7 +1521,8 @@ static long find_free_cluster32(struct bpb *fat_bpb, long startcluster)
         {
             unsigned long k = (j + offset) % CLUSTERS_PER_FAT_SECTOR;
 
-            if (!(letoh32(sec[k]) & 0x0fffffff))
+            uint32_t value = letoh32(sec[k]);
+            if (!(fat_bpb->is_exfat ? value : (value & 0x0fffffff)))
             {
                 unsigned long c = nr * CLUSTERS_PER_FAT_SECTOR + k;
                  /* Ignore the reserved clusters 0 & 1, and also
@@ -1080,6 +1547,7 @@ static long find_free_cluster32(struct bpb *fat_bpb, long startcluster)
 static int update_fat_entry32(struct bpb *fat_bpb, unsigned long entry,
                               unsigned long val)
 {
+    int rc;
     unsigned long sector = entry / CLUSTERS_PER_FAT_SECTOR;
     unsigned long offset = entry % CLUSTERS_PER_FAT_SECTOR;
 
@@ -1102,24 +1570,39 @@ static int update_fat_entry32(struct bpb *fat_bpb, unsigned long entry,
     }
 
     uint32_t curval = letoh32(sec[offset]);
+    uint32_t curdata = fat_bpb->is_exfat ? curval : (curval & 0x0fffffff);
 
     if (val)
     {
         /* being allocated */
-        if (!(curval & 0x0fffffff) && fat_bpb->fsinfo.freecount > 0)
+        if (!fat_bpb->is_exfat && !curdata && fat_bpb->fsinfo.freecount > 0)
             fat_bpb->fsinfo.freecount--;
     }
     else
     {
         /* being freed */
-        if (curval & 0x0fffffff)
+        if (!fat_bpb->is_exfat && curdata)
             fat_bpb->fsinfo.freecount++;
     }
 
     DEBUGF("%lu free clusters\n", (unsigned long)fat_bpb->fsinfo.freecount);
 
-    /* don't change top 4 bits */
-    sec[offset] = htole32((curval & 0xf0000000) | (val & 0x0fffffff));
+    if (fat_bpb->is_exfat)
+    {
+        if ((curval == 0) != (val == 0))
+        {
+            rc = exfat_bitmap_set(fat_bpb, entry, val != 0);
+            if (rc < 0)
+            {
+                dc_unlock_cache();
+                return -1;
+            }
+        }
+
+        sec[offset] = htole32(val);
+    }
+    else
+        sec[offset] = htole32((curval & 0xf0000000) | (val & 0x0fffffff));
     dc_dirty_buf(sec);
 
     dc_unlock_cache();
@@ -1128,6 +1611,33 @@ static int update_fat_entry32(struct bpb *fat_bpb, unsigned long entry,
 
 static void fat_recalc_free_internal32(struct bpb *fat_bpb)
 {
+    if (fat_bpb->is_exfat)
+    {
+        unsigned long free = 0;
+        fat_bpb->fsinfo.nextfree = 0xffffffff;
+
+        for (unsigned long c = 2; c <= fat_bpb->dataclusters + 1; c++)
+        {
+            uint8_t *bytep;
+            uint8_t *sectorp;
+            uint8_t mask;
+            int rc = exfat_bitmap_read(fat_bpb, c, &bytep, &sectorp, &mask);
+            if (rc < 0)
+                break;
+
+            (void)sectorp;
+            if (*bytep & mask)
+                continue;
+
+            free++;
+            if (fat_bpb->fsinfo.nextfree == 0xffffffff)
+                fat_bpb->fsinfo.nextfree = c;
+        }
+
+        fat_bpb->fsinfo.freecount = free;
+        return;
+    }
+
     unsigned long free = 0;
 
     for (unsigned long i = 0; i < fat_bpb->fatsize; i++)
@@ -1143,7 +1653,8 @@ static void fat_recalc_free_internal32(struct bpb *fat_bpb)
             if (c < 2 || c > fat_bpb->dataclusters + 1) /* nr 0 is unused */
                 continue;
 
-            if (letoh32(sec[j]) & 0x0fffffff)
+            uint32_t value = letoh32(sec[j]);
+            if (fat_bpb->is_exfat ? value : (value & 0x0fffffff))
                 continue;
 
             free++;
@@ -1153,7 +1664,97 @@ static void fat_recalc_free_internal32(struct bpb *fat_bpb)
     }
 
     fat_bpb->fsinfo.freecount = free;
-    update_fsinfo32(fat_bpb);
+    if (!fat_bpb->is_exfat)
+        update_fsinfo32(fat_bpb);
+}
+
+static int mount_exfat_internal(struct bpb *fat_bpb, const uint8_t *buf)
+{
+    if (buf[EXFAT_BYTES_PER_SEC_SHIFT] < 9 ||
+        buf[EXFAT_BYTES_PER_SEC_SHIFT] > 12)
+    {
+        DEBUGF("%s() - Invalid exFAT bytes/sector shift %u\n",
+               __func__, buf[EXFAT_BYTES_PER_SEC_SHIFT]);
+        return -3;
+    }
+
+    uint32_t bytes_per_sec = 1u << buf[EXFAT_BYTES_PER_SEC_SHIFT];
+    if (bytes_per_sec % LOG_SECTOR_SIZE(fat_bpb))
+    {
+        DEBUGF("%s() - exFAT sector size mismatch (%lu)\n",
+               __func__, (unsigned long)bytes_per_sec);
+        return -4;
+    }
+
+    unsigned long secmult = bytes_per_sec / LOG_SECTOR_SIZE(fat_bpb);
+    if (!secmult)
+        return -5;
+
+    if (buf[EXFAT_SEC_PER_CLUS_SHIFT] > 25)
+    {
+        DEBUGF("%s() - Invalid exFAT sec/clus shift %u\n",
+               __func__, buf[EXFAT_SEC_PER_CLUS_SHIFT]);
+        return -6;
+    }
+
+    uint32_t sec_per_clus = 1u << buf[EXFAT_SEC_PER_CLUS_SHIFT];
+    uint32_t fat_offset = BYTES2INT32(buf, EXFAT_FATOFF);
+    uint32_t fat_length = BYTES2INT32(buf, EXFAT_FATLENGTH);
+    uint32_t cluster_heap = BYTES2INT32(buf, EXFAT_CLUSTER_HEAP_OFF);
+    uint32_t cluster_count = BYTES2INT32(buf, EXFAT_CLUSTER_COUNT);
+    uint32_t root_cluster = BYTES2INT32(buf, EXFAT_ROOTCLUSTER);
+    uint32_t vol_len_lo = BYTES2INT32(buf, EXFAT_VOLLEN + 0);
+    uint32_t vol_len_hi = BYTES2INT32(buf, EXFAT_VOLLEN + 4);
+
+    if (!fat_length || !cluster_count || root_cluster < 2)
+        return -7;
+
+    if (vol_len_hi != 0)
+    {
+        DEBUGF("%s() - exFAT volume too large for this build\n", __func__);
+        return -8;
+    }
+
+    fat_bpb->bpb_bytspersec = bytes_per_sec;
+    fat_bpb->bpb_secperclus = secmult * sec_per_clus;
+    fat_bpb->bpb_numfats = buf[EXFAT_NUMFATS];
+    fat_bpb->bpb_media = 0xf8;
+    fat_bpb->bpb_fatsz16 = 0;
+    fat_bpb->bpb_fatsz32 = secmult * fat_length;
+    fat_bpb->bpb_totsec16 = 0;
+    fat_bpb->bpb_totsec32 = secmult * vol_len_lo;
+    fat_bpb->last_word = BYTES2INT16(buf, BPB_LAST_WORD);
+
+    fat_bpb->fatsize = secmult * fat_length;
+    fat_bpb->fatrgnstart = secmult * fat_offset;
+    fat_bpb->fatrgnend = fat_bpb->fatrgnstart + fat_bpb->fatsize;
+    fat_bpb->firstdatasector = secmult * cluster_heap;
+    fat_bpb->totalsectors = secmult * vol_len_lo;
+    fat_bpb->dataclusters = cluster_count;
+    fat_bpb->bpb_rootclus = root_cluster;
+    fat_bpb->rootdirsector = cluster2sec(fat_bpb, fat_bpb->bpb_rootclus);
+
+    fat_bpb->bpb_rsvdseccnt = fat_bpb->fatrgnstart;
+    fat_bpb->bpb_fsinfo = 0;
+    fat_bpb->exfat_bitmap_clus = 0;
+    fat_bpb->exfat_bitmap_size = 0;
+    fat_bpb->fsinfo.nextfree = 2;
+
+    uint8_t percent_in_use = buf[EXFAT_PERCENT_INUSE];
+    if (percent_in_use <= 100)
+        fat_bpb->fsinfo.freecount =
+            (fat_bpb->dataclusters * (100 - percent_in_use)) / 100;
+    else
+        fat_bpb->fsinfo.freecount = 0xffffffff;
+
+    if (fat_bpb->last_word != 0xaa55)
+        return -9;
+
+    fat_bpb->is_exfat = true;
+#ifdef HAVE_FAT16SUPPORT
+    fat_bpb->is_fat16 = false;
+#endif
+    return 0;
 }
 
 static int fat_mount_internal(struct bpb *fat_bpb)
@@ -1173,6 +1774,33 @@ static int fat_mount_internal(struct bpb *fat_bpb)
         DEBUGF("%s() - Couldn't read BPB"
                " (err %d)\n", __func__, rc);
         FAT_ERROR(rc * 10 - 2);
+    }
+
+    fat_bpb->is_exfat = false;
+
+    if (is_exfat_volume(buf))
+    {
+        rc = mount_exfat_internal(fat_bpb, buf);
+        if (rc < 0)
+            FAT_ERROR(rc * 10 - 3);
+
+        rc = exfat_find_bitmap(fat_bpb);
+        if (rc < 0)
+        {
+            DEBUGF("%s() - exFAT allocation bitmap missing (%d)\n",
+                   __func__, rc);
+            FAT_ERROR(rc * 10 - 4);
+        }
+
+#ifdef HAVE_FAT16SUPPORT
+        BPB_FN_SET32(fat_bpb, get_next_cluster);
+        BPB_FN_SET32(fat_bpb, find_free_cluster);
+        BPB_FN_SET32(fat_bpb, update_fat_entry);
+        BPB_FN_SET32(fat_bpb, fat_recalc_free_internal);
+#endif
+
+        rc = 0;
+        goto fat_error;
     }
 
     fat_bpb->bpb_bytspersec = BYTES2INT16(buf, BPB_BYTSPERSEC);
@@ -1373,9 +2001,18 @@ static union raw_dirent * cache_direntry(struct bpb *fat_bpb,
     return ent;
 }
 
-static long next_write_cluster(struct bpb *fat_bpb, long oldcluster)
+static long next_write_cluster(struct bpb *fat_bpb,
+                               struct fat_file *file,
+                               long oldcluster)
 {
     DEBUGF("%s(old:%lx)\n", __func__, oldcluster);
+
+    if (oldcluster && exfat_file_has_nofat_chain(fat_bpb, file))
+    {
+        int rc = exfat_materialize_chain(fat_bpb, file, oldcluster);
+        if (rc < 0)
+            return 0;
+    }
 
     long cluster = 0;
 
@@ -1402,10 +2039,16 @@ static long next_write_cluster(struct bpb *fat_bpb, long oldcluster)
         if (cluster)
         {
             /* create the cluster chain */
-            if (oldcluster)
-                update_fat_entry(fat_bpb, oldcluster, cluster);
+            int rc = 0;
 
-            update_fat_entry(fat_bpb, cluster, FAT_EOF_MARK);
+            if (oldcluster)
+                rc = update_fat_entry(fat_bpb, oldcluster, cluster);
+
+            if (rc >= 0)
+                rc = update_fat_entry(fat_bpb, cluster, fat_eof_mark(fat_bpb));
+
+            if (rc < 0)
+                cluster = 0;
         }
         else
         {
@@ -1432,7 +2075,7 @@ static int fat_extend_dir(struct bpb *fat_bpb, struct fat_filestr *dirstr)
     int rc;
 
     long cluster    = dirstr->lastcluster;
-    long newcluster = next_write_cluster(fat_bpb, cluster);
+    long newcluster = next_write_cluster(fat_bpb, dirstr->fatfilep, cluster);
 
     if (!newcluster)
     {
@@ -1740,6 +2383,268 @@ fat_error:
     return rc;
 }
 
+static inline unsigned int exfat_entry_count(const struct fat_file *file)
+{
+    return file->e.entries & EXFAT_ENTRY_COUNT_MASK;
+}
+
+static inline unsigned int exfat_first_entry(const struct fat_file *file)
+{
+    unsigned int count = exfat_entry_count(file);
+    return file->e.entry - count + 1;
+}
+
+static unsigned int exfat_name_to_ucs(const unsigned char *name,
+                                      uint16_t *ucs, unsigned int maxlen)
+{
+    unsigned int len = 0;
+
+    while (*name && len < maxlen)
+    {
+#ifdef UNICODE32
+        ucschar_t cp;
+        name = utf8decode(name, &cp);
+
+        if (cp < 0x10000)
+        {
+            ucs[len++] = cp;
+        }
+        else
+        {
+            if (len + 1 >= maxlen)
+                break;
+
+            cp -= 0x10000;
+            ucs[len++] = 0xd800 | ((cp >> 10) & 0x3ff);
+            ucs[len++] = 0xdc00 | (cp & 0x3ff);
+        }
+#else
+        name = utf8decode(name, &ucs[len++]);
+#endif
+    }
+
+    return len;
+}
+
+static uint16_t exfat_direntry_checksum_step(uint16_t csum, uint8_t value)
+{
+    return ((csum << 15) | (csum >> 1)) + value;
+}
+
+static uint16_t exfat_name_hash_from_ucs(const uint16_t *ucs,
+                                         unsigned int ucslen)
+{
+    uint16_t hash = 0;
+
+    for (unsigned int i = 0; i < ucslen; i++)
+    {
+        uint16_t ch = ucs[i];
+
+        if (ch >= 'a' && ch <= 'z')
+            ch -= ('a' - 'A');
+
+        hash = exfat_direntry_checksum_step(hash, ch & 0xff);
+        hash = exfat_direntry_checksum_step(hash, (ch >> 8) & 0xff);
+    }
+
+    return hash;
+}
+
+static int exfat_update_set_checksum(struct bpb *fat_bpb,
+                                     struct fat_filestr *parentstr,
+                                     unsigned int first,
+                                     unsigned int entries)
+{
+    if (entries < 2)
+        return -1;
+
+    uint16_t csum = 0;
+
+    for (unsigned int i = 0; i < entries; i++)
+    {
+        union raw_dirent *ent = cache_direntry(fat_bpb, parentstr, first + i);
+        if (!ent)
+            return -1;
+
+        for (unsigned int j = 0; j < DIR_ENTRY_SIZE; j++)
+        {
+            uint8_t value = ent->data[j];
+            if (i == 0 && (j == 2 || j == 3))
+                value = 0;
+
+            csum = exfat_direntry_checksum_step(csum, value);
+        }
+    }
+
+    union raw_dirent *fent = cache_direntry(fat_bpb, parentstr, first);
+    if (!fent)
+        return -1;
+
+    INT162BYTES(fent->data, 2, csum);
+    dc_dirty_buf(fent);
+
+    return 0;
+}
+
+static int exfat_add_dir_entry(struct bpb *fat_bpb,
+                               struct fat_filestr *parentstr,
+                               struct fat_file *file,
+                               const unsigned char *name,
+                               uint8_t attr,
+                               unsigned int flags,
+                               union raw_dirent *srcent)
+{
+    int rc;
+    uint16_t ucs[255];
+    unsigned int ucslen;
+    int entries_needed;
+
+    rc = check_longname(name);
+    if (rc < 0)
+        FAT_ERROR(rc * 10 - 1);
+
+    ucslen = exfat_name_to_ucs(name, ucs, ARRAYLEN(ucs));
+    if (!ucslen || ucslen > 255)
+        FAT_ERROR(-2);
+
+    entries_needed = 2 + (ucslen + 14) / 15;
+
+    int entry = 0, entries_found = 0, firstentry = -1;
+    const int entperclus = DIR_ENTRIES_PER_SECTOR * fat_bpb->bpb_secperclus;
+
+    dc_lock_cache();
+
+    for (bool done = false; !done;)
+    {
+        union raw_dirent *ent = cache_direntry(fat_bpb, parentstr, entry);
+        if (!ent)
+        {
+            if (parentstr->eof)
+                break;
+
+            dc_unlock_cache();
+            FAT_ERROR(-3);
+        }
+
+        if (ent->data[0] == 0x00 || !(ent->data[0] & 0x80))
+        {
+            entries_found++;
+        }
+        else
+        {
+            entries_found = 0;
+        }
+
+        entry++;
+
+        if (firstentry < 0 && entries_found >= entries_needed)
+            firstentry = entry - entries_found;
+
+        if (ent->data[0] == 0x00)
+            done = true;
+    }
+
+    dc_unlock_cache();
+
+    if (firstentry < 0)
+    {
+        while (entries_found < entries_needed)
+        {
+            rc = fat_extend_dir(fat_bpb, parentstr);
+            if (rc == FAT_RC_ENOSPC)
+                FAT_ERROR(RC);
+            else if (rc < 0)
+                FAT_ERROR(rc * 10 - 4);
+
+            entries_found += entperclus;
+            entry += entperclus;
+        }
+
+        firstentry = entry - entries_found;
+    }
+
+#ifdef HAVE_MULTIVOLUME
+    file->volume = parentstr->fatfilep->volume;
+#endif
+    file->dircluster = parentstr->fatfilep->firstcluster;
+    file->e.entry = firstentry + entries_needed - 1;
+    file->e.entries = entries_needed;
+
+    uint16_t date = 0, time = 0, tenth = 0;
+    fat_time(&date, &time, &tenth);
+
+    dc_lock_cache();
+
+    union raw_dirent *fent = cache_direntry(fat_bpb, parentstr, firstentry);
+    if (!fent)
+        FAT_ERROR(-5);
+
+    memset(fent->data, 0, DIR_ENTRY_SIZE);
+    fent->data[0] = EXFAT_ENTRY_FILE;
+    fent->data[1] = entries_needed - 1;
+    INT162BYTES(fent->data, 4, attr);
+    INT162BYTES(fent->data, 8, time);
+    INT162BYTES(fent->data, 10, date);
+    INT162BYTES(fent->data, 12, time);
+    INT162BYTES(fent->data, 14, date);
+    INT162BYTES(fent->data, 18, date);
+    fent->data[20] = tenth;
+    dc_dirty_buf(fent);
+
+    union raw_dirent *sent = cache_direntry(fat_bpb, parentstr, firstentry + 1);
+    if (!sent)
+        FAT_ERROR(-6);
+
+    memset(sent->data, 0, DIR_ENTRY_SIZE);
+    sent->data[0] = EXFAT_ENTRY_STREAM;
+    sent->data[1] = 0;
+    sent->data[1] |= EXFAT_STREAM_ALLOCATION_POSSIBLE;
+    if (exfat_file_has_nofat_chain(fat_bpb, file))
+        sent->data[1] |= EXFAT_STREAM_NO_FATCHAIN;
+    sent->data[3] = ucslen;
+    INT162BYTES(sent->data, 4, exfat_name_hash_from_ucs(ucs, ucslen));
+    INT322BYTES(sent->data, 20, file->firstcluster);
+    INT322BYTES(sent->data, 24, 0);
+    INT322BYTES(sent->data, 28, 0);
+    dc_dirty_buf(sent);
+
+    unsigned int pos = 0;
+    unsigned int naments = entries_needed - 2;
+    for (unsigned int i = 0; i < naments; i++)
+    {
+        union raw_dirent *nent = cache_direntry(fat_bpb, parentstr,
+                                                firstentry + 2 + i);
+        if (!nent)
+            FAT_ERROR(-7);
+
+        memset(nent->data, 0, DIR_ENTRY_SIZE);
+        nent->data[0] = EXFAT_ENTRY_FILENAME;
+
+        for (unsigned int j = 0; j < 15; j++)
+        {
+            uint16_t ch = pos < ucslen ? ucs[pos++] : 0;
+            INT162BYTES(nent->data, 2 + 2*j, ch);
+        }
+
+        dc_dirty_buf(nent);
+    }
+
+    rc = exfat_update_set_checksum(fat_bpb, parentstr, firstentry,
+                                   entries_needed);
+    if (rc < 0)
+        FAT_ERROR(-8);
+
+    if (srcent && (flags & DIRENT_RETURN))
+        *srcent = *sent;
+
+    exfat_meta_store(file, 0, false);
+
+    rc = 0;
+fat_error:
+    dc_unlock_cache();
+    return rc;
+}
+
 static int add_dir_entry(struct bpb *fat_bpb, struct fat_filestr *parentstr,
                          struct fat_file *file, const char *name,
                          union raw_dirent *srcent, uint8_t attr,
@@ -1749,6 +2654,11 @@ static int add_dir_entry(struct bpb *fat_bpb, struct fat_filestr *parentstr,
            file->firstcluster);
 
     int rc;
+
+    if (fat_bpb->is_exfat)
+        return exfat_add_dir_entry(fat_bpb, parentstr, file,
+                                   (const unsigned char *)name,
+                                   attr, flags, srcent);
 
     unsigned char basisname[11], shortname[11];
     int entries_needed;
@@ -1908,6 +2818,112 @@ fat_error:
     return rc;
 }
 
+static int exfat_update_entries(struct bpb *fat_bpb, struct fat_file *file,
+                                uint32_t size, bool update_time,
+                                struct fat_direntry *fatent)
+{
+    int rc;
+    struct fat_file parent;
+    fat_open_internal(IF_MV(file->volume,) file->dircluster, &parent);
+
+    struct fat_filestr parentstr;
+    fat_filestr_init(&parentstr, &parent);
+
+    unsigned int first = exfat_first_entry(file);
+
+    uint16_t date = 0;
+    uint16_t time = 0;
+    int16_t tenth = 0;
+    if (update_time)
+        fat_time(&date, &time, &tenth);
+
+    dc_lock_cache();
+
+    union raw_dirent *fent = cache_direntry(fat_bpb, &parentstr, first);
+    union raw_dirent *sent = cache_direntry(fat_bpb, &parentstr, first + 1);
+    if (!fent || !sent || fent->data[0] != EXFAT_ENTRY_FILE ||
+        sent->data[0] != EXFAT_ENTRY_STREAM)
+    {
+        dc_unlock_cache();
+        return -1;
+    }
+
+    if (update_time)
+    {
+        INT162BYTES(fent->data, 12, time);
+        INT162BYTES(fent->data, 14, date);
+        INT162BYTES(fent->data, 18, date);
+        fent->data[21] = tenth;
+        dc_dirty_buf(fent);
+    }
+
+    INT322BYTES(sent->data, 20, file->firstcluster);
+    sent->data[1] = 0;
+    sent->data[1] |= EXFAT_STREAM_ALLOCATION_POSSIBLE;
+    if (exfat_file_has_nofat_chain(fat_bpb, file))
+        sent->data[1] |= EXFAT_STREAM_NO_FATCHAIN;
+    INT322BYTES(sent->data, 24, size);
+    INT322BYTES(sent->data, 28, 0);
+    INT322BYTES(sent->data, 8, size);
+    INT322BYTES(sent->data, 12, 0);
+    dc_dirty_buf(sent);
+
+    rc = exfat_update_set_checksum(fat_bpb, &parentstr, first,
+                                   exfat_entry_count(file));
+    if (rc < 0)
+    {
+        dc_unlock_cache();
+        return -1;
+    }
+
+    dc_unlock_cache();
+
+    exfat_meta_store(file, size, exfat_file_has_nofat_chain(fat_bpb, file));
+
+    if (fatent)
+    {
+        fatent->filesize = size;
+        fatent->firstcluster = file->firstcluster;
+    }
+
+    return 0;
+}
+
+static int exfat_free_direntries(struct bpb *fat_bpb, struct fat_file *file)
+{
+    struct fat_file parent;
+    fat_open_internal(IF_MV(file->volume,) file->dircluster, &parent);
+
+    struct fat_filestr parentstr;
+    fat_filestr_init(&parentstr, &parent);
+
+    unsigned int entries = exfat_entry_count(file);
+    unsigned int first = exfat_first_entry(file);
+
+    dc_lock_cache();
+
+    for (unsigned int i = 0; i < entries; i++)
+    {
+        union raw_dirent *ent = cache_direntry(fat_bpb, &parentstr, first + i);
+        if (!ent)
+        {
+            dc_unlock_cache();
+            return i ? 0 : -1;
+        }
+
+        ent->data[0] &= 0x7f;
+        dc_dirty_buf(ent);
+    }
+
+    dc_unlock_cache();
+
+    exfat_meta_remove(file);
+    file->dircluster = 0;
+    file->e.entry = FAT_DIRSCAN_RW_VAL;
+    file->e.entries = 0;
+    return 1;
+}
+
 static int update_short_entry(struct bpb *fat_bpb, struct fat_file *file,
                               uint32_t size, struct fat_direntry *fatent)
 {
@@ -1915,6 +2931,9 @@ static int update_short_entry(struct bpb *fat_bpb, struct fat_file *file,
            __func__, file->firstcluster, file->e.entry, size);
 
     int rc;
+
+    if (fat_bpb->is_exfat)
+        return exfat_update_entries(fat_bpb, file, size, true, fatent);
 
 #if CONFIG_RTC
     uint16_t time = 0;
@@ -1969,6 +2988,9 @@ fat_error:
 
 static int free_direntries(struct bpb *fat_bpb, struct fat_file *file)
 {
+    if (fat_bpb->is_exfat)
+        return exfat_free_direntries(fat_bpb, file);
+
     /* open the parent directory */
     struct fat_file parent;
     fat_open_internal(IF_MV(file->volume,) file->dircluster, &parent);
@@ -2064,7 +3086,7 @@ int fat_create_file(struct fat_file *parent, const char *name,
     union raw_dirent *newentp = (isdir || fatent) ?
                                 alloca(sizeof (union raw_dirent)) : NULL;
 
-    if (isdir)
+    if (isdir && !fat_bpb->is_exfat)
     {
         struct fat_filestr dirstr;
         fat_filestr_init(&dirstr, file);
@@ -2100,6 +3122,17 @@ int fat_create_file(struct fat_file *parent, const char *name,
 
         addflags |= DIRENT_TEMPL_TIMES;
     }
+    else if (isdir)
+    {
+        struct fat_filestr dirstr;
+        fat_filestr_init(&dirstr, file);
+
+        rc = fat_extend_dir(fat_bpb, &dirstr);
+        if (rc == FAT_RC_ENOSPC)
+            FAT_ERROR(RC);
+        else if (rc < 0)
+            FAT_ERROR(rc * 10 - 2);
+    }
 
     /* lastly, add the entry in the parent directory */
     rc = add_dir_entry(fat_bpb, &parentstr, file, name, newentp,
@@ -2111,8 +3144,19 @@ int fat_create_file(struct fat_file *parent, const char *name,
 
     if (fatent)
     {
-        strcpy(fatent->name, name);
-        parse_short_direntry(newentp, fatent);
+        if (fat_bpb->is_exfat)
+        {
+            strlcpy(fatent->name, name, sizeof(fatent->name));
+            strlcpy(fatent->shortname, name, sizeof(fatent->shortname));
+            fatent->attr = attr;
+            fatent->firstcluster = file->firstcluster;
+            fatent->filesize = 0;
+        }
+        else
+        {
+            strcpy(fatent->name, name);
+            parse_short_direntry(newentp, fatent);
+        }
     }
 
     rc = 0;
@@ -2207,7 +3251,27 @@ int fat_remove(struct fat_file *file, enum fat_remove_op what)
     {
         /* mark all clusters in the chain as free */
         DEBUGF("Removing cluster chain: %lX\n", file->firstcluster);
-        rc = free_cluster_chain(fat_bpb, file->firstcluster);
+        if (fat_bpb->is_exfat && exfat_file_has_nofat_chain(fat_bpb, file))
+        {
+            uint32_t size = exfat_file_size_cached(file);
+            unsigned long clussize = fat_bpb->bpb_secperclus * LOG_SECTOR_SIZE(fat_bpb);
+            unsigned long clusters = size ? (size + clussize - 1) / clussize : 1;
+            rc = 1;
+
+            for (unsigned long i = 0; i < clusters; i++)
+            {
+                int rc2 = exfat_bitmap_set(fat_bpb, file->firstcluster + i, false);
+                if (rc2 < 0)
+                {
+                    rc = -1;
+                    break;
+                }
+            }
+        }
+        else
+        {
+            rc = free_cluster_chain(fat_bpb, file->firstcluster);
+        }
         if (rc < 0)
             FAT_ERROR(rc * 10 - 4);
 
@@ -2269,7 +3333,9 @@ int fat_rename(struct fat_file *parent, struct fat_file *file,
     /* fetch a copy of the existing short entry */
     dc_lock_cache();
 
-    union raw_dirent *ent = cache_direntry(fat_bpb, &dirstr, file->e.entry);
+    unsigned int oldentry = fat_bpb->is_exfat ? exfat_first_entry(file) :
+                                                file->e.entry;
+    union raw_dirent *ent = cache_direntry(fat_bpb, &dirstr, oldentry);
     if (!ent)
     {
         dc_unlock_cache();
@@ -2277,21 +3343,53 @@ int fat_rename(struct fat_file *parent, struct fat_file *file,
     }
 
     union raw_dirent rawent = *ent;
+    uint32_t oldsize = 0;
+    bool oldnofat = false;
+
+    if (fat_bpb->is_exfat)
+    {
+        union raw_dirent *streament = cache_direntry(fat_bpb, &dirstr,
+                                                     oldentry + 1);
+        if (!streament || streament->data[0] != EXFAT_ENTRY_STREAM)
+        {
+            dc_unlock_cache();
+            FAT_ERROR(-5);
+        }
+
+        oldsize = BYTES2INT32(streament->data, 24);
+        oldnofat = !!(streament->data[1] & EXFAT_STREAM_NO_FATCHAIN);
+    }
 
     dc_unlock_cache();
+
+    if (fat_bpb->is_exfat)
+        rawent.attr = BYTES2INT16(rawent.data, 4);
 
     /* create new name in new parent directory */
     fat_filestr_init(&dirstr, parent);
     rc = add_dir_entry(fat_bpb, &dirstr, &newfile, newname, &rawent,
-                       0, DIRENT_TEMPL_CRT | DIRENT_TEMPL_WRT);
+                       fat_bpb->is_exfat ? rawent.attr : 0,
+                       DIRENT_TEMPL_CRT | DIRENT_TEMPL_WRT);
     if (rc == FAT_RC_ENOSPC)
         FAT_ERROR(RC);
     else if (rc < 0)
         FAT_ERROR(rc * 10 - 6);
 
+    if (fat_bpb->is_exfat)
+    {
+        if (oldnofat)
+            newfile.e.entries |= EXFAT_NOFAT_FLAG;
+        exfat_meta_store(&newfile, oldsize, oldnofat);
+
+        rc = exfat_update_entries(fat_bpb, &newfile, oldsize, false, NULL);
+        if (rc < 0)
+            FAT_ERROR(rc * 10 - 7);
+    }
+
     /* if renaming a directory and it was a move, update the '..' entry to
        keep it pointing to its parent directory */
-    if ((rawent.attr & ATTR_DIRECTORY) && newfile.dircluster != file->dircluster)
+    if (!fat_bpb->is_exfat &&
+        (rawent.attr & ATTR_DIRECTORY) && newfile.dircluster != file->dircluster)
     {
         /* open the dir that was renamed */
         fat_open_internal(IF_MV(newfile.volume,) newfile.firstcluster, &dir);
@@ -2351,6 +3449,38 @@ int fat_modtime(struct fat_file *parent, struct fat_file *file,
         return -1;
 
     int rc;
+
+    if (fat_bpb->is_exfat)
+    {
+        struct fat_file pdir;
+        fat_open_internal(IF_MV(parent->volume,) parent->firstcluster, &pdir);
+        struct fat_filestr pstr;
+        fat_filestr_init(&pstr, &pdir);
+
+        uint16_t date;
+        uint16_t time;
+        dostime_localtime(modtime, &date, &time);
+
+        dc_lock_cache();
+        unsigned int first = exfat_first_entry(file);
+        union raw_dirent *fent = cache_direntry(fat_bpb, &pstr, first);
+        if (!fent)
+            FAT_ERROR(-2);
+
+        INT162BYTES(fent->data, 12, time);
+        INT162BYTES(fent->data, 14, date);
+        INT162BYTES(fent->data, 18, date);
+        dc_dirty_buf(fent);
+
+        rc = exfat_update_set_checksum(fat_bpb, &pstr,
+                                       exfat_first_entry(file),
+                                       exfat_entry_count(file));
+        if (rc < 0)
+            FAT_ERROR(-3);
+
+        rc = 0;
+        goto fat_error;
+    }
 
     struct fat_filestr parentstr;
     fat_filestr_init(&parentstr, parent);
@@ -2542,6 +3672,28 @@ long fat_readwrite(struct fat_filestr *filestr, unsigned long sectorcount,
         return -1;
 
     bool eof = filestr->eof;
+    bool exfat_nofat = exfat_file_has_nofat_chain(fat_bpb, file);
+    uint32_t exfat_size = exfat_file_size_cached(file);
+
+    /* Refresh nofat/size from disk only when not already in cache.
+     * Meta is populated during directory scan and on every write, so
+     * this path is only needed for files opened without a prior scan. */
+    if (!write && fat_bpb->is_exfat && file->dircluster &&
+        exfat_entry_count(file) >= 2 && !exfat_meta_find(file))
+    {
+        bool nofat2 = exfat_nofat;
+        uint32_t size2 = exfat_size;
+        if (exfat_load_stream_info(fat_bpb, file, &nofat2, &size2) == 0)
+        {
+            exfat_nofat = nofat2;
+            exfat_size = size2;
+        }
+    }
+
+    const unsigned long exfat_total_secs =
+        (!write && exfat_nofat && exfat_size) ?
+            ((exfat_size + LOG_SECTOR_SIZE(fat_bpb) - 1) /
+             LOG_SECTOR_SIZE(fat_bpb)) : 0;
 
     if ((eof && !write) || !sectorcount)
         return 0;
@@ -2569,7 +3721,7 @@ long fat_readwrite(struct fat_filestr *filestr, unsigned long sectorcount,
         if (write && !newcluster)
         {
             /* file is empty; try to allocate its first cluster */
-            newcluster = next_write_cluster(fat_bpb, 0);
+            newcluster = next_write_cluster(fat_bpb, file, 0);
             file->firstcluster = newcluster;
         }
 
@@ -2600,11 +3752,40 @@ long fat_readwrite(struct fat_filestr *filestr, unsigned long sectorcount,
 
     while (transferred + count < sectorcount)
     {
+        if (!write && exfat_nofat)
+        {
+            unsigned long secpos =
+                clusternum * fat_bpb->bpb_secperclus + sectornum + 1;
+            if (secpos >= exfat_total_secs)
+            {
+                eof = true;
+                break;
+            }
+        }
+
+        if ((unsigned long)clusternum > fat_bpb->dataclusters)
+        {
+            DEBUGF("%s() - cluster loop/overflow detected\n", __func__);
+            eof = true;
+            break;
+        }
+
         if (++sectornum >= fat_bpb->bpb_secperclus)
         {
             /* out of sectors in this cluster; get the next cluster */
-            long newcluster = write ? next_write_cluster(fat_bpb, cluster) :
-                                      get_next_cluster(fat_bpb, cluster);
+            long newcluster;
+            if (write)
+            {
+                newcluster = next_write_cluster(fat_bpb, file, cluster);
+            }
+            else if (exfat_nofat)
+            {
+                newcluster = exfat_next_contig_cluster(fat_bpb, cluster);
+            }
+            else
+            {
+                newcluster = get_next_cluster(fat_bpb, cluster);
+            }
             if (newcluster)
             {
                 cluster = newcluster;
@@ -2704,6 +3885,36 @@ int fat_seek(struct fat_filestr *filestr, unsigned long seeksector)
 #endif /* HAVE_FAT16SUPPORT */
 
     filestr->eof = false;
+
+    bool exfat_nofat = exfat_file_has_nofat_chain(fat_bpb, file);
+    uint32_t exfat_size = exfat_file_size_cached(file);
+
+    /* See fat_readwrite: load from disk only when not already cached. */
+    if (fat_bpb->is_exfat && file->dircluster && exfat_entry_count(file) >= 2
+        && !exfat_meta_find(file))
+    {
+        bool nofat2 = exfat_nofat;
+        uint32_t size2 = exfat_size;
+        if (exfat_load_stream_info(fat_bpb, file, &nofat2, &size2) == 0)
+        {
+            exfat_nofat = nofat2;
+            exfat_size = size2;
+        }
+    }
+
+    if (exfat_nofat)
+    {
+        unsigned long total_secs = exfat_size ?
+            ((exfat_size + LOG_SECTOR_SIZE(fat_bpb) - 1) /
+             LOG_SECTOR_SIZE(fat_bpb)) : 0;
+        if (seeksector > total_secs)
+        {
+            DEBUGF("Seeking beyond exFAT nofat stream size (%lu > %lu)\n",
+                   seeksector, total_secs);
+            FAT_ERROR(FAT_SEEK_EOF);
+        }
+    }
+
     if (seeksector)
     {
         if (cluster == 0)
@@ -2731,7 +3942,10 @@ int fat_seek(struct fat_filestr *filestr, unsigned long seeksector)
 
         for (long i = 0; i < numclusters; i++)
         {
-            cluster = get_next_cluster(fat_bpb, cluster);
+            if (exfat_nofat)
+                cluster = exfat_next_contig_cluster(fat_bpb, cluster);
+            else
+                cluster = get_next_cluster(fat_bpb, cluster);
 
             if (!cluster)
             {
@@ -2773,10 +3987,17 @@ int fat_truncate(const struct fat_filestr *filestr)
     /* truncate trailing clusters after the current position */
     if (last)
     {
+        if (exfat_file_has_nofat_chain(fat_bpb, filestr->fatfilep))
+        {
+            int rc2 = exfat_materialize_chain(fat_bpb, filestr->fatfilep, last);
+            if (rc2 < 0)
+                FAT_ERROR(rc2 * 10 - 2);
+        }
+
         next = get_next_cluster(fat_bpb, last);
-        int rc2 = update_fat_entry(fat_bpb, last, FAT_EOF_MARK);
+        int rc2 = update_fat_entry(fat_bpb, last, fat_eof_mark(fat_bpb));
         if (rc2 < 0)
-            FAT_ERROR(rc2 * 10 - 2);
+            FAT_ERROR(rc2 * 10 - 3);
     }
 
     int rc2 = free_cluster_chain(fat_bpb, next);
@@ -2793,9 +4014,210 @@ fat_error:
 
 /** Directory stream functions **/
 
+static int exfat_readdir(struct fat_filestr *dirstr,
+                         struct fat_dirscan_info *scan,
+                         struct fat_direntry *entry)
+{
+    struct bpb * const fat_bpb = FAT_BPB(dirstr->fatfilep->volume);
+    if (!fat_bpb)
+        return -1;
+
+    int rc = 0;
+    scan->entries = 0;
+
+    while (1)
+    {
+        unsigned int first = ++scan->entry;
+        union raw_dirent *ent = cache_direntry(fat_bpb, dirstr, first);
+        if (!ent)
+        {
+            if (dirstr->eof)
+                break;
+
+            FAT_ERROR(-1);
+        }
+
+        uint8_t type = ent->data[0];
+
+        if (type == 0x00)
+            break; /* end of directory */
+
+        if (!(type & 0x80))
+        {
+            scan->entries = 0;
+            continue;
+        }
+
+        if (type != EXFAT_ENTRY_FILE)
+        {
+            scan->entries = 0;
+            continue;
+        }
+
+        uint8_t secondary_count = ent->data[1];
+        uint16_t attr16 = BYTES2INT16(ent->data, 4);
+        uint16_t crttime = BYTES2INT16(ent->data, 8);
+        uint16_t crtdate = BYTES2INT16(ent->data, 10);
+        uint16_t wrttime = BYTES2INT16(ent->data, 12);
+        uint16_t wrtdate = BYTES2INT16(ent->data, 14);
+        uint16_t lstaccdate = BYTES2INT16(ent->data, 18);
+        uint8_t crttimetenth = ent->data[20];
+
+        bool have_stream = false;
+        bool nofat = false;
+        uint8_t namelen = 0;
+        uint32_t firstcluster = 0;
+        uint64_t datalen = 0;
+        uint16_t ucsname[255];
+        unsigned int ucslen = 0;
+        bool malformed = false;
+
+        for (unsigned int i = 0; i < secondary_count; i++)
+        {
+            union raw_dirent *sub = cache_direntry(fat_bpb, dirstr,
+                                                   ++scan->entry);
+            if (!sub)
+            {
+                malformed = true;
+                break;
+            }
+
+            uint8_t subtype = sub->data[0];
+            if (!(subtype & 0x80))
+            {
+                malformed = true;
+                break;
+            }
+
+            if (subtype == EXFAT_ENTRY_STREAM)
+            {
+                have_stream = true;
+                nofat = !!(sub->data[1] & EXFAT_STREAM_NO_FATCHAIN);
+                namelen = sub->data[3];
+                firstcluster = BYTES2INT32(sub->data, 20);
+                datalen = BYTES2INT32(sub->data, 24);
+                datalen |= ((uint64_t)BYTES2INT32(sub->data, 28) << 32);
+            }
+            else if (subtype == EXFAT_ENTRY_FILENAME)
+            {
+                for (unsigned int j = 0; j < 15 && ucslen < ARRAYLEN(ucsname);
+                     j++)
+                {
+                    uint16_t ucs = BYTES2INT16(sub->data, 2 + 2*j);
+                    if (!ucs)
+                        break;
+                    ucsname[ucslen++] = ucs;
+                }
+            }
+        }
+
+        scan->entries = ((unsigned int)secondary_count + 1) &
+                        EXFAT_ENTRY_COUNT_MASK;
+        if (nofat)
+            scan->entries |= EXFAT_NOFAT_FLAG;
+
+        if (malformed || !have_stream)
+        {
+            scan->entries = 0;
+            continue;
+        }
+
+        if (namelen < ucslen)
+            ucslen = namelen;
+
+        unsigned char *name = entry->name;
+        unsigned char *p = name;
+
+        for (unsigned int i = 0; i < ucslen; i++)
+        {
+            unsigned long ucc;
+
+#ifdef UNICODE32
+            uint16_t ucs = ucsname[i];
+            if (ucs >= 0xd800 && ucs < 0xdc00 && i + 1 < ucslen &&
+                ucsname[i + 1] >= 0xdc00 && ucsname[i + 1] < 0xe000)
+            {
+                ucc = 0x10000 + (((ucs & 0x3ff) << 10) |
+                      (ucsname[i + 1] & 0x3ff));
+                i++;
+            }
+            else
+#endif
+            {
+                ucc = ucsname[i];
+            }
+
+            if ((p = utf8encode(ucc, p)) - name > FAT_DIRENTRY_NAME_MAX)
+            {
+                malformed = true;
+                break;
+            }
+        }
+
+        if (malformed)
+        {
+            scan->entries = 0;
+            continue;
+        }
+
+        *p = '\0';
+
+        if (entry->name[0] == '\0')
+        {
+            scan->entries = 0;
+            continue;
+        }
+
+        strlcpy(entry->shortname, entry->name, sizeof(entry->shortname));
+        entry->attr         = attr16;
+        entry->crttimetenth = crttimetenth;
+        entry->crttime      = crttime;
+        entry->crtdate      = crtdate;
+        entry->lstaccdate   = lstaccdate;
+        entry->wrttime      = wrttime;
+        entry->wrtdate      = wrtdate;
+        entry->firstcluster = firstcluster;
+        entry->filesize     = datalen > FAT_MAX_FILE_SIZE ?
+                                FAT_MAX_FILE_SIZE : (uint32_t)datalen;
+
+        struct fat_file metafile;
+    #ifdef HAVE_MULTIVOLUME
+        metafile.volume = dirstr->fatfilep->volume;
+    #endif
+        metafile.firstcluster = firstcluster;
+        metafile.dircluster = dirstr->fatfilep->firstcluster;
+        metafile.e.entry = scan->entry;
+        metafile.e.entries = scan->entries;
+        exfat_meta_store(&metafile, entry->filesize, nofat);
+
+        rc = 1;
+        break;
+    }
+
+fat_error:
+    if (rc <= 0)
+    {
+        fat_empty_fat_direntry(entry);
+        scan->entry--;
+        scan->entries = 0;
+    }
+
+    return rc;
+}
+
 int fat_readdir(struct fat_filestr *dirstr, struct fat_dirscan_info *scan,
                 struct filestr_cache *cachep, struct fat_direntry *entry)
 {
+    struct bpb * const fat_bpb = FAT_BPB(dirstr->fatfilep->volume);
+    if (!fat_bpb)
+        return -1;
+
+    if (fat_bpb->is_exfat)
+    {
+        (void)cachep;
+        return exfat_readdir(dirstr, scan, entry);
+    }
+
     int rc = 0;
 
     /* long file names are stored in special entries; each entry holds up to
@@ -2805,10 +4227,6 @@ int fat_readdir(struct fat_filestr *dirstr, struct fat_dirscan_info *scan,
     fatlong_parse_start(&lnparse);
 
     scan->entries = 0;
-
-#if defined(MAX_VIRT_SECTOR_SIZE) || defined(MAX_VARIABLE_LOG_SECTOR)
-    struct bpb *fat_bpb = FAT_BPB(dirstr->fatfilep->volume);
-#endif
 
     while (1)
     {
@@ -2936,6 +4354,12 @@ bool fat_ismounted(IF_MV_NONVOID(int volume))
     return !!FAT_BPB(volume);
 }
 
+bool fat_is_exfat(IF_MV_NONVOID(int volume))
+{
+    const struct bpb *fat_bpb = FAT_BPB(volume);
+    return fat_bpb && fat_bpb->is_exfat;
+}
+
 int fat_mount(IF_MV(int volume,) IF_MD(int drive,) unsigned long startsector)
 {
     int rc;
@@ -2952,6 +4376,7 @@ int fat_mount(IF_MV(int volume,) IF_MD(int drive,) unsigned long startsector)
 #ifdef HAVE_MULTIDRIVE
     fat_bpb->drive       = drive;
 #endif
+    fat_bpb->is_exfat    = false;
 #if defined(MAX_VIRT_SECTOR_SIZE) || defined(MAX_VARIABLE_LOG_SECTOR)
     fat_bpb->sector_size = disk_get_log_sector_size(IF_MD(drive));
 #endif
@@ -2985,6 +4410,7 @@ int fat_unmount(IF_MV_NONVOID(int volume))
         return -1; /* not mounted */
 
     /* free the entries for this volume */
+    exfat_meta_invalidate_volume(IF_MV(fat_bpb->volume));
     cache_discard(IF_MV(fat_bpb));
     fat_bpb->mounted = false;
 
@@ -3067,6 +4493,8 @@ void fat_empty_fat_direntry(struct fat_direntry *entry)
 void fat_init(void)
 {
     dc_lock_cache();
+
+    memset(exfat_meta, 0, sizeof(exfat_meta));
 
     /* mark the possible volumes as not mounted */
     for (unsigned int i = 0; i < NUM_VOLUMES; i++)
