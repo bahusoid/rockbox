@@ -103,7 +103,9 @@ const struct button_mapping pf_context_album_scroll[] =
     {ACTION_NONE,     BUTTON_LEFT|BUTTON_REL,     BUTTON_LEFT},
     {ACTION_NONE,     BUTTON_RIGHT|BUTTON_REL,    BUTTON_RIGHT},
     {ACTION_NONE,     BUTTON_LEFT|BUTTON_REPEAT,  BUTTON_LEFT},
-    {ACTION_NONE,     BUTTON_RIGHT|BUTTON_REPEAT, BUTTON_RIGHT},
+    {ACTION_NONE,     BUTTON_RIGHT|BUTTON_REPEAT, BUTTON_RIGHT}
+#elif defined(HIBY_R1)
+    //Use default mapping
 #elif defined(BUTTON_LEFT) && defined(BUTTON_RIGHT)
     {PF_PREV,         BUTTON_LEFT,                BUTTON_NONE},
     {PF_PREV_REPEAT,  BUTTON_LEFT|BUTTON_REPEAT,  BUTTON_NONE},
