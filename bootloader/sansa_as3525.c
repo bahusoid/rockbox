@@ -35,6 +35,7 @@
 #endif /* HAVE_BOOTLOADER_USB_MODE */
 #include "backlight.h"
 #include "button-target.h"
+#include "button.h"
 #include "common.h"
 #include "rb-loader.h"
 #include "loader_strerror.h"
