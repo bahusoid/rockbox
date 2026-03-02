@@ -2266,29 +2266,12 @@ static int write_longname(struct bpb *fat_bpb, struct fat_filestr *parentstr,
     unsigned long ucspadlen = ALIGN_UP(ucslen, FATLONG_NAME_CHARS);
     uint16_t ucsname[ucspadlen];
 
-    for (unsigned long i = 0; i < ucspadlen; i++)
+    utf8_to_ucs2(name, ucsname, ucslen);
+    if (ucspadlen > ucslen)
     {
-        if (i < ucslen) {
-#ifdef UNICODE32
-            ucschar_t tmp;
-            name = utf8decode(name, &tmp);
-            /* For codepoints > U+FFFF we will need to use a UTF16 surrogate
-               pair. 'ucslen' already takes this into account! */
-            if (tmp < 0x10000) {
-                ucsname[i] = tmp;
-            } else {
-                tmp -= 0x10000;
-                ucsname[i++] = 0xd800 | ((tmp >> 10) & 0x3ff); /* High */
-                ucsname[i] = 0xdc00 | (tmp & 0x3ff); /* Low */
-            }
-#else
-            name = utf8decode(name, &ucsname[i]);
-#endif
-        } else if (i == ucslen) {
-            ucsname[i] = 0x0000; /* name doesn't fill last block */
-        } else /* i > ucslen */ {
+        ucsname[ucslen] = 0x0000; /* name doesn't fill last block */
+        for (unsigned long i = ucslen + 1; i < ucspadlen; i++)
             ucsname[i] = 0xffff; /* pad-out to end */
-        }
     }
 
     dc_lock_cache();
@@ -2394,8 +2377,12 @@ static inline unsigned int exfat_first_entry(const struct fat_file *file)
     return file->e.entry - count + 1;
 }
 
-static unsigned int exfat_name_to_ucs(const unsigned char *name,
-                                      uint16_t *ucs, unsigned int maxlen)
+/* Convert a UTF-8 string to a UCS-2/UTF-16 buffer.
+ * Handles codepoints > U+FFFF as surrogate pairs when UNICODE32 is set.
+ * Returns the number of uint16_t units written (may be > char count due to
+ * surrogate pairs). */
+static unsigned int utf8_to_ucs2(const unsigned char *name,
+                                 uint16_t *ucs, unsigned int maxlen)
 {
     unsigned int len = 0;
 
@@ -2503,7 +2490,7 @@ static int exfat_add_dir_entry(struct bpb *fat_bpb,
     if (rc < 0)
         FAT_ERROR(rc * 10 - 1);
 
-    ucslen = exfat_name_to_ucs(name, ucs, ARRAYLEN(ucs));
+    ucslen = utf8_to_ucs2(name, ucs, ARRAYLEN(ucs));
     if (!ucslen || ucslen > 255)
         FAT_ERROR(-2);
 
