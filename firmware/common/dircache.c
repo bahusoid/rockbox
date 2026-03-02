@@ -1383,6 +1383,10 @@ static void sab_process_sub(struct sab *sabp)
         infop->fatfile.e.entries    = ce->direntries;
         infop->dcfile.idx           = idx;
         infop->dcfile.serialnum     = ce->serialnum;
+        /* Restore exFAT stream info (nofat flag, filesize) that was not
+         * stored in the cache entry; needed before fat_readwrite on this
+         * directory's stream. No-op on FAT32 volumes. */
+        fat_file_exfat_refresh(&infop->fatfile);
     } /* end while */
 }
 

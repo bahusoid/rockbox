@@ -181,6 +181,7 @@ void fat_rewinddir(struct fat_dirscan_info *scan);
 /** Mounting and unmounting functions **/
 bool fat_ismounted(IF_MV_NONVOID(int volume));
 bool fat_is_exfat(IF_MV_NONVOID(int volume));
+void fat_file_exfat_refresh(struct fat_file *file);
 int fat_mount(IF_MV(int volume,) IF_MD(int drive,) unsigned long startsector);
 int fat_unmount(IF_MV_NONVOID(int volume));
 
