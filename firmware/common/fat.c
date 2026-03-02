@@ -201,8 +201,7 @@ union raw_dirent
 #define EXFAT_STREAM_ALLOCATION_POSSIBLE 0x01
 #define EXFAT_STREAM_NO_FATCHAIN    0x02
 
-#define EXFAT_NOFAT_FLAG            0x80000000u
-#define EXFAT_ENTRY_COUNT_MASK      0x0000ffffu
+/* entries is always a plain count; the nofat flag lives in e.exfat_nofat_chain */
 
 struct fsinfo
 {
@@ -425,10 +424,7 @@ static int exfat_set_nofat_flag(struct bpb *fat_bpb,
     dc_unlock_cache();
 
     /* Keep the per-instance fast-path flag in sync. */
-    if (nofat)
-        file->e.entries |= EXFAT_NOFAT_FLAG;
-    else
-        file->e.entries &= EXFAT_ENTRY_COUNT_MASK;
+    file->e.exfat_nofat_chain = nofat;
 
     return 0;
 }
@@ -569,9 +565,9 @@ static bool exfat_file_has_nofat_chain(const struct bpb *fat_bpb,
     if (!fat_bpb->is_exfat)
         return false;
 
-    /* EXFAT_NOFAT_FLAG is set in e.entries by exfat_readdir (fresh scan)
+    /* exfat_nofat_chain is set in e by exfat_readdir (fresh scan)
      * and by exfat_load_stream_info (lazy/eager load via fat_open). */
-    return !!(file->e.entries & EXFAT_NOFAT_FLAG);
+    return file->e.exfat_nofat_chain;
 }
 
 static inline long exfat_next_contig_cluster(const struct bpb *fat_bpb,
@@ -589,7 +585,7 @@ static inline unsigned long fat_eof_mark(const struct bpb *fat_bpb)
 }
 
 /* Reads the exFAT stream entry for file and stores the result directly in
- * file->exfat_filesize and the EXFAT_NOFAT_FLAG bit of file->e.entries. */
+ * file->exfat_filesize and file->e.exfat_nofat_chain. */
 static int exfat_load_stream_info(struct bpb *fat_bpb, struct fat_file *file)
 {
     if (!fat_bpb->is_exfat || !file->dircluster || exfat_entry_count(file) < 2)
@@ -616,10 +612,7 @@ static int exfat_load_stream_info(struct bpb *fat_bpb, struct fat_file *file)
     dc_unlock_cache();
 
     file->exfat_filesize = size;
-    if (nofat)
-        file->e.entries |= EXFAT_NOFAT_FLAG;
-    else
-        file->e.entries &= EXFAT_ENTRY_COUNT_MASK;
+    file->e.exfat_nofat_chain = nofat;
 
     return 0;
 }
@@ -2014,11 +2007,12 @@ static void fat_open_internal(IF_MV(int volume,) long startcluster,
 #ifdef HAVE_MULTIVOLUME
     file->volume       = volume;
 #endif
-    file->firstcluster   = startcluster;
-    file->dircluster     = 0;
-    file->e.entry        = 0;
-    file->e.entries      = 0;
-    file->exfat_filesize = 0;
+    file->firstcluster          = startcluster;
+    file->dircluster             = 0;
+    file->e.entry                = 0;
+    file->e.entries              = 0;
+    file->e.exfat_nofat_chain    = false;
+    file->exfat_filesize         = 0;
 }
 
 #if CONFIG_RTC
@@ -2254,7 +2248,7 @@ fat_error:
 
 static inline unsigned int exfat_entry_count(const struct fat_file *file)
 {
-    return file->e.entries & EXFAT_ENTRY_COUNT_MASK;
+    return file->e.entries;
 }
 
 static inline unsigned int exfat_first_entry(const struct fat_file *file)
@@ -2820,10 +2814,11 @@ static int exfat_free_direntries(struct bpb *fat_bpb, struct fat_file *file)
 
     dc_unlock_cache();
 
-    file->exfat_filesize = 0;
-    file->dircluster = 0;
-    file->e.entry = FAT_DIRSCAN_RW_VAL;
-    file->e.entries = 0;
+    file->exfat_filesize      = 0;
+    file->e.exfat_nofat_chain = false;
+    file->dircluster          = 0;
+    file->e.entry             = FAT_DIRSCAN_RW_VAL;
+    file->e.entries           = 0;
     return 1;
 }
 
@@ -3287,8 +3282,7 @@ int fat_rename(struct fat_file *parent, struct fat_file *file,
 
     if (fat_bpb->is_exfat)
     {
-        if (oldnofat)
-            newfile.e.entries |= EXFAT_NOFAT_FLAG;
+        newfile.e.exfat_nofat_chain = oldnofat;
 
         rc = exfat_update_entries(fat_bpb, &newfile, oldsize, false, NULL);
         if (rc < 0)
@@ -4015,10 +4009,8 @@ static int exfat_readdir(struct fat_filestr *dirstr,
             }
         }
 
-        scan->entries = ((unsigned int)secondary_count + 1) &
-                        EXFAT_ENTRY_COUNT_MASK;
-        if (nofat)
-            scan->entries |= EXFAT_NOFAT_FLAG;
+        scan->entries = (unsigned int)secondary_count + 1;
+        scan->exfat_nofat_chain = nofat;
 
         if (malformed || !have_stream)
         {
