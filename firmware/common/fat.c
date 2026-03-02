@@ -245,6 +245,10 @@ static inline unsigned int exfat_entry_count(const struct fat_file *file);
 static inline unsigned int exfat_first_entry(const struct fat_file *file);
 static bool exfat_file_has_nofat_chain(const struct bpb *fat_bpb,
                                        const struct fat_file *file);
+static unsigned char *ucs2_to_utf8(const uint16_t *ucs, unsigned int len,
+                                   unsigned char *out);
+static unsigned int utf8_to_ucs2(const unsigned char *name,
+                                 uint16_t *ucs, unsigned int maxlen);
 static unsigned long cluster2sec(struct bpb *fat_bpb, long cluster);
 static union raw_dirent * cache_direntry(struct bpb *fat_bpb,
                                          struct fat_filestr *filestr,
@@ -1224,27 +1228,19 @@ static bool fatlong_parse_finish(struct fatlong_parse_state *lnparse,
     /* ensure the last segment is NULL-terminated if it is filled */
     fatent->ucssegs[lnparse->ord_max + 5][0] = 0x0000;
 
-    unsigned long ucc;     /* Decoded codepoint */
-    uint16_t *ucsp, ucs;
-    for (ucsp = fatent->ucssegs[5], ucs=*ucsp; ucs; ucs = *++ucsp)
+    /* scan the null-terminated UCS-2 flat array; reject 0xffff padding */
+    const uint16_t * const ucs_start = fatent->ucssegs[5];
+    const uint16_t *ucsp;
+    for (ucsp = ucs_start; *ucsp; ucsp++)
     {
-        /* end should be hit before ever seeing padding */
-        if (ucs == 0xffff)
-            return false;
-
-#ifdef UNICODE32
-        /* Check for a surrogate UTF16 pair */
-        if (ucs >= 0xd800 && ucs < 0xdc00 &&
-            *(ucsp+1) >= 0xdc00 && *(ucsp+1) < 0xe000) {
-            ucc = 0x10000 + (((ucs & 0x3ff) << 10) | (*(ucsp+1) & 0x3ff));
-            ucsp++;
-        } else
-#endif
-            ucc = ucs;
-
-        if ((p = utf8encode(ucc, p)) - name > FAT_DIRENTRY_NAME_MAX)
-            return false;
+        if (*ucsp == 0xffff)
+            return false; /* padding found mid-name */
     }
+    unsigned int ucscount = (unsigned int)(ucsp - ucs_start);
+
+    p = ucs2_to_utf8(ucs_start, ucscount, p);
+    if (!p)
+        return false;
 
     /* longname ok */
     *p = '\0';
@@ -2411,6 +2407,36 @@ static unsigned int utf8_to_ucs2(const unsigned char *name,
     }
 
     return len;
+}
+
+/* Convert a UCS-2/UTF-16 buffer of known length to UTF-8.
+ * Handles surrogate pairs when UNICODE32 is set.
+ * Returns pointer past the last byte written, or NULL if
+ * FAT_DIRENTRY_NAME_MAX would be exceeded. The caller writes '\0'. */
+static unsigned char *ucs2_to_utf8(const uint16_t *ucs, unsigned int len,
+                                   unsigned char *out)
+{
+    unsigned char * const base = out;
+    for (unsigned int i = 0; i < len; i++)
+    {
+        unsigned long ucc;
+#ifdef UNICODE32
+        uint16_t u = ucs[i];
+        if (u >= 0xd800 && u < 0xdc00 && i + 1 < len &&
+            ucs[i + 1] >= 0xdc00 && ucs[i + 1] < 0xe000)
+        {
+            ucc = 0x10000 + (((unsigned long)(u & 0x3ff) << 10) |
+                             (ucs[i + 1] & 0x3ff));
+            i++;
+        }
+        else
+#endif
+            ucc = ucs[i];
+
+        if ((out = utf8encode(ucc, out)) - base > FAT_DIRENTRY_NAME_MAX)
+            return NULL;
+    }
+    return out;
 }
 
 static uint16_t exfat_direntry_checksum_step(uint16_t csum, uint8_t value)
@@ -4115,31 +4141,9 @@ static int exfat_readdir(struct fat_filestr *dirstr,
         unsigned char *name = entry->name;
         unsigned char *p = name;
 
-        for (unsigned int i = 0; i < ucslen; i++)
-        {
-            unsigned long ucc;
-
-#ifdef UNICODE32
-            uint16_t ucs = ucsname[i];
-            if (ucs >= 0xd800 && ucs < 0xdc00 && i + 1 < ucslen &&
-                ucsname[i + 1] >= 0xdc00 && ucsname[i + 1] < 0xe000)
-            {
-                ucc = 0x10000 + (((ucs & 0x3ff) << 10) |
-                      (ucsname[i + 1] & 0x3ff));
-                i++;
-            }
-            else
-#endif
-            {
-                ucc = ucsname[i];
-            }
-
-            if ((p = utf8encode(ucc, p)) - name > FAT_DIRENTRY_NAME_MAX)
-            {
-                malformed = true;
-                break;
-            }
-        }
+        p = ucs2_to_utf8(ucsname, ucslen, p);
+        if (!p)
+            malformed = true;
 
         if (malformed)
         {
