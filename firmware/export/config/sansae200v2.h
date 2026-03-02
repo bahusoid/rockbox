@@ -206,12 +206,16 @@
 #define CONFIG_USBOTG USBOTG_AS3525
 
 /* enable these for the experimental usb stack */
+#ifndef BOOTLOADER
 #define HAVE_USBSTACK
-//#define USB_HANDLED_BY_OF
+#define HAVE_USB_HID_MOUSE
+#else
+//#define HAVE_BOOTLOADER_USB_MODE
+#define USB_HANDLED_BY_OF
+#endif
+
 #define USB_VENDOR_ID 0x0781
 #define USB_PRODUCT_ID 0x7423
-#define HAVE_USB_HID_MOUSE
-#define HAVE_BOOTLOADER_USB_MODE
 
 /* Define this if you have adjustable CPU frequency */
 #define HAVE_ADJUSTABLE_CPU_FREQ
