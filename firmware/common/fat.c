@@ -379,108 +379,6 @@ struct fatlong_parse_state
     uint8_t chksum;
 };
 
-struct exfat_file_meta
-{
-#ifdef HAVE_MULTIVOLUME
-    uint8_t volume;
-#endif
-    long dircluster;
-    unsigned int endentry;
-    uint32_t size;
-    uint8_t flags;
-    uint8_t valid;
-};
-
-#define EXFAT_META_FLAG_NOFAT 0x01
-#define EXFAT_META_SLOTS 64
-static struct exfat_file_meta exfat_meta[EXFAT_META_SLOTS];
-
-static struct exfat_file_meta * exfat_meta_find(const struct fat_file *file)
-{
-    for (unsigned int i = 0; i < EXFAT_META_SLOTS; i++)
-    {
-        struct exfat_file_meta *m = &exfat_meta[i];
-        if (!m->valid)
-            continue;
-
-        if (m->dircluster != file->dircluster)
-            continue;
-
-        if (m->endentry != file->e.entry)
-            continue;
-
-#ifdef HAVE_MULTIVOLUME
-        if (m->volume != file->volume)
-            continue;
-#endif
-        return m;
-    }
-
-    return NULL;
-}
-
-static void exfat_meta_store(const struct fat_file *file,
-                             uint32_t size, bool nofat)
-{
-    struct exfat_file_meta *slot = exfat_meta_find(file);
-
-    if (!slot)
-    {
-        for (unsigned int i = 0; i < EXFAT_META_SLOTS; i++)
-        {
-            if (exfat_meta[i].valid)
-                continue;
-
-            slot = &exfat_meta[i];
-            break;
-        }
-
-        if (!slot)
-            slot = &exfat_meta[file->e.entry % EXFAT_META_SLOTS];
-    }
-
-    slot->valid = 1;
-#ifdef HAVE_MULTIVOLUME
-    slot->volume = file->volume;
-#endif
-    slot->dircluster = file->dircluster;
-    slot->endentry = file->e.entry;
-    slot->size = size;
-    slot->flags = nofat ? EXFAT_META_FLAG_NOFAT : 0;
-}
-
-static void exfat_meta_remove(const struct fat_file *file)
-{
-    struct exfat_file_meta *slot = exfat_meta_find(file);
-    if (slot)
-        slot->valid = 0;
-}
-
-static void exfat_meta_invalidate_volume(IF_MV_NONVOID(int volume))
-{
-    for (unsigned int i = 0; i < EXFAT_META_SLOTS; i++)
-    {
-        struct exfat_file_meta *slot = &exfat_meta[i];
-        if (!slot->valid)
-            continue;
-
-#ifdef HAVE_MULTIVOLUME
-        if (slot->volume != volume)
-            continue;
-#else
-        (void)volume;
-#endif
-
-        slot->valid = 0;
-    }
-}
-
-static uint32_t exfat_file_size_cached(const struct fat_file *file)
-{
-    struct exfat_file_meta *slot = exfat_meta_find(file);
-    return slot ? slot->size : 0;
-}
-
 static int exfat_update_set_checksum(struct bpb *fat_bpb,
                                      struct fat_filestr *parentstr,
                                      unsigned int first,
@@ -532,7 +430,6 @@ static int exfat_set_nofat_flag(struct bpb *fat_bpb,
     else
         file->e.entries &= EXFAT_ENTRY_COUNT_MASK;
 
-    exfat_meta_store(file, exfat_file_size_cached(file), nofat);
     return 0;
 }
 
@@ -541,7 +438,7 @@ static unsigned long exfat_allocated_clusters(struct bpb *fat_bpb,
                                               long upto_cluster)
 {
     unsigned long clussize = fat_bpb->bpb_secperclus * LOG_SECTOR_SIZE(fat_bpb);
-    uint32_t size = exfat_file_size_cached(file);
+    uint32_t size = file->exfat_filesize;
     unsigned long by_size = size ? (size + clussize - 1) / clussize : 0;
     unsigned long by_pos = 0;
 
@@ -672,15 +569,9 @@ static bool exfat_file_has_nofat_chain(const struct bpb *fat_bpb,
     if (!fat_bpb->is_exfat)
         return false;
 
-    /* Fast path: flag cached directly in the fat_file struct (set during
-     * dirscan or after a nofat-state transition). */
-    if (file->e.entries & EXFAT_NOFAT_FLAG)
-        return true;
-
-    /* Fallback: check the meta table (covers files opened via fat_open()
-     * without a preceding dirscan). */
-    struct exfat_file_meta *slot = exfat_meta_find(file);
-    return slot && (slot->flags & EXFAT_META_FLAG_NOFAT);
+    /* EXFAT_NOFAT_FLAG is set in e.entries by exfat_readdir (fresh scan)
+     * and by exfat_load_stream_info (lazy/eager load via fat_open). */
+    return !!(file->e.entries & EXFAT_NOFAT_FLAG);
 }
 
 static inline long exfat_next_contig_cluster(const struct bpb *fat_bpb,
@@ -697,10 +588,9 @@ static inline unsigned long fat_eof_mark(const struct bpb *fat_bpb)
     return fat_bpb->is_exfat ? EXFAT_EOF_MARK : FAT_EOF_MARK;
 }
 
-static int exfat_load_stream_info(struct bpb *fat_bpb,
-                                  const struct fat_file *file,
-                                  bool *nofat_out,
-                                  uint32_t *size_out)
+/* Reads the exFAT stream entry for file and stores the result directly in
+ * file->exfat_filesize and the EXFAT_NOFAT_FLAG bit of file->e.entries. */
+static int exfat_load_stream_info(struct bpb *fat_bpb, struct fat_file *file)
 {
     if (!fat_bpb->is_exfat || !file->dircluster || exfat_entry_count(file) < 2)
         return -1;
@@ -725,12 +615,11 @@ static int exfat_load_stream_info(struct bpb *fat_bpb,
     uint32_t size = BYTES2INT32(sent->data, 24);
     dc_unlock_cache();
 
-    exfat_meta_store(file, size, nofat);
-
-    if (nofat_out)
-        *nofat_out = nofat;
-    if (size_out)
-        *size_out = size;
+    file->exfat_filesize = size;
+    if (nofat)
+        file->e.entries |= EXFAT_NOFAT_FLAG;
+    else
+        file->e.entries &= EXFAT_ENTRY_COUNT_MASK;
 
     return 0;
 }
@@ -2125,10 +2014,11 @@ static void fat_open_internal(IF_MV(int volume,) long startcluster,
 #ifdef HAVE_MULTIVOLUME
     file->volume       = volume;
 #endif
-    file->firstcluster = startcluster;
-    file->dircluster   = 0;
-    file->e.entry      = 0;
-    file->e.entries    = 0;
+    file->firstcluster   = startcluster;
+    file->dircluster     = 0;
+    file->e.entry        = 0;
+    file->e.entries      = 0;
+    file->exfat_filesize = 0;
 }
 
 #if CONFIG_RTC
@@ -2650,7 +2540,7 @@ static int exfat_add_dir_entry(struct bpb *fat_bpb,
     if (srcent && (flags & DIRENT_RETURN))
         *srcent = *sent;
 
-    exfat_meta_store(file, 0, false);
+    file->exfat_filesize = 0;
 
     rc = 0;
 fat_error:
@@ -2891,7 +2781,7 @@ static int exfat_update_entries(struct bpb *fat_bpb, struct fat_file *file,
 
     dc_unlock_cache();
 
-    exfat_meta_store(file, size, exfat_file_has_nofat_chain(fat_bpb, file));
+    file->exfat_filesize = size;
 
     if (fatent)
     {
@@ -2930,7 +2820,7 @@ static int exfat_free_direntries(struct bpb *fat_bpb, struct fat_file *file)
 
     dc_unlock_cache();
 
-    exfat_meta_remove(file);
+    file->exfat_filesize = 0;
     file->dircluster = 0;
     file->e.entry = FAT_DIRSCAN_RW_VAL;
     file->e.entries = 0;
@@ -3222,6 +3112,13 @@ int fat_open(const struct fat_file *parent, long startcluster,
 #endif
     file->firstcluster = startcluster;
     file->dircluster   = parent->firstcluster;
+    file->exfat_filesize = 0;
+
+    /* Eagerly load stream info so exfat_filesize and the NOFAT flag are valid
+     * for all users without a lazy-load path at each call site.  The stream
+     * entry sector is typically already cached from the preceding dirscan. */
+    if (fat_bpb->is_exfat)
+        exfat_load_stream_info(fat_bpb, file);
 
     return 0;
 }
@@ -3266,7 +3163,7 @@ int fat_remove(struct fat_file *file, enum fat_remove_op what)
         DEBUGF("Removing cluster chain: %lX\n", file->firstcluster);
         if (fat_bpb->is_exfat && exfat_file_has_nofat_chain(fat_bpb, file))
         {
-            uint32_t size = exfat_file_size_cached(file);
+            uint32_t size = file->exfat_filesize;
             unsigned long clussize = fat_bpb->bpb_secperclus * LOG_SECTOR_SIZE(fat_bpb);
             unsigned long clusters = size ? (size + clussize - 1) / clussize : 1;
             rc = 1;
@@ -3392,7 +3289,6 @@ int fat_rename(struct fat_file *parent, struct fat_file *file,
     {
         if (oldnofat)
             newfile.e.entries |= EXFAT_NOFAT_FLAG;
-        exfat_meta_store(&newfile, oldsize, oldnofat);
 
         rc = exfat_update_entries(fat_bpb, &newfile, oldsize, false, NULL);
         if (rc < 0)
@@ -3686,20 +3582,17 @@ long fat_readwrite(struct fat_filestr *filestr, unsigned long sectorcount,
 
     bool eof = filestr->eof;
     bool exfat_nofat = exfat_file_has_nofat_chain(fat_bpb, file);
-    uint32_t exfat_size = exfat_file_size_cached(file);
+    uint32_t exfat_size = file->exfat_filesize;
 
-    /* Refresh nofat/size from disk only when not already in cache.
-     * Meta is populated during directory scan and on every write, so
-     * this path is only needed for files opened without a prior scan. */
-    if (!write && fat_bpb->is_exfat && file->dircluster &&
-        exfat_entry_count(file) >= 2 && !exfat_meta_find(file))
+    /* Safety: if nofat is set but size reads as zero yet the file has a first
+     * cluster, the size was not loaded (unusual paths bypassing fat_open). */
+    if (!write && fat_bpb->is_exfat && exfat_nofat
+        && !exfat_size && file->firstcluster && exfat_entry_count(file) >= 2)
     {
-        bool nofat2 = exfat_nofat;
-        uint32_t size2 = exfat_size;
-        if (exfat_load_stream_info(fat_bpb, file, &nofat2, &size2) == 0)
+        if (exfat_load_stream_info(fat_bpb, file) == 0)
         {
-            exfat_nofat = nofat2;
-            exfat_size = size2;
+            exfat_nofat = exfat_file_has_nofat_chain(fat_bpb, file);
+            exfat_size = file->exfat_filesize;
         }
     }
 
@@ -3881,7 +3774,7 @@ void fat_seek_to_stream(struct fat_filestr *filestr,
 
 int fat_seek(struct fat_filestr *filestr, unsigned long seeksector)
 {
-    const struct fat_file * const file = filestr->fatfilep;
+    struct fat_file * const file = filestr->fatfilep;
     struct bpb * const fat_bpb = FAT_BPB(file->volume);
     if (!fat_bpb)
         return -1;
@@ -3900,18 +3793,16 @@ int fat_seek(struct fat_filestr *filestr, unsigned long seeksector)
     filestr->eof = false;
 
     bool exfat_nofat = exfat_file_has_nofat_chain(fat_bpb, file);
-    uint32_t exfat_size = exfat_file_size_cached(file);
+    uint32_t exfat_size = file->exfat_filesize;
 
-    /* See fat_readwrite: load from disk only when not already cached. */
-    if (fat_bpb->is_exfat && file->dircluster && exfat_entry_count(file) >= 2
-        && !exfat_meta_find(file))
+    /* See fat_readwrite: load from disk only when not already populated. */
+    if (fat_bpb->is_exfat && exfat_nofat
+        && !exfat_size && file->firstcluster && exfat_entry_count(file) >= 2)
     {
-        bool nofat2 = exfat_nofat;
-        uint32_t size2 = exfat_size;
-        if (exfat_load_stream_info(fat_bpb, file, &nofat2, &size2) == 0)
+        if (exfat_load_stream_info(fat_bpb, file) == 0)
         {
-            exfat_nofat = nofat2;
-            exfat_size = size2;
+            exfat_nofat = exfat_file_has_nofat_chain(fat_bpb, file);
+            exfat_size = file->exfat_filesize;
         }
     }
 
@@ -4171,16 +4062,6 @@ static int exfat_readdir(struct fat_filestr *dirstr,
         entry->filesize     = datalen > FAT_MAX_FILE_SIZE ?
                                 FAT_MAX_FILE_SIZE : (uint32_t)datalen;
 
-        struct fat_file metafile;
-    #ifdef HAVE_MULTIVOLUME
-        metafile.volume = dirstr->fatfilep->volume;
-    #endif
-        metafile.firstcluster = firstcluster;
-        metafile.dircluster = dirstr->fatfilep->firstcluster;
-        metafile.e.entry = scan->entry;
-        metafile.e.entries = scan->entries;
-        exfat_meta_store(&metafile, entry->filesize, nofat);
-
         rc = 1;
         break;
     }
@@ -4401,7 +4282,6 @@ int fat_unmount(IF_MV_NONVOID(int volume))
         return -1; /* not mounted */
 
     /* free the entries for this volume */
-    exfat_meta_invalidate_volume(IF_MV(fat_bpb->volume));
     cache_discard(IF_MV(fat_bpb));
     fat_bpb->mounted = false;
 
@@ -4484,8 +4364,6 @@ void fat_empty_fat_direntry(struct fat_direntry *entry)
 void fat_init(void)
 {
     dc_lock_cache();
-
-    memset(exfat_meta, 0, sizeof(exfat_meta));
 
     /* mark the possible volumes as not mounted */
     for (unsigned int i = 0; i < NUM_VOLUMES; i++)
