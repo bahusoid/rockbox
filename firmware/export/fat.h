@@ -99,6 +99,8 @@ struct fat_dirscan_info
 {
     unsigned int entry;         /* short dir entry index in parent */
     unsigned int entries;       /* number of dir entries used */
+    bool exfat_nofat_chain;     /* exFAT: file uses contiguous allocation,
+                                   no FAT chain (GeneralSecondaryFlags bit 1) */
 };
 
 #define FAT_FILE_RW_VAL  (0ul - 1ul)
