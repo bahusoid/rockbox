@@ -2155,9 +2155,9 @@ static int write_longname(struct bpb *fat_bpb, struct fat_filestr *parentstr,
     utf8_to_ucs2(name, ucsname, ucslen);
     if (ucspadlen > ucslen)
     {
-        ucsname[ucslen] = 0x0000; /* name doesn't fill last block */
-        for (unsigned long i = ucslen + 1; i < ucspadlen; i++)
-            ucsname[i] = 0xffff; /* pad-out to end */
+        ucsname[ucslen] = 0x0000; /* null-terminate within last entry */
+        memset(ucsname + ucslen + 1, 0xff,
+               (ucspadlen - ucslen - 1) * sizeof(*ucsname)); /* 0xFFFF pad */
     }
 
     dc_lock_cache();
