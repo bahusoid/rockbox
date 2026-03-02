@@ -3118,6 +3118,21 @@ int fat_open(const struct fat_file *parent, long startcluster,
     return 0;
 }
 
+/* Re-populate exFAT stream info (nofat flag, filesize) for a fat_file whose
+ * e.entry/entries and dircluster are already set but whose exFAT-specific
+ * fields may be stale (e.g. after dircache reconstructs a fat_file from
+ * cached integer fields without going through fat_open). No-op on FAT32. */
+void fat_file_exfat_refresh(struct fat_file *file)
+{
+    struct bpb * const fat_bpb = FAT_BPB(file->volume);
+    if (fat_bpb && fat_bpb->is_exfat)
+    {
+        file->exfat_filesize      = 0;
+        file->e.exfat_nofat_chain = false;
+        exfat_load_stream_info(fat_bpb, file);
+    }
+}
+
 int fat_open_rootdir(IF_MV(int volume,) struct fat_file *dir)
 {
     struct bpb * const fat_bpb = FAT_BPB(volume);
