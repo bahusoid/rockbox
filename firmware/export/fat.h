@@ -112,6 +112,10 @@ struct fat_file
     long   firstcluster;        /* first cluster in file */
     long   dircluster;          /* first cluster of parent directory */
     struct fat_dirscan_info e;  /* entry information */
+    /* exFAT-only: cached stream info (populated on open or first access).
+     * exfat_filesize == 0 is both ''empty'' and ''unknown''; this is safe
+     * because a nofat file with firstcluster != 0 is guaranteed non-empty. */
+    uint32_t exfat_filesize;    /* file size from stream entry */
 };
 
 /* this stores what was last accessed when read or writing a file's data */
