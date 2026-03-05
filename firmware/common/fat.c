@@ -239,7 +239,7 @@ struct fsinfo
 struct bpb;
 static void update_fsinfo32(struct bpb *fat_bpb);
 static long get_next_cluster32(struct bpb *fat_bpb, long startcluster);
-static inline unsigned long fat_eof_mark(const struct bpb *fat_bpb);
+static FORCE_INLINE unsigned long fat_eof_mark(const struct bpb *fat_bpb);
 static inline unsigned int exfat_entry_count(const struct fat_file *file);
 static inline unsigned int exfat_first_entry(const struct fat_file *file);
 static bool exfat_file_has_nofat_chain(const struct bpb *fat_bpb,
@@ -579,7 +579,7 @@ static inline long exfat_next_contig_cluster(const struct bpb *fat_bpb,
     return cluster + 1;
 }
 
-static inline unsigned long fat_eof_mark(const struct bpb *fat_bpb)
+static unsigned long fat_eof_mark(const struct bpb *fat_bpb)
 {
     return fat_bpb->is_exfat ? EXFAT_EOF_MARK : FAT_EOF_MARK;
 }
@@ -1340,17 +1340,16 @@ static long get_next_cluster32(struct bpb *fat_bpb, long startcluster)
     }
 
     uint32_t value = letoh32(sec[offset]);
-    long next = fat_bpb->is_exfat ? value : (value & 0x0fffffff);
-    uint32_t eof_mark = fat_bpb->is_exfat ? EXFAT_EOF_MARK : FAT_EOF_MARK;
+    uint32_t next = fat_bpb->is_exfat ? value : (value & 0x0fffffff);
 
-    if (next == startcluster || next < 2 ||
-        (unsigned long)next > fat_bpb->dataclusters + 1)
+    if (next == entry || next < 2 ||
+        next > fat_bpb->dataclusters + 1)
     {
         next = 0;
     }
 
     /* is this last cluster in chain? */
-    if ((uint32_t)next >= eof_mark)
+    if (next >= fat_eof_mark(fat_bpb))
         next = 0;
 
     dc_unlock_cache();
