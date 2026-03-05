@@ -2742,6 +2742,17 @@ fat_error:
     return rc;
 }
 
+static void exfat_fill_attribs(struct fat_direntry* fatent, union raw_dirent* fent)
+{
+    fatent->attr         = BYTES2INT16(fent->data, 4);
+    fatent->crttimetenth = fent->data[20];
+    fatent->crttime      = BYTES2INT16(fent->data, 8);
+    fatent->crtdate      = BYTES2INT16(fent->data, 10);
+    fatent->wrttime      = BYTES2INT16(fent->data, 12);
+    fatent->wrtdate      = BYTES2INT16(fent->data, 14);
+    fatent->lstaccdate   = BYTES2INT16(fent->data, 18);
+}
+
 static int exfat_update_entries(struct bpb *fat_bpb, struct fat_file *file,
                                 uint32_t size, bool update_time,
                                 struct fat_direntry *fatent)
@@ -2792,6 +2803,13 @@ static int exfat_update_entries(struct bpb *fat_bpb, struct fat_file *file,
     INT322BYTES(sent->data, 12, 0);
     dc_dirty_buf(sent);
 
+    if (fatent)
+    {
+        fatent->filesize     = size;
+        fatent->firstcluster = file->firstcluster;
+        exfat_fill_attribs(fatent, fent);
+    }
+
     rc = exfat_update_set_checksum(fat_bpb, &parentstr, first,
                                    exfat_entry_count(file));
     if (rc < 0)
@@ -2803,12 +2821,6 @@ static int exfat_update_entries(struct bpb *fat_bpb, struct fat_file *file,
     dc_unlock_cache();
 
     file->exfat_filesize = size;
-
-    if (fatent)
-    {
-        fatent->filesize = size;
-        fatent->firstcluster = file->firstcluster;
-    }
 
     return 0;
 }
@@ -3995,13 +4007,6 @@ static int exfat_readdir(struct fat_filestr *dirstr,
         }
 
         uint8_t secondary_count = ent->data[1];
-        uint16_t attr16 = BYTES2INT16(ent->data, 4);
-        uint16_t crttime = BYTES2INT16(ent->data, 8);
-        uint16_t crtdate = BYTES2INT16(ent->data, 10);
-        uint16_t wrttime = BYTES2INT16(ent->data, 12);
-        uint16_t wrtdate = BYTES2INT16(ent->data, 14);
-        uint16_t lstaccdate = BYTES2INT16(ent->data, 18);
-        uint8_t crttimetenth = ent->data[20];
 
         bool have_stream = false;
         bool nofat = false;
@@ -4085,13 +4090,7 @@ static int exfat_readdir(struct fat_filestr *dirstr,
         }
 
         strlcpy(entry->shortname, entry->name, sizeof(entry->shortname));
-        entry->attr         = attr16;
-        entry->crttimetenth = crttimetenth;
-        entry->crttime      = crttime;
-        entry->crtdate      = crtdate;
-        entry->lstaccdate   = lstaccdate;
-        entry->wrttime      = wrttime;
-        entry->wrtdate      = wrtdate;
+        exfat_fill_attribs(entry, ent);
         entry->firstcluster = firstcluster;
         entry->filesize     = datalen > FAT_MAX_FILE_SIZE ?
                                 FAT_MAX_FILE_SIZE : (uint32_t)datalen;
