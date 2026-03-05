@@ -1323,6 +1323,12 @@ static void update_fsinfo32(struct bpb *fat_bpb)
     dc_dirty_buf(fsinfo);
 }
 
+static FORCE_INLINE uint32_t get_fat_entry(const struct bpb* fat_bpb, const uint32_t v)
+{
+    const uint32_t value = letoh32(v);
+    return fat_bpb->is_exfat ? value : (value & 0x0fffffff);
+}
+
 static long get_next_cluster32(struct bpb *fat_bpb, long startcluster)
 {
     unsigned long entry = startcluster;
@@ -1339,8 +1345,7 @@ static long get_next_cluster32(struct bpb *fat_bpb, long startcluster)
         return -1;
     }
 
-    uint32_t value = letoh32(sec[offset]);
-    uint32_t next = fat_bpb->is_exfat ? value : (value & 0x0fffffff);
+    uint32_t next = get_fat_entry(fat_bpb, sec[offset]);
 
     if (next == entry || next < 2 ||
         next > fat_bpb->dataclusters + 1)
@@ -1406,8 +1411,7 @@ static long find_free_cluster32(struct bpb *fat_bpb, long startcluster)
         {
             unsigned long k = (j + offset) % CLUSTERS_PER_FAT_SECTOR;
 
-            uint32_t value = letoh32(sec[k]);
-            if (!(fat_bpb->is_exfat ? value : (value & 0x0fffffff)))
+            if (!(get_fat_entry(fat_bpb, sec[k])))
             {
                 unsigned long c = nr * CLUSTERS_PER_FAT_SECTOR + k;
                  /* Ignore the reserved clusters 0 & 1, and also
@@ -1538,8 +1542,7 @@ static void fat_recalc_free_internal32(struct bpb *fat_bpb)
             if (c < 2 || c > fat_bpb->dataclusters + 1) /* nr 0 is unused */
                 continue;
 
-            uint32_t value = letoh32(sec[j]);
-            if (fat_bpb->is_exfat ? value : (value & 0x0fffffff))
+            if (get_fat_entry(fat_bpb, sec[j]))
                 continue;
 
             free++;
