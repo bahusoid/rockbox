@@ -2257,6 +2257,32 @@ static inline unsigned int exfat_first_entry(const struct fat_file *file)
     return file->e.entry - count + 1;
 }
 
+/* Extracts next UCS-2 character(s) from a UTF-8 string pointer.
+ * Returns the number of uint16_t units written (0, 1, or 2) and advances the pointer. */
+static inline int utf8_get_ucs2(const unsigned char **p, uint16_t *out1, uint16_t *out2)
+{
+    (void)out2; /* Unused if not UNICODE32 */
+    if (!**p) return 0;
+#ifdef UNICODE32
+    ucschar_t cp;
+    *p = utf8decode(*p, &cp);
+    if (cp >= 0x10000)
+    {
+        cp -= 0x10000;
+        *out1 = 0xd800 | ((cp >> 10) & 0x3ff);
+        *out2 = 0xdc00 | (cp & 0x3ff);
+        return 2;
+    }
+    *out1 = cp;
+    return 1;
+#else
+    uint16_t cp;
+    *p = utf8decode(*p, &cp);
+    *out1 = cp;
+    return 1;
+#endif
+}
+
 /* Convert a UTF-8 string to a UCS-2/UTF-16 buffer.
  * Handles codepoints > U+FFFF as surrogate pairs when UNICODE32 is set.
  * Returns the number of uint16_t units written (may be > char count due to
@@ -2265,29 +2291,19 @@ static unsigned int utf8_to_ucs2(const unsigned char *name,
                                  uint16_t *ucs, unsigned int maxlen)
 {
     unsigned int len = 0;
+    uint16_t u1 = 0, u2 = 0;
+    int count;
 
-    while (*name && len < maxlen)
+    while (len < maxlen && (count = utf8_get_ucs2(&name, &u1, &u2)) > 0)
     {
-#ifdef UNICODE32
-        ucschar_t cp;
-        name = utf8decode(name, &cp);
-
-        if (cp < 0x10000)
-        {
-            ucs[len++] = cp;
-        }
-        else
-        {
+        if (count == 2) {
             if (len + 1 >= maxlen)
                 break;
-
-            cp -= 0x10000;
-            ucs[len++] = 0xd800 | ((cp >> 10) & 0x3ff);
-            ucs[len++] = 0xdc00 | (cp & 0x3ff);
+            ucs[len++] = u1;
+            ucs[len++] = u2;
+        } else {
+            ucs[len++] = u1;
         }
-#else
-        name = utf8decode(name, &ucs[len++]);
-#endif
     }
 
     return len;
@@ -2328,22 +2344,12 @@ static uint16_t exfat_direntry_checksum_step(uint16_t csum, uint8_t value)
     return ((csum << 15) | (csum >> 1)) + value;
 }
 
-static uint16_t exfat_name_hash_from_ucs(const uint16_t *ucs,
-                                         unsigned int ucslen)
+static inline uint16_t exfat_name_hash_char(uint16_t hash, uint16_t ch)
 {
-    uint16_t hash = 0;
-
-    for (unsigned int i = 0; i < ucslen; i++)
-    {
-        uint16_t ch = ucs[i];
-
-        if (ch >= 'a' && ch <= 'z')
-            ch -= ('a' - 'A');
-
-        hash = exfat_direntry_checksum_step(hash, ch & 0xff);
-        hash = exfat_direntry_checksum_step(hash, (ch >> 8) & 0xff);
-    }
-
+    if (ch >= 'a' && ch <= 'z')
+        ch -= ('a' - 'A');
+    hash = exfat_direntry_checksum_step(hash, ch & 0xff);
+    hash = exfat_direntry_checksum_step(hash, (ch >> 8) & 0xff);
     return hash;
 }
 
@@ -2392,15 +2398,28 @@ static int exfat_add_dir_entry(struct bpb *fat_bpb,
                                union raw_dirent *srcent)
 {
     int rc;
-    uint16_t ucs[FAT_DIRENTRY_NAME_MAX];
-    unsigned int ucslen;
+    unsigned int ucslen = 0;
+    uint16_t name_hash = 0;
     int entries_needed;
 
     rc = check_longname(name);
     if (rc < 0)
         FAT_ERROR(rc * 10 - 1);
 
-    ucslen = utf8_to_ucs2(name, ucs, ARRAYLEN(ucs));
+    const unsigned char *p = name;
+    uint16_t u1 = 0, u2 = 0;
+    int count;
+    while (ucslen <= FAT_DIRENTRY_NAME_MAX && (count = utf8_get_ucs2(&p, &u1, &u2)) > 0)
+    {
+        name_hash = exfat_name_hash_char(name_hash, u1);
+        ucslen++;
+        
+        if (count == 2 && ucslen <= FAT_DIRENTRY_NAME_MAX) {
+            name_hash = exfat_name_hash_char(name_hash, u2);
+            ucslen++;
+        }
+    }
+
     if (!ucslen || ucslen > FAT_DIRENTRY_NAME_MAX)
         FAT_ERROR(-2);
 
@@ -2499,7 +2518,7 @@ static int exfat_add_dir_entry(struct bpb *fat_bpb,
     if (exfat_file_has_nofat_chain(fat_bpb, file))
         sent->data[1] |= EXFAT_STREAM_NO_FATCHAIN;
     sent->data[3] = ucslen;
-    INT162BYTES(sent->data, 4, exfat_name_hash_from_ucs(ucs, ucslen));
+    INT162BYTES(sent->data, 4, name_hash);
     INT322BYTES(sent->data, 20, file->firstcluster);
     INT322BYTES(sent->data, 24, 0);
     INT322BYTES(sent->data, 28, 0);
@@ -2507,6 +2526,8 @@ static int exfat_add_dir_entry(struct bpb *fat_bpb,
 
     unsigned int pos = 0;
     unsigned int naments = entries_needed - 2;
+    const unsigned char *name_ptr = name;
+    uint16_t pending_surrogate = 0;
     for (unsigned int i = 0; i < naments; i++)
     {
         union raw_dirent *nent = cache_direntry(fat_bpb, parentstr,
@@ -2519,7 +2540,18 @@ static int exfat_add_dir_entry(struct bpb *fat_bpb,
 
         for (unsigned int j = 0; j < 15; j++)
         {
-            uint16_t ch = pos < ucslen ? ucs[pos++] : 0;
+            uint16_t ch = 0;
+            if (pos < ucslen) {
+                if (pending_surrogate) {
+                    ch = pending_surrogate;
+                    pending_surrogate = 0;
+                } else {
+                    uint16_t u2;
+                    if (utf8_get_ucs2(&name_ptr, &ch, &u2) == 2)
+                        pending_surrogate = u2;
+                }
+                pos++;
+            }
             INT162BYTES(nent->data, 2 + 2*j, ch);
         }
 
