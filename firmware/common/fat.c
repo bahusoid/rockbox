@@ -1110,19 +1110,27 @@ static bool fatlong_parse_finish(struct fatlong_parse_state *lnparse,
     /* ensure the last segment is NULL-terminated if it is filled */
     fatent->ucssegs[lnparse->ord_max + 5][0] = 0x0000;
 
-    /* scan the null-terminated UCS-2 flat array; reject 0xffff padding */
-    const uint16_t * const ucs_start = fatent->ucssegs[5];
-    const uint16_t *ucsp;
-    for (ucsp = ucs_start; *ucsp; ucsp++)
+    unsigned long ucc;     /* Decoded codepoint */
+    uint16_t *ucsp, ucs;
+    for (ucsp = fatent->ucssegs[5], ucs=*ucsp; ucs; ucs = *++ucsp)
     {
-        if (*ucsp == 0xffff)
-            return false; /* padding found mid-name */
-    }
-    unsigned int ucscount = (unsigned int)(ucsp - ucs_start);
+        /* end should be hit before ever seeing padding */
+        if (ucs == 0xffff)
+            return false;
 
-    p = ucs2_to_utf8(ucs_start, ucscount, p);
-    if (!p)
-        return false;
+#ifdef UNICODE32
+        /* Check for a surrogate UTF16 pair */
+        if (ucs >= 0xd800 && ucs < 0xdc00 &&
+            *(ucsp+1) >= 0xdc00 && *(ucsp+1) < 0xe000) {
+            ucc = 0x10000 + (((ucs & 0x3ff) << 10) | (*(ucsp+1) & 0x3ff));
+            ucsp++;
+        } else
+#endif
+            ucc = ucs;
+
+        if ((p = utf8encode(ucc, p)) - name > FAT_DIRENTRY_NAME_MAX)
+            return false;
+    }
 
     /* longname ok */
     *p = '\0';
@@ -2146,12 +2154,29 @@ static int write_longname(struct bpb *fat_bpb, struct fat_filestr *parentstr,
     unsigned long ucspadlen = ALIGN_UP(ucslen, FATLONG_NAME_CHARS);
     uint16_t ucsname[ucspadlen];
 
-    utf8_to_ucs2(name, ucsname, ucslen);
-    if (ucspadlen > ucslen)
+    for (unsigned long i = 0; i < ucspadlen; i++)
     {
-        ucsname[ucslen] = 0x0000; /* null-terminate within last entry */
-        memset(ucsname + ucslen + 1, 0xff,
-               (ucspadlen - ucslen - 1) * sizeof(*ucsname)); /* 0xFFFF pad */
+        if (i < ucslen) {
+#ifdef UNICODE32
+            ucschar_t tmp;
+            name = utf8decode(name, &tmp);
+            /* For codepoints > U+FFFF we will need to use a UTF16 surrogate
+               pair. 'ucslen' already takes this into account! */
+            if (tmp < 0x10000) {
+                ucsname[i] = tmp;
+            } else {
+                tmp -= 0x10000;
+                ucsname[i++] = 0xd800 | ((tmp >> 10) & 0x3ff); /* High */
+                ucsname[i] = 0xdc00 | (tmp & 0x3ff); /* Low */
+            }
+#else
+            name = utf8decode(name, &ucsname[i]);
+#endif
+        } else if (i == ucslen) {
+            ucsname[i] = 0x0000; /* name doesn't fill last block */
+        } else /* i > ucslen */ {
+            ucsname[i] = 0xffff; /* pad-out to end */
+        }
     }
 
     dc_lock_cache();
