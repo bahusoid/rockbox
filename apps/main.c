@@ -25,7 +25,6 @@
 #include "gcc_extensions.h"
 #include "storage.h"
 #include "disk.h"
-#include "fat.h"
 #include "file_internal.h"
 #include "lcd.h"
 #include "rtc.h"
