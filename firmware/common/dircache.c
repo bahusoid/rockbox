@@ -43,6 +43,7 @@
 #include "linked_list.h"
 #include "crc32.h"
 
+//#define DIRCACHE_SKIP_EXFAT
 /**
  * Cache memory layout:
  * x - array of struct dircache_entry
@@ -1854,7 +1855,14 @@ static void build_volumes(void)
            "ready" volumes */
         if (dcvolp->status == DIRCACHE_READY)
             continue;
-
+#ifdef DIRCACHE_SKIP_EXFAT
+        /* Skip exFAT partitions */
+        if (fat_is_exfat(IF_MV(i)))
+        {
+            dcvolp->status = DIRCACHE_READY;
+            continue;
+        }
+#endif
         /* measure how long it takes to build the cache for each volume */
         if (!dcvolp->serialnum)
             dcvolp->serialnum = next_serialnum();
