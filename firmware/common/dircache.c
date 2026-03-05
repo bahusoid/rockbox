@@ -21,6 +21,7 @@
  ****************************************************************************/
 #include "config.h"
 #include <stdio.h>
+#include <stdarg.h>
 #include <errno.h>
 #include "string-extra.h"
 #include <stdbool.h>
@@ -42,6 +43,7 @@
 #include "rbpaths.h"
 #include "linked_list.h"
 #include "crc32.h"
+#include "fat.h"
 
 /**
  * Cache memory layout:
@@ -1226,6 +1228,32 @@ static void process_events(void)
 }
 
 #if defined (DIRCACHE_NATIVE)
+
+/* --- dircache hang debug --- */
+static int dc_dbg_fd = -1;
+
+static void dc_dbg_write(const char *msg)
+{
+    if (dc_dbg_fd < 0)
+        return;
+    write(dc_dbg_fd, msg, strlen(msg));
+    write(dc_dbg_fd, "\n", 1);
+    fsync(dc_dbg_fd);
+}
+
+static void dc_dbg_writef(const char *fmt, ...)
+{
+    if (dc_dbg_fd < 0)
+        return;
+    static char buf[128];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    dc_dbg_write(buf);
+}
+/* --- end dircache hang debug --- */
+
 /**
  * scan and build the contents of a subdirectory
  */
@@ -1249,8 +1277,11 @@ static void sab_process_sub(struct sab *sabp)
 
         /* open directory stream */
         filestr_base_init(streamp);
+        dc_dbg_write("fileobj_fileop_open: enter");
         fileobj_fileop_open(streamp, infop, FO_DIRECTORY);
+        dc_dbg_write("fileobj_fileop_open: done");
         fat_rewind(&streamp->fatstr);
+        dc_dbg_write("fat_rewind: done");
         uncached_rewinddir_internal(infop);
 
         const long dircluster = streamp->infop->fatfile.firstcluster;
@@ -1270,7 +1301,10 @@ static void sab_process_sub(struct sab *sabp)
             }
             /* else an immediate-contents directory scan */
 
+            dc_dbg_write("uncached_readdir_internal: enter");
             int rc = uncached_readdir_internal(streamp, infop, fatentp);
+            dc_dbg_writef("uncached_readdir_internal: rc=%d name=%s",
+                          rc, rc > 0 ? (const char *)fatentp->name : "");
             if (rc <= 0)
             {
                 if (rc < 0)
@@ -1322,7 +1356,10 @@ static void sab_process_sub(struct sab *sabp)
             if (!(fatentp->attr & ATTR_DIRECTORY))
                 ce->filesize = fatentp->filesize;
             else if (!is_dotdir_name(fatentp->name))
+            {
                 ce->frontier = FRONTIER_NEW; /* this needs scanning */
+                dc_dbg_writef("dir entry queued for scan: %s", fatentp->name);
+            }
 
             /* copy remaining FS info */
             ce->direntry     = infop->fatfile.e.entry;
@@ -1341,6 +1378,7 @@ static void sab_process_sub(struct sab *sabp)
         } /* end while */
 
         close_stream_internal(streamp);
+        dc_dbg_write("close_stream_internal: done");
 
         if (sabp->quit)
             return;
@@ -1416,7 +1454,9 @@ static void sab_process_dir(struct file_base_info *infop, bool issab)
         DCRIVOL(infop)->sabp = sabp;
 
     establish_frontier(infop->dcfile.idx, FRONTIER_NEW | FRONTIER_RENEW);
+    dc_dbg_write("sab_process_sub: enter");
     sab_process_sub(sabp);
+    dc_dbg_write("sab_process_sub: return");
 
     if (issab)
         DCRIVOL(infop)->sabp = NULL;
@@ -1434,9 +1474,38 @@ static void sab_process_volume(struct dircache_volume *dcvolp)
 
     logf("dircache - building volume %d", volume);
 
+    /* debug: open log file on the exFAT SD card BEFORE scanning begins,
+     * so no directory modifications happen during the scan */
+#ifdef HAVE_MULTIVOLUME
+    if (fat_is_exfat(volume))
+    {
+        char dc_dbg_path[MAX_PATH];
+        int n = make_volume_root(volume, dc_dbg_path);
+        strlcpy(dc_dbg_path + n, "/dircache_debug.txt", sizeof(dc_dbg_path) - n);
+        dc_dbg_fd = open(dc_dbg_path, O_WRONLY | O_CREAT | O_TRUNC);
+    }
+    else
+    {
+        dc_dbg_fd = -1;
+    }
+#else
+    if (fat_is_exfat())
+    {
+        dc_dbg_fd = open("/dircache_debug.txt", O_WRONLY | O_CREAT | O_TRUNC);
+    }
+    else
+    {
+        dc_dbg_fd = -1;
+    }
+#endif
+
+    dc_dbg_writef("sab_process_volume: start volume=%d", volume);
+
     /* gather everything sab_process_dir() needs in order to begin a scan */
     struct file_base_info info;
+    dc_dbg_write("fat_open_rootdir: enter");
     rc = fat_open_rootdir(IF_MV(volume,) &info.fatfile);
+    dc_dbg_writef("fat_open_rootdir: rc=%d", rc);
     if (rc < 0)
     {
         /* probably not mounted */
@@ -1447,8 +1516,16 @@ static void sab_process_volume(struct dircache_volume *dcvolp)
 
     info.dcfile.idx       = idx;
     info.dcfile.serialnum = dcvolp->serialnum;
+    dc_dbg_write("binding_resolve: enter");
     binding_resolve(&info);
+    dc_dbg_write("binding_resolve: done, calling sab_process_dir");
     sab_process_dir(&info, true);
+    dc_dbg_write("sab_process_dir: returned");
+    if (dc_dbg_fd >= 0)
+    {
+        close(dc_dbg_fd);
+        dc_dbg_fd = -1;
+    }
 }
 
 /**
