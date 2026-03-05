@@ -2392,7 +2392,7 @@ static int exfat_add_dir_entry(struct bpb *fat_bpb,
                                union raw_dirent *srcent)
 {
     int rc;
-    uint16_t ucs[255];
+    uint16_t ucs[FAT_DIRENTRY_NAME_MAX];
     unsigned int ucslen;
     int entries_needed;
 
@@ -2401,7 +2401,7 @@ static int exfat_add_dir_entry(struct bpb *fat_bpb,
         FAT_ERROR(rc * 10 - 1);
 
     ucslen = utf8_to_ucs2(name, ucs, ARRAYLEN(ucs));
-    if (!ucslen || ucslen > 255)
+    if (!ucslen || ucslen > FAT_DIRENTRY_NAME_MAX)
         FAT_ERROR(-2);
 
     entries_needed = 2 + (ucslen + 14) / 15;
@@ -3981,7 +3981,7 @@ static int exfat_readdir(struct fat_filestr *dirstr,
         uint8_t namelen = 0;
         uint32_t firstcluster = 0;
         uint64_t datalen = 0;
-        uint16_t ucsname[255];
+        uint16_t * const ucsname = &entry->ucssegs[5][0];
         unsigned int ucslen = 0;
         bool malformed = false;
 
@@ -4013,7 +4013,7 @@ static int exfat_readdir(struct fat_filestr *dirstr,
             }
             else if (subtype == EXFAT_ENTRY_FILENAME)
             {
-                for (unsigned int j = 0; j < 15 && ucslen < ARRAYLEN(ucsname);
+                for (unsigned int j = 0; j < 15 && ucslen < FAT_DIRENTRY_NAME_MAX;
                      j++)
                 {
                     uint16_t ucs = BYTES2INT16(sub->data, 2 + 2*j);
