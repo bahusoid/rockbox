@@ -1,0 +1,30 @@
+name: Test Sansa E200V2 Boot build
+on: [workflow_dispatch, push, pull_request]
+
+jobs:
+  prepare:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+
+    name: Prepare arm toolchain and build
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run reproduction steps
+        run: |
+
+          # 2. Install dependencies:
+          sudo apt-get update && sudo apt-get install -y automake bison build-essential ccache flex libc6-dev libgmp3-dev libmpfr-dev libsdl1.2-dev libtool-bin texinfo zip gawk wget libmpc-dev gettext gtk-doc-tools
+
+          # 3. Build arm toolchains. Inside tools folder:
+          cd tools
+          sudo ./rockboxdev.sh --target=a
+
+          # 4. Generate makefile for Sansa E200V2 bootloader. Inside project root folder:
+          cd .. #back to root
+          mkdir -p buildE200V2Boot && cd buildE200V2Boot && ../tools/configure --target=sansae200v2 --type=B
+
+          # Test makefile builds
+          make
