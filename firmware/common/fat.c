@@ -660,24 +660,21 @@ static int exfat_bitmap_set(struct bpb *fat_bpb, unsigned long cluster,
         return rc;
 
     bool was_alloc = !!(*bytep & mask);
-    if (allocated)
-        *bytep |= mask;
-    else
-        *bytep &= ~mask;
-
-    dc_dirty_buf(sectorp);
 
     if (allocated != was_alloc)
     {
         if (allocated)
         {
+            *bytep |= mask;
             if (fat_bpb->fsinfo.freecount > 0)
                 fat_bpb->fsinfo.freecount--;
         }
         else
         {
+            *bytep &= ~mask;
             fat_bpb->fsinfo.freecount++;
         }
+        dc_dirty_buf(sectorp);
     }
 
     return 0;
@@ -1478,14 +1475,11 @@ static int update_fat_entry32(struct bpb *fat_bpb, unsigned long entry,
 
     if (fat_bpb->is_exfat)
     {
-        if ((curval == 0) != (val == 0))
+        rc = exfat_bitmap_set(fat_bpb, entry, val != 0);
+        if (rc < 0)
         {
-            rc = exfat_bitmap_set(fat_bpb, entry, val != 0);
-            if (rc < 0)
-            {
-                dc_unlock_cache();
-                return -1;
-            }
+            dc_unlock_cache();
+            return -1;
         }
 
         sec[offset] = htole32(val);
