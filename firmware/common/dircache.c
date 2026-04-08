@@ -199,6 +199,17 @@ struct dircache_entry
 /* spare us some tedium */
 #define ENTRYSIZE   (sizeof (struct dircache_entry))
 
+/* dircache_entry packs directory location into bitfields; skip exFAT entries
+ * that exceed these limits to avoid truncation and wrong entry updates. */
+static bool dircache_native_entry_fits(const struct file_base_info *infop)
+{
+    if (!fat_is_exfat(IF_MV_NONVOID(infop->fatfile.volume)))
+        return true;
+
+    return infop->fatfile.e.entry <= 0xffffu &&
+           infop->fatfile.e.entries <= 0x1fu;
+}
+
 /* thread and kernel stuff */
 static struct event_queue dircache_queue SHAREDBSS_ATTR;
 static uintptr_t dircache_stack[DIRCACHE_STACK_SIZE / sizeof (uintptr_t)];
@@ -1282,6 +1293,14 @@ static void sab_process_sub(struct sab *sabp)
                 break;
             }
 
+            if (!dircache_native_entry_fits(infop))
+            {
+                /* Keep serving this directory through read-through mode for
+                 * entries that cannot be represented by the cache bitfields. */
+                establish_frontier(compp->idx, FRONTIER_ZONED);
+                continue;
+            }
+
             struct dircache_entry *ce;
             int prev = *compp->prevp;
 
@@ -2350,6 +2369,14 @@ void dircache_fileop_create(struct file_base_info *dirinfop,
     struct file_base_info *infop = &bindp->info;
 
 #ifdef DIRCACHE_NATIVE
+    if (!dircache_native_entry_fits(infop))
+    {
+        establish_frontier(dirinfop->dcfile.idx, FRONTIER_ZONED);
+        return;
+    }
+#endif
+
+#ifdef DIRCACHE_NATIVE
     ce->firstcluster = infop->fatfile.firstcluster;
     ce->direntry     = infop->fatfile.e.entry;
     ce->direntries   = infop->fatfile.e.entries;
@@ -2424,6 +2451,16 @@ void dircache_fileop_rename(struct file_base_info *dirinfop,
         establish_frontier(dirinfop->dcfile.idx, FRONTIER_ZONED);
         return;
     }
+
+#ifdef DIRCACHE_NATIVE
+    if (!dircache_native_entry_fits(&bindp->info))
+    {
+        /* Entry location cannot be represented safely in dircache. */
+        free_file_entry(&bindp->info);
+        establish_frontier(dirinfop->dcfile.idx, FRONTIER_ZONED);
+        return;
+    }
+#endif
 
     /* unlink the entry but keep it; it needs to be re-sorted since the
        underlying FS probably changed the order */
