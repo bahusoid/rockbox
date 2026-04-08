@@ -55,6 +55,8 @@
 %s%ac%?id<%id|%?d(1)<%d(1)|%(root%)>>
 %s%ac%?it<%it|%fn>
 %s%ac%?ia<%ia|%?iA<%iA|%?d(2)<%d(2)|%(root%)>>>
+%s%ac%?iy<%iy|>
+%ac%fb kbps%?fv< %(vbr%)|> %fc %fk kHz
 
 # next track info - AA
 %Vl(d,0,470,-,-200,-)
