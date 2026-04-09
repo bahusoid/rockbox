@@ -32,6 +32,9 @@ buffering.c
 voice_thread.c
 rbcodec_helpers.c
 menus/main_menu.c
+#ifdef HIBY_LINUX
+menus/hiby_bluetooth_menu.c
+#endif
 menus/playback_menu.c
 menus/playlist_menu.c
 #ifdef HAVE_RECORDING
@@ -53,6 +56,9 @@ root_menu.c
 screens.c
 settings.c
 settings_list.c
+#ifdef HIBY_LINUX
+hiby_bluetooth.c
+#endif
 shortcuts.c
 status.c
 cuesheet.c
