@@ -32,11 +32,23 @@
 #include "panic.h"
 #include "sysfs.h"
 #include "alsa-controls.h"
-#include "pcm-alsa.h"
+#include "pcm-alsa-hiby.h"
+#include "sound.h"
+#include "settings.h"
 
 #include "logf.h"
 
+#include <stdio.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/un.h>
+#include <unistd.h>
+
 int hiby_has_valid_output(void);
+
+#define HIBY_SYS_SERVER_SOCKET "/var/run/sys_server"
+#define HIBY_ABSVOL_MAX 127
 
 static int hw_init = 0;
 
@@ -45,6 +57,127 @@ static long int vol_r_hw = 255;
 static long int last_ps = -1;
 
 static int muted = -1;
+static int bt_absvol_last_step = -1;
+static char bt_absvol_last_mac[18];
+
+static int hiby_volume_to_absvol_step(int volume_cb)
+{
+    int min_vol = sound_min(SOUND_VOLUME);
+    int max_vol = sound_max(SOUND_VOLUME);
+    int limit_vol = global_settings.volume_limit;
+    int span;
+    int pct;
+    int step;
+
+    if (limit_vol < max_vol)
+        max_vol = limit_vol;
+    if (max_vol < min_vol)
+        max_vol = min_vol;
+
+    if (volume_cb < min_vol)
+        volume_cb = min_vol;
+    if (volume_cb > max_vol)
+        volume_cb = max_vol;
+
+    span = max_vol - min_vol;
+    if (span <= 0)
+        return 0;
+
+    pct = ((volume_cb - min_vol) * 100 + span / 2) / span;
+    if (pct < 0)
+        pct = 0;
+    if (pct > 100)
+        pct = 100;
+
+    step = (pct * HIBY_ABSVOL_MAX + 50) / 100;
+    if (step < 0)
+        step = 0;
+    if (step > HIBY_ABSVOL_MAX)
+        step = HIBY_ABSVOL_MAX;
+
+    return step;
+}
+
+static int hiby_sys_server_command(const char *command, char *reply, size_t reply_size)
+{
+    struct sockaddr_un addr;
+    struct timeval tv = { .tv_sec = 0, .tv_usec = 300000 };
+    int fd = -1;
+    int rc = -1;
+    ssize_t n;
+
+    if (reply && reply_size > 0)
+        reply[0] = '\0';
+
+    if (!command || !*command)
+        return -1;
+
+    fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0)
+        return -1;
+
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", HIBY_SYS_SERVER_SOCKET);
+
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+        goto out;
+    if (send(fd, command, strlen(command), 0) < 0)
+        goto out;
+
+    if (reply && reply_size > 1)
+    {
+        n = recv(fd, reply, reply_size - 1, 0);
+        if (n < 0)
+            goto out;
+        reply[n] = '\0';
+    }
+
+    rc = 0;
+
+out:
+    if (fd >= 0)
+        close(fd);
+    return rc;
+}
+
+static void hiby_notify_bt_absvol(int volume_cb)
+{
+    const char *mac_u = hiby_pcm_get_bt_mac();
+    char cmd[96];
+    char reply[128];
+    int step;
+
+    if (!mac_u || !mac_u[0])
+    {
+        bt_absvol_last_step = -1;
+        bt_absvol_last_mac[0] = '\0';
+        return;
+    }
+
+    step = hiby_volume_to_absvol_step(volume_cb);
+    if (step == bt_absvol_last_step && !strcmp(mac_u, bt_absvol_last_mac))
+        return;
+
+    snprintf(cmd, sizeof(cmd), "BT:ABSVOL:%s %d", mac_u, step);
+    if (hiby_sys_server_command(cmd, reply, sizeof(reply)) < 0)
+    {
+        logf("bt absvol send fail: %s", cmd);
+        return;
+    }
+
+    if (!strstr(reply, "OK"))
+    {
+        logf("bt absvol not-ok: %s", reply);
+        return;
+    }
+
+    bt_absvol_last_step = step;
+    snprintf(bt_absvol_last_mac, sizeof(bt_absvol_last_mac), "%s", mac_u);
+}
 
 void audiohw_mute(int mute)
 {
@@ -126,6 +259,7 @@ void audiohw_set_frequency(int fsel)
 
 void audiohw_set_volume(int vol_l, int vol_r)
 {
+    int vol_avg;
     logf("hw vol %d %d", vol_l, vol_r);
 
     long l,r;
@@ -141,6 +275,9 @@ void audiohw_set_volume(int vol_l, int vol_r)
 
     alsa_controls_set_ints("Left Playback Volume", 1, &l);
     alsa_controls_set_ints("Right Playback Volume", 1, &r);
+
+    vol_avg = (vol_l + vol_r) / 2;
+    hiby_notify_bt_absvol(vol_avg);
 }
 
 void audiohw_set_filter_roll_off(int value)
@@ -155,4 +292,3 @@ void audiohw_set_filter_roll_off(int value)
     alsa_controls_set_ints("Digital Filter", 1, &value_hw);
 
 }
-

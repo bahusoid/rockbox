@@ -108,6 +108,10 @@ static snd_pcm_stream_t current_alsa_mode;  /* SND_PCM_STREAM_PLAYBACK / _CAPTUR
 #endif
 
 static const char *current_alsa_device;
+static void pcm_pump_locked(snd_pcm_t *handle);
+#if defined(HIBY_LINUX)
+#include "hiby/pcm-alsa-hiby-hooks.h"
+#endif
 
 void pcm_alsa_set_playback_device(const char *device)
 {
@@ -145,6 +149,10 @@ static int set_hwparams(snd_pcm_t *handle)
         buffer_size = MIX_FRAME_SAMPLES * 4;
         period_size = MIX_FRAME_SAMPLES;
     }
+
+#if defined(HIBY_LINUX)
+    hiby_pcm_adjust_bt_buffering(&period_size, &buffer_size, hiby_pcm_bt_active());
+#endif
 
     /* choose all parameters */
     err = snd_pcm_hw_params_any(handle, params);
@@ -208,6 +216,11 @@ static int set_hwparams(snd_pcm_t *handle)
 
     if (frames) free(frames);
     frames = calloc(1, period_size * channels * sizeof(sample_t));
+#if defined(HIBY_LINUX)
+    hiby_pcm_poll_interval_us =
+        hiby_pcm_calc_poll_interval(real_sample_rate, period_size,
+                                    hiby_pcm_bt_active());
+#endif
 
     /* write the parameters to device */
     err = snd_pcm_hw_params(handle, params);
@@ -227,6 +240,12 @@ error:
 static int set_swparams(snd_pcm_t *handle)
 {
     int err;
+#if defined(HIBY_LINUX)
+    snd_pcm_uframes_t start_threshold =
+        hiby_pcm_start_threshold(buffer_size, period_size, hiby_pcm_bt_active());
+#else
+    snd_pcm_uframes_t start_threshold = buffer_size / 2;
+#endif
 
     snd_pcm_sw_params_t *swparams;
     snd_pcm_sw_params_malloc(&swparams);
@@ -238,8 +257,7 @@ static int set_swparams(snd_pcm_t *handle)
         logf("Unable to determine current swparams for playback: %s", snd_strerror(err));
         goto error;
     }
-    /* start the transfer when the buffer is half full */
-    err = snd_pcm_sw_params_set_start_threshold(handle, swparams, buffer_size / 2);
+    err = snd_pcm_sw_params_set_start_threshold(handle, swparams, start_threshold);
     if (err < 0)
     {
         logf("Unable to set start threshold mode for playback: %s", snd_strerror(err));
@@ -411,20 +429,19 @@ static bool copy_frames(bool first)
     return true;
 }
 
-static void async_callback(snd_async_handler_t *ahandler)
+static void pcm_pump_locked(snd_pcm_t *handle)
 {
     int err;
 
-    if (!ahandler) return;
-
-    snd_pcm_t *handle = snd_async_handler_get_pcm(ahandler);
-
-    if (!handle) return;
-
-    if (pthread_mutex_trylock(&pcm_mtx) != 0)
+    if (!handle)
         return;
 
     snd_pcm_state_t state = snd_pcm_state(handle);
+
+#if defined(HIBY_LINUX)
+    if (state == SND_PCM_STATE_OPEN || !hiby_pcm_params_ready())
+        return;
+#endif
 
     if (state == SND_PCM_STATE_XRUN)
     {
@@ -524,6 +541,24 @@ static void async_callback(snd_async_handler_t *ahandler)
     }
 
 abort:
+    return;
+}
+
+static void async_callback(snd_async_handler_t *ahandler)
+{
+    snd_pcm_t *cb_handle;
+
+    if (!ahandler)
+        return;
+
+    cb_handle = snd_async_handler_get_pcm(ahandler);
+    if (!cb_handle)
+        return;
+
+    if (pthread_mutex_trylock(&pcm_mtx) != 0)
+        return;
+
+    pcm_pump_locked(cb_handle);
     pthread_mutex_unlock(&pcm_mtx);
 }
 
@@ -532,14 +567,19 @@ static void close_hwdev(void)
     logf("closedev (%p)", handle);
 
     if (handle) {
+#if defined(HIBY_LINUX)
+        hiby_pcm_stop_poll_thread();
+#endif
         snd_pcm_drain(handle);
 #ifdef AUDIOHW_MUTE_ON_STOP
         audiohw_mute(true);
 #endif
+#if !defined(HIBY_LINUX)
         if (ahandler) {
             snd_async_del_handler(ahandler);
             ahandler = NULL;
         }
+#endif
         snd_pcm_close(handle);
 
         handle = NULL;
@@ -561,9 +601,18 @@ static void alsadev_cleanup(void)
 static void open_hwdev(const char *device, snd_pcm_stream_t mode)
 {
     int err;
+#if defined(HIBY_LINUX)
+    if (!device || !*device)
+        panicf("%s(): Invalid empty ALSA device", __func__);
+#endif
 
     logf("opendev %s (%p)", device, handle);
-
+#if defined(HIBY_LINUX)
+    if (hiby_pcm_keep_hwdev(device, mode))
+    {
+        return;
+    }
+#else
     if (handle && device == current_alsa_device
 #ifdef HAVE_RECORDING
         && current_alsa_mode == mode
@@ -572,7 +621,7 @@ static void open_hwdev(const char *device, snd_pcm_stream_t mode)
     {
         return;
     }
-
+#endif
     /* Close old handle */
     close_hwdev();
 
@@ -581,7 +630,9 @@ static void open_hwdev(const char *device, snd_pcm_stream_t mode)
         panicf("%s(): Cannot open device %s: %s", __func__, device, snd_strerror(err));
     }
     last_sample_rate = 0;
-
+#if defined(HIBY_LINUX)
+    hiby_pcm_start_poll_thread();
+#else
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
@@ -615,6 +666,7 @@ static void open_hwdev(const char *device, snd_pcm_stream_t mode)
     {
         panicf("Unable to install alternative signal stack: %s", strerror(err));
     }
+#endif
 
 #ifdef HAVE_RECORDING
     current_alsa_mode = mode;
