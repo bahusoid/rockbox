@@ -23,7 +23,7 @@
 #include <string.h>
 #include <ucontext.h>
 #include <backtrace.h>
-#include <sys/reboot.h>
+
 #include "system.h"
 #include "mv.h"
 #include "font.h"
@@ -93,11 +93,6 @@ void power_off(void)
 {
     backlight_hw_on();
     sync();
-
-    /* Try direct kernel syscall first (no memory overhead) */
-    reboot(RB_POWER_OFF);
-
-    /* If we get here, reboot failed (shouldn't happen). Keep system call for compatibility */
     system("/sbin/poweroff");
     while (1) {
         // Make sure we're not throttling the cpu
