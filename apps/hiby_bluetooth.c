@@ -27,14 +27,14 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <unistd.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/un.h>
-#include <sys/stat.h>
+#include <signal.h>
+#include <sys/wait.h>
 
 #include "kernel.h"
 #include "audio.h"
+#include "action.h"
 #include "menu.h"
+#include "misc.h"
 #include "splash.h"
 #include "gui/list.h"
 #include "pcm-alsa.h"
@@ -43,17 +43,17 @@
  * target-specific PCM implementation. */
 int pcm_alsa_switch_playback_device(const char *device);
 void hiby_pcm_set_bt_mac(const char *mac);
+static bool bt_ctl_run(const char *subcmd, const char *mac, const char *success_str);
+static bool bt_get_active_mac(char *mac_out, size_t mac_out_len);
 
 #define BT_MAX_DEVICES 32
 #define BT_NAME_LEN 80
 #define BT_LOCAL_PLAYBACK_DEVICE "plughw:0,0"
-#define BT_SYS_SOCKET "/var/run/sys_server"
-#define BT_LIST_FILE "/data/bt_list.txt"
-#define BT_SCAN_FILE "/data/bt_scan.txt"
-#define BT_SYS_REPLY_MAX 128
 #define BT_DEVICE_PICK_CANCEL (-1)
 #define BT_DEVICE_PICK_SCAN (-2)
 #define BT_SCAN_MENU_LABEL "Scan for new devices"
+#define BT_MAX_CODECS 8
+#define BT_CODEC_NAME_LEN 16
 
 struct bt_device
 {
@@ -66,7 +66,12 @@ struct bt_device_menu_data
 {
     struct bt_device *devices;
     int count;
-    bool include_scan_item;
+};
+
+struct bt_strlist_data
+{
+    char (*items)[BT_CODEC_NAME_LEN];
+    int count;
 };
 
 static char bt_selected_mac[18];
@@ -75,16 +80,78 @@ static char bt_bt_playback_dev[2][96];
 static unsigned int bt_bt_playback_dev_next = 0;
 static char bt_active_codec[16];
 
-static const char *bt_codec_preference[] = {
-    "LDAC", "aptX-HD", "aptX", "SBC", NULL
-};
-
 static bool bt_wait_for_bluealsa_pcm(const char *mac, int timeout_ticks);
-static void bt_select_best_codec(const char *mac);
+static void bt_set_active_codec(const char *mac);
 static bool bt_bluealsa_pcm_ready(const char *mac);
 static bool bt_is_connected(const char *mac);
 static bool bt_prepare_stack(void);
 static void bt_connect_device(const struct bt_device *device);
+static void bt_disconnect(void);
+
+/* Like popen(cmd, mode) but also returns the child PID.
+ * Caller must pclose() the FILE and waitpid() the pid when done. */
+static FILE *popen_pid(const char *cmd, const char *mode, pid_t *out_pid)
+{
+    int pipefd[2];
+    pid_t pid;
+    FILE *fp;
+    int is_write = (mode[0] == 'w');
+
+    if (pipe(pipefd) < 0)
+        return NULL;
+
+    pid = fork();
+    if (pid < 0)
+    {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return NULL;
+    }
+
+    if (pid == 0)
+    {
+        if (is_write)
+        {
+            dup2(pipefd[0], STDIN_FILENO);
+        }
+        else
+        {
+            dup2(pipefd[1], STDOUT_FILENO);
+            dup2(pipefd[1], STDERR_FILENO);
+        }
+        close(pipefd[0]);
+        close(pipefd[1]);
+        execl("/bin/sh", "sh", "-c", cmd, NULL);
+        _exit(127);
+    }
+
+    if (is_write)
+    {
+        close(pipefd[0]);
+        fp = fdopen(pipefd[1], "w");
+    }
+    else
+    {
+        close(pipefd[1]);
+        fp = fdopen(pipefd[0], "r");
+    }
+
+    if (!fp)
+    {
+        close(is_write ? pipefd[1] : pipefd[0]);
+        waitpid(pid, NULL, 0);
+        return NULL;
+    }
+
+    *out_pid = pid;
+    return fp;
+}
+
+static void pclose_pid(FILE *fp, pid_t pid)
+{
+    fclose(fp);
+    waitpid(pid, NULL, 0);
+}
 
 static const char *bt_make_bt_playback_dev(const char *mac)
 {
@@ -101,6 +168,28 @@ static int bt_simplelist_ok_cancel(int action, struct gui_synclist *lists)
     (void)lists;
     if (action == ACTION_STD_OK)
         return ACTION_STD_CANCEL;
+    return action;
+}
+static int bt_devicelist_callback(int action, struct gui_synclist *lists)
+{
+    (void)lists;
+    if (action == ACTION_STD_OK)
+        return ACTION_STD_CANCEL;
+    if (action == ACTION_STD_CONTEXT)
+    {
+        struct bt_device_menu_data* ctx = lists->data;
+        struct bt_device bt_device = ctx->devices[lists->selected_item - 1];
+        if (bt_device.paired && confirm_delete_yesno(bt_device.name) == 0)
+        {
+            if (*bt_active_codec && strcmp(bt_selected_mac, bt_device.mac) == 0)
+                bt_disconnect();
+
+            bt_ctl_run("remove", bt_device.mac, NULL);
+            bt_device.paired = false;
+            return ACTION_REDRAW;
+        }
+    }
+
     return action;
 }
 
@@ -121,27 +210,36 @@ static const char *bt_device_name_cb(int selected_item, void *data,
     char *buffer, size_t buffer_len)
 {
     struct bt_device_menu_data *ctx = data;
-
-    if (ctx->include_scan_item)
+    if (selected_item == 0)
     {
-        if (selected_item == 0)
-        {
-            snprintf(buffer, buffer_len, "%s", BT_SCAN_MENU_LABEL);
-            return buffer;
-        }
-        selected_item--;
+        snprintf(buffer, buffer_len, "%s", BT_SCAN_MENU_LABEL);
+        return buffer;
     }
-
+    selected_item--;
     if (selected_item < 0 || selected_item >= ctx->count)
     {
         buffer[0] = '\0';
         return buffer;
     }
 
-    snprintf(buffer, buffer_len, "%s (%s)%s",
+    snprintf(buffer, buffer_len, "%s%s (%s)",
+    ctx->devices[selected_item].paired ? " [P]" : "",
         ctx->devices[selected_item].name,
-        ctx->devices[selected_item].mac,
-        ctx->devices[selected_item].paired ? " [Paired]" : "");
+        ctx->devices[selected_item].mac
+        );
+    return buffer;
+}
+
+static const char *bt_strlist_name_cb(int selected_item, void *data,
+    char *buffer, size_t buffer_len)
+{
+    struct bt_strlist_data *ctx = data;
+    if (selected_item < 0 || selected_item >= ctx->count)
+    {
+        buffer[0] = '\0';
+        return buffer;
+    }
+    snprintf(buffer, buffer_len, "%s", ctx->items[selected_item]);
     return buffer;
 }
 
@@ -264,357 +362,159 @@ static int bt_device_sort_cmp(const void *a, const void *b)
     return strcasecmp(da->name, db->name);
 }
 
-static int bt_sys_command(const char *command, char *reply, size_t reply_size)
+/* Run "bluetoothctl <subcmd> <mac>" and return true if success_str appears in output.
+ * Pass NULL for success_str to skip output checking. */
+static bool bt_ctl_run(const char *subcmd, const char *mac, const char *success_str)
 {
-    struct sockaddr_un addr;
-    struct timeval tv_send = { .tv_sec = 1, .tv_usec = 0 };
-    struct timeval tv_recv = { .tv_sec = 2, .tv_usec = 0 };
-    int fd = -1;
-    ssize_t n;
-
-    if (!command || !command[0])
-        return -1;
-
-    if (reply && reply_size > 0)
-        reply[0] = '\0';
-
-    fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0)
-        return -1;
-
-    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv_send, sizeof(tv_send));
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv_recv, sizeof(tv_recv));
-
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", BT_SYS_SOCKET);
-
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
-    {
-        close(fd);
-        return -1;
-    }
-
-    if (send(fd, command, strlen(command), 0) < 0)
-    {
-        close(fd);
-        return -1;
-    }
-
-    if (reply && reply_size > 1)
-    {
-        n = recv(fd, reply, reply_size - 1, 0);
-        if (n < 0)
-        {
-            close(fd);
-            return -1;
-        }
-
-        reply[n] = '\0';
-        bt_trim(reply);
-    }
-
-    close(fd);
-    return 0;
-}
-
-static bool bt_sys_reply_ok(const char *reply, const char *command_prefix)
-{
-    char ok_reply[48];
-    char wait_reply[48];
-
-    if (!reply || !reply[0])
-        return false;
-
-    if (!strcasecmp(reply, "OK") || !strcasecmp(reply, "WAITINIT"))
-        return true;
-
-    if (strstr(reply, "FAIL"))
-        return false;
-
-    if (!command_prefix || !command_prefix[0])
-        return false;
-
-    snprintf(ok_reply, sizeof(ok_reply), "%s:OK", command_prefix);
-    snprintf(wait_reply, sizeof(wait_reply), "%s:WAITINIT", command_prefix);
-
-    if (strstr(reply, ok_reply))
-        return true;
-    if (strstr(reply, wait_reply))
-        return true;
-
-    return false;
-}
-
-static bool bt_json_get_string_value(const char *line, const char *key,
-                                     char *out, size_t out_len)
-{
-    const char *start;
-    const char *colon;
-    const char *q1;
-    const char *q2;
-    size_t len;
-
-    if (!line || !key || !out || out_len == 0)
-        return false;
-
-    start = strstr(line, key);
-    if (!start)
-        return false;
-
-    colon = strchr(start, ':');
-    if (!colon)
-        return false;
-
-    q1 = strchr(colon, '"');
-    if (!q1)
-        return false;
-    q1++;
-
-    q2 = strchr(q1, '"');
-    if (!q2)
-        return false;
-
-    len = (size_t)(q2 - q1);
-    if (len >= out_len)
-        len = out_len - 1;
-    memcpy(out, q1, len);
-    out[len] = '\0';
-    return true;
-}
-
-static bool bt_json_get_int_value(const char *line, const char *key, int *value)
-{
-    const char *start;
-    const char *colon;
-    const char *p;
-
-    if (!line || !key || !value)
-        return false;
-
-    start = strstr(line, key);
-    if (!start)
-        return false;
-
-    colon = strchr(start, ':');
-    if (!colon)
-        return false;
-
-    p = colon + 1;
-    while (*p == ' ' || *p == '\t')
-        p++;
-
-    if (!isdigit((unsigned char)*p) && *p != '-')
-        return false;
-
-    *value = atoi(p);
-    return true;
-}
-
-static bool bt_get_file_stamp(const char *path, long *mtime, long *size)
-{
-    struct stat st;
-
-    if (!path || !mtime || !size)
-        return false;
-
-    if (stat(path, &st) < 0)
-        return false;
-
-    *mtime = (long)st.st_mtime;
-    *size = (long)st.st_size;
-    return true;
-}
-
-static int bt_load_devices_from_json_file(const char *path,
-                                          struct bt_device *devices,
-                                          int max_devices,
-                                          bool *ready)
-{
+    char cmd[128];
+    char line[256];
+    bool success = false;
     FILE *fp;
-    char line[512];
-    char mac[18] = "";
-    char name[BT_NAME_LEN] = "";
-    int paired = 0;
-    int count = 0;
-    bool has_device_key = false;
 
-    if (ready)
-        *ready = false;
-
-    fp = fopen(path, "r");
+    snprintf(cmd, sizeof(cmd), "bluetoothctl %s %s 2>&1", subcmd, mac);
+    fp = popen(cmd, "r");
     if (!fp)
-        return 0;
+        return false;
 
     while (fgets(line, sizeof(line), fp))
     {
-        if (strstr(line, "\"DEVICE\""))
-            has_device_key = true;
-
-        if (strstr(line, "\"MAC\""))
-            bt_extract_mac_from_line(line, mac, sizeof(mac));
-
-        if (bt_json_get_string_value(line, "\"Name\"", name, sizeof(name)))
-            bt_trim(name);
-
-        bt_json_get_int_value(line, "\"Paired\"", &paired);
-
-        if (mac[0] && strchr(line, '}'))
-        {
-            count = bt_add_device_unique_ex(devices, count, max_devices,
-                                            mac, name, paired != 0);
-            mac[0] = '\0';
-            name[0] = '\0';
-            paired = 0;
-        }
+        if (success_str && strstr(line, success_str))
+            success = true;
     }
 
-    fclose(fp);
-
-    if (ready)
-        *ready = has_device_key;
-
-    return count;
+    pclose(fp);
+    return success;
 }
 
-static int bt_load_devices_from_bt_list_file(struct bt_device *devices, int max_devices,
-                                             bool *ready)
+/* Run "bluetoothctl <subcmd> <mac>" and return true if success_str appears in output.
+ * Pass NULL for success_str to skip output checking. */
+static void bt_sigalrm(int sig) { (void)sig; }
+static bool bt_ctl_run_fork(const char *subcmd, const char *mac, const char *success_str)
 {
-    return bt_load_devices_from_json_file(BT_LIST_FILE, devices, max_devices, ready);
-}
+    char grep_arg[128];
+    char cmd[256];
+    pid_t pid;
 
-static int bt_merge_devices_from_bt_scan_file(struct bt_device *devices, int count,
-                                              int max_devices, bool *ready)
-{
-    static struct bt_device scanned[BT_MAX_DEVICES];
-    int scanned_count;
-    int i;
+    if (success_str)
+        snprintf(grep_arg, sizeof(grep_arg), "| grep -q '%s'", success_str);
+    else
+        grep_arg[0] = '\0';
 
-    scanned_count = bt_load_devices_from_json_file(BT_SCAN_FILE, scanned,
-                                                   BT_MAX_DEVICES, ready);
-    for (i = 0; i < scanned_count; i++)
+    snprintf(cmd, sizeof(cmd), "bluetoothctl %s %s 2>&1 %s", subcmd, mac, grep_arg);
+
+    pid = fork();
+    if (pid == 0) { execl("/bin/sh", "sh", "-c", cmd, NULL); _exit(127); }
+    if (pid < 0) return false;
+
+    int status;
+    signal(SIGALRM, bt_sigalrm);
+    alarm(15);
+    bool timed_out = waitpid(pid, &status, 0) < 0;
+    alarm(0);
+    signal(SIGALRM, SIG_DFL);
+
+    if (timed_out)
     {
-        count = bt_add_device_unique_ex(devices, count, max_devices,
-                                        scanned[i].mac, scanned[i].name,
-                                        scanned[i].paired);
+        kill(pid, SIGTERM);
+        waitpid(pid, NULL, 0);
+        return false;
     }
 
-    return count;
+    return success_str ? (WIFEXITED(status) && WEXITSTATUS(status) == 0) : true;
 }
 
-static int bt_load_devices_via_sys_list(struct bt_device *devices, int max_devices)
+/* Parse "Device XX:XX:XX:XX:XX:XX Name" lines from a bluetoothctl command. */
+static int  bt_parse_ctl_devices(const char *ctl_cmd, struct bt_device *devices,
+                                 int count, int max_devices, bool paired)
 {
-    char reply[BT_SYS_REPLY_MAX];
-    long old_mtime = 0;
-    long old_size = 0;
-    bool had_old_stamp = false;
-    bool ready = false;
-    bool changed = false;
-    int count = 0;
-    int waited = 0;
+    FILE *fp;
+    char line[256];
 
-    had_old_stamp = bt_get_file_stamp(BT_LIST_FILE, &old_mtime, &old_size);
-    if (bt_sys_command("BT:LIST", reply, sizeof(reply)) < 0)
-        return 0;
-
-    while (waited < HZ * 3)
-    {
-        long mtime = 0;
-        long size = 0;
-
-        count = bt_load_devices_from_bt_list_file(devices, max_devices, &ready);
-
-        if (bt_get_file_stamp(BT_LIST_FILE, &mtime, &size))
-        {
-            if (!had_old_stamp || mtime != old_mtime || size != old_size)
-                changed = true;
-        }
-
-        if (ready && (changed || waited >= HZ))
-            break;
-
-        sleep(HZ / 5);
-        waited += HZ / 5;
-    }
-
-    if (count > 1)
-        qsort(devices, count, sizeof(devices[0]), bt_device_sort_cmp);
-    return count;
-}
-
-static int bt_scan_and_merge_devices(struct bt_device *devices, int count, int max_devices)
-{
-    char reply[BT_SYS_REPLY_MAX];
-    long old_mtime = 0;
-    long old_size = 0;
-    bool had_old_stamp;
-    bool changed = false;
-    bool ready = false;
-    int waited = 0;
-    int post_waited = 0;
-
-    had_old_stamp = bt_get_file_stamp(BT_SCAN_FILE, &old_mtime, &old_size);
-
-    if (bt_sys_command("BT:SCAN", reply, sizeof(reply)) < 0 ||
-        !bt_sys_reply_ok(reply, "BT:SCAN"))
+    fp = popen(ctl_cmd, "r");
+    if (!fp)
         return count;
 
-    while (waited < HZ * 8)
+    while (fgets(line, sizeof(line), fp))
     {
-        long mtime = 0;
-        long size = 0;
+        const char *p = line;
+        char mac[18] = "";
+        char name[BT_NAME_LEN] = "";
 
-        if (bt_get_file_stamp(BT_SCAN_FILE, &mtime, &size))
-        {
-            if (!had_old_stamp || mtime != old_mtime || size != old_size)
-            {
-                changed = true;
-                break;
-            }
-        }
+        /* Strip leading junk (bluetoothctl can emit color codes / prompts) */
+        while (*p && *p != 'D') p++;
+        if (strncmp(p, "Device ", 7) != 0)
+            continue;
 
-        sleep(HZ / 5);
-        waited += HZ / 5;
+        p += 7;
+        if (strlen(p) < 17 || p[2] != ':' || p[5] != ':')
+            continue;
+
+        memcpy(mac, p, 17);
+        mac[17] = '\0';
+        p += 18;
+        snprintf(name, sizeof(name), "%s", p);
+        bt_trim(name);
+
+        count = bt_add_device_unique_ex(devices, count, max_devices, mac, name, paired);
     }
 
-    bt_sys_command("BT:CANCEL_SCAN", reply, sizeof(reply));
+    pclose(fp);
+    return count;
+}
 
-    while (post_waited < HZ * 3)
-    {
-        long mtime = 0;
-        long size = 0;
-
-        if (bt_get_file_stamp(BT_SCAN_FILE, &mtime, &size))
-        {
-            if (!had_old_stamp || mtime != old_mtime || size != old_size)
-                changed = true;
-            if (changed)
-            {
-                count = bt_merge_devices_from_bt_scan_file(devices, count,
-                                                           max_devices, &ready);
-                if (ready)
-                    break;
-            }
-        }
-
-        sleep(HZ / 5);
-        post_waited += HZ / 5;
-    }
-
-    if (!changed)
-        count = bt_merge_devices_from_bt_scan_file(devices, count, max_devices, NULL);
-
+/* Load paired devices instantly via bluetoothctl paired-devices. */
+static int bt_load_devices_via_bluetoothctl(struct bt_device *devices, int max_devices)
+{
+    int count = bt_parse_ctl_devices("bluetoothctl paired-devices 2>/dev/null",
+                                     devices, 0, max_devices, true);
+    count = bt_parse_ctl_devices("bluetoothctl devices 2>/dev/null",
+                             devices, count, max_devices, false);
     if (count > 1)
         qsort(devices, count, sizeof(devices[0]), bt_device_sort_cmp);
     return count;
 }
 
-static int bt_choose_device(const char *title, struct bt_device *devices, int count,
-                            bool include_scan_item)
+static int bt_scan_devices(struct bt_device *devices, int count, int max_devices)
+{
+    int waited = 0;
+    int action;
+    FILE *fp;
+
+    fp = popen("bluetoothctl", "w");
+    if (!fp)
+        return count;
+
+    fprintf(fp, "scan on\n");
+    fflush(fp);
+
+    const int timeout = 15;
+    while (waited < timeout)
+    {
+        splashf(0, "Scanning for %d/%d secs... Press any key to stop", waited, timeout);
+        action = get_action(CONTEXT_STD, HZ);
+        if (action != ACTION_NONE)
+            break;
+        waited++;
+    }
+
+    fprintf(fp, "scan off\n");
+    fflush(fp);
+    fprintf(fp, "exit\n");
+    fflush(fp);
+    pclose(fp);
+
+    count = bt_parse_ctl_devices("bluetoothctl devices 2>/dev/null",
+                                 devices, count, max_devices, false);
+    if (count > 1)
+        qsort(devices, count, sizeof(devices[0]), bt_device_sort_cmp);
+    return count;
+}
+
+static int bt_choose_device(const char *title, struct bt_device *devices, int count)
 {
     struct bt_device_menu_data data;
     struct simplelist_info info;
-    int total_count = count + (include_scan_item ? 1 : 0);
+    int total_count = count + 1;
 
     if (total_count <= 0)
     {
@@ -624,11 +524,10 @@ static int bt_choose_device(const char *title, struct bt_device *devices, int co
 
     data.devices = devices;
     data.count = count;
-    data.include_scan_item = include_scan_item;
 
     simplelist_info_init(&info, (char *)title, total_count, &data);
     info.get_name = bt_device_name_cb;
-    info.action_callback = bt_simplelist_ok_cancel;
+    info.action_callback = bt_devicelist_callback;
     info.selection = -1;
     info.title_icon = Icon_Submenu;
 
@@ -636,10 +535,10 @@ static int bt_choose_device(const char *title, struct bt_device *devices, int co
     if (info.selection < 0 || info.selection >= total_count)
         return BT_DEVICE_PICK_CANCEL;
 
-    if (include_scan_item && info.selection == 0)
+    if (info.selection == 0)
         return BT_DEVICE_PICK_SCAN;
 
-    return include_scan_item ? info.selection - 1 : info.selection;
+    return info.selection - 1;
 }
 
 static void bt_set_selected_mac(const char *mac)
@@ -687,7 +586,7 @@ static bool bt_route_to_bluetooth(const char *mac)
         return false;
     }
 
-    bt_select_best_codec(mac);
+    bt_set_active_codec(mac);
     if (!bt_wait_for_bluealsa_pcm(mac, HZ * 3))
     {
         bt_route_to_local(false);
@@ -800,58 +699,75 @@ static bool bt_try_set_codec(const char *pcm_path, const char *codec)
     int rc;
 
     snprintf(cmd, sizeof(cmd),
-             "bluealsa-cli codec '%s' %s >/tmp/rb_bt_codec.log 2>&1",
+             "bluealsa-cli codec '%s' %s >/dev/null 2>&1",
              pcm_path, codec);
     rc = system(cmd);
     return (rc == 0);
 }
 
-static void bt_select_best_codec(const char *mac)
+static void bt_build_pcm_path(const char *mac, char *path, size_t path_len)
 {
     char mac_u[18];
+    bt_mac_to_underscore(mac, mac_u, sizeof(mac_u));
+    snprintf(path, path_len, "/org/bluealsa/hci0/dev_%s/a2dpsrc/sink", mac_u);
+}
+
+static void bt_set_active_codec(const char *mac)
+{
     char pcm_path[96];
-    int i;
+    char cmd[256];
+    char line[256];
+    FILE *fp;
 
     if (!mac || !*mac)
         return;
 
     bt_active_codec[0] = '\0';
-    bt_mac_to_underscore(mac, mac_u, sizeof(mac_u));
-    snprintf(pcm_path, sizeof(pcm_path),
-             "/org/bluealsa/hci0/dev_%s/a2dpsrc/sink", mac_u);
+    bt_build_pcm_path(mac, pcm_path, sizeof(pcm_path));
+    snprintf(cmd, sizeof(cmd), "bluealsa-cli codec '%s' 2>/dev/null", pcm_path);
+    fp = popen(cmd, "r");
+    if (!fp)
+        return;
 
-    for (i = 0; bt_codec_preference[i] != NULL; i++)
+    while (fgets(line, sizeof(line), fp))
     {
-        if (bt_try_set_codec(pcm_path, bt_codec_preference[i]))
+        if (strncmp(line, "Selected codec:", 15) == 0)
         {
-            snprintf(bt_active_codec, sizeof(bt_active_codec), "%s",
-                     bt_codec_preference[i]);
-            return;
+            const char *p = line + 15;
+            while (*p == ' ' || *p == '\t') p++;
+            snprintf(bt_active_codec, sizeof(bt_active_codec), "%s", p);
+            bt_trim(bt_active_codec);
+            break;
         }
     }
+
+    pclose(fp);
+}
+
+static bool bt_enable(void)
+{
+    FILE* fp;
+
+    //fp = popen("/usr/bin/bt_enable | grep 'Powered:'", "r");
+    fp = popen("bluetoothctl power on | grep 'power on succeeded'", "r");
+    if (!fp)
+        return false;
+
+    bool eof = fgetc(fp) == EOF;
+    pclose(fp);
+
+    return !eof;
 }
 
 static bool bt_prepare_stack(void)
 {
-    char reply[BT_SYS_REPLY_MAX];
-    int i;
+    if (bt_enable())
+        return true;
 
-    system("/usr/bin/bt_enable >/tmp/rb_bt_enable.log 2>&1");
-
-    for (i = 0; i < 12; i++)
-    {
-        reply[0] = '\0';
-        if (bt_sys_command("BT:LIST", reply, sizeof(reply)) == 0 &&
-            bt_sys_reply_ok(reply, "BT:LIST"))
-            return true;
-
-        reply[0] = '\0';
-        bt_sys_command("BT:ON", reply, sizeof(reply));
-
-        sleep(HZ / 5);
-    }
-
-    return false;
+    splash(0, "Bluetooth is suspended. Resuming may take some time...");
+    system("/usr/bin/bt_resume");
+    splash(0, "Done.");
+    return bt_enable();
 }
 
 static void bt_show_devices(void)
@@ -866,23 +782,16 @@ static void bt_show_devices(void)
         return;
     }
 
-    splash(0, "Loading devices...");
-    count = bt_load_devices_via_sys_list(devices, BT_MAX_DEVICES);
-    if (count <= 0)
-    {
-        splash(0, "Scanning...");
-        count = bt_scan_and_merge_devices(devices, count, BT_MAX_DEVICES);
-    }
+    count = bt_load_devices_via_bluetoothctl(devices, BT_MAX_DEVICES);
 
     while (1)
     {
-        idx = bt_choose_device("Devices", devices, count, true);
+        idx = bt_choose_device("Devices", devices, count);
         if (idx == BT_DEVICE_PICK_SCAN)
         {
-            splash(0, "Scanning...");
-            count = bt_scan_and_merge_devices(devices, count, BT_MAX_DEVICES);
+            count = bt_scan_devices(devices, count, BT_MAX_DEVICES);
             if (count <= 0)
-                splash(HZ, "No devices");
+                splash(HZ, "No devices found");
             continue;
         }
 
@@ -895,12 +804,6 @@ static void bt_show_devices(void)
 static void bt_connect_device(const struct bt_device *device)
 {
     const char *mac;
-    char cmd[96];
-    char reply[BT_SYS_REPLY_MAX];
-    int ctl_rc;
-    bool routed;
-    bool connect_reply_ok;
-    bool pair_reply_ok = true;
 
     if (!device || !device->mac[0])
         return;
@@ -916,24 +819,16 @@ static void bt_connect_device(const struct bt_device *device)
 
     if (!device->paired)
     {
-        snprintf(cmd, sizeof(cmd), "BT:PAIR:%s", mac);
-        ctl_rc = bt_sys_command(cmd, reply, sizeof(reply));
-        pair_reply_ok = (ctl_rc == 0) && bt_sys_reply_ok(reply, "BT:PAIR");
-        if (pair_reply_ok)
-            sleep(HZ / 2);
+        bt_ctl_run("trust", mac, NULL);
+        if (!bt_ctl_run("pair", mac, "Pairing successful"))
+        {
+            splash(HZ * 2, "BT pair failed");
+            return;
+        }
+        //sleep(HZ / 2);
     }
 
-    snprintf(cmd, sizeof(cmd), "BT:CONNECT:%s", mac);
-    ctl_rc = bt_sys_command(cmd, reply, sizeof(reply));
-    connect_reply_ok = (ctl_rc == 0) && bt_sys_reply_ok(reply, "BT:CONNECT");
-
-    if (!pair_reply_ok && !device->paired)
-    {
-        splash(HZ * 2, "BT pair failed");
-        return;
-    }
-
-    if (!connect_reply_ok)
+    if (!bt_ctl_run("connect", mac, "Connection successful"))
     {
         splash(HZ * 2, "BT connect failed");
         return;
@@ -941,19 +836,7 @@ static void bt_connect_device(const struct bt_device *device)
 
     bt_set_selected_mac(mac);
 
-    routed = bt_route_to_bluetooth(mac);
-    if (!routed)
-    {
-        snprintf(cmd, sizeof(cmd), "BT:CONNECT:%s", mac);
-        ctl_rc = bt_sys_command(cmd, reply, sizeof(reply));
-        if (ctl_rc == 0 && bt_sys_reply_ok(reply, "BT:CONNECT"))
-        {
-            sleep(HZ / 2);
-            routed = bt_route_to_bluetooth(mac);
-        }
-    }
-
-    if (routed)
+    if (bt_route_to_bluetooth(mac))
         splash(HZ, "BT connected");
     else
         splash(HZ * 2, "BT connected, no audio route");
@@ -963,7 +846,6 @@ static void bt_disconnect(void)
 {
     char mac[18];
     char cmd[96];
-    char reply[BT_SYS_REPLY_MAX];
 
     mac[0] = '\0';
     if (!bt_get_active_mac(mac, sizeof(mac)) && bt_selected_mac[0])
@@ -971,8 +853,8 @@ static void bt_disconnect(void)
 
     if (mac[0])
     {
-        snprintf(cmd, sizeof(cmd), "BT:DISCONNECT:%s", mac);
-        bt_sys_command(cmd, reply, sizeof(reply));
+        snprintf(cmd, sizeof(cmd), "bluetoothctl disconnect %s >/dev/null 2>&1", mac);
+        system(cmd);
     }
 
     bt_set_selected_mac(NULL);
@@ -981,40 +863,197 @@ static void bt_disconnect(void)
     splash(HZ, "Disconnected");
 }
 
+static bool bt_is_enabled(void)
+{
+    FILE *fp;
+    char line[64];
+    bool result = false;
+
+    fp = popen("bt-adapter -i 2>/dev/null | grep 'Powered:'", "r");
+    if (!fp)
+        return false;
+
+    if (fgets(line, sizeof(line), fp))
+        result = strstr(line, ": 1") != NULL;
+
+    pclose(fp);
+    return result;
+}
+
+static int bt_get_available_codecs(const char *mac,
+                                   char codecs[][BT_CODEC_NAME_LEN],
+                                   int max_codecs)
+{
+    char pcm_path[96];
+    char cmd[256];
+    char line[256];
+    FILE *fp;
+    int count = 0;
+
+    if (!mac || !*mac)
+        return 0;
+
+    bt_build_pcm_path(mac, pcm_path, sizeof(pcm_path));
+    snprintf(cmd, sizeof(cmd), "bluealsa-cli codec '%s' 2>/dev/null", pcm_path);
+    fp = popen(cmd, "r");
+    if (!fp)
+        return 0;
+
+    while (fgets(line, sizeof(line), fp))
+    {
+        if (strncmp(line, "Available codecs:", 17) == 0)
+        {
+            char *p = line + 17;
+            while (*p && count < max_codecs)
+            {
+                int i = 0;
+                while (*p == ' ' || *p == '\t') p++;
+                if (*p == '\0' || *p == '\n' || *p == '\r') break;
+                while (*p && *p != ' ' && *p != '\t' &&
+                       *p != '\n' && *p != '\r' &&
+                       i < BT_CODEC_NAME_LEN - 1)
+                    codecs[count][i++] = *p++;
+                codecs[count][i] = '\0';
+                if (i > 0)
+                    count++;
+            }
+            break;
+        }
+    }
+
+    pclose(fp);
+    return count;
+}
+
+static void bt_show_codec_picker(const char *mac)
+{
+    static char codecs[BT_MAX_CODECS][BT_CODEC_NAME_LEN];
+    struct bt_strlist_data data;
+    struct simplelist_info info;
+    char pcm_path[96];
+    int count;
+
+    count = bt_get_available_codecs(mac, codecs, BT_MAX_CODECS);
+    if (count <= 0)
+    {
+        splash(HZ, "No codecs available");
+        return;
+    }
+
+    data.items = codecs;
+    data.count = count;
+
+    simplelist_info_init(&info, "Select Codec", count, &data);
+    info.get_name = bt_strlist_name_cb;
+    info.action_callback = bt_simplelist_ok_cancel;
+    info.selection = -1;
+    info.title_icon = Icon_Submenu;
+
+    simplelist_show_list(&info);
+
+    if (info.selection >= 0 && info.selection < count)
+    {
+        bt_build_pcm_path(mac, pcm_path, sizeof(pcm_path));
+        if (bt_try_set_codec(pcm_path, codecs[info.selection]))
+        {
+            bt_route_to_bluetooth(mac);
+            splashf(HZ, "Codec: %s",
+                   bt_active_codec[0] ? bt_active_codec : codecs[info.selection]);
+        }
+        else
+            splash(HZ, "Codec change failed");
+    }
+}
+
 static void bt_show_status(void)
 {
     struct simplelist_info info;
     char active_mac[18];
+    bool bt_on = false;
+    int sel;
 
-    simplelist_info_init(&info, "Status", 0, NULL);
-    simplelist_reset_lines();
-
-    if (bt_get_active_mac(active_mac, sizeof(active_mac)))
+    // /* Auto-route to BT if headphone is connected but output is still local */
+    if (bt_get_active_mac(active_mac, sizeof(active_mac)) && strcmp(bt_playback_dev, BT_LOCAL_PLAYBACK_DEVICE) == 0)
     {
-        simplelist_addline("Device: Bluetooth");
-        simplelist_addline("MAC: %s", active_mac);
-        simplelist_addline("Connected: %s",
-                           bt_is_connected(active_mac) ? "Yes" : "No");
-        simplelist_addline("A2DP PCM: %s",
-                           bt_bluealsa_pcm_ready(active_mac) ? "Ready" : "Not ready");
-        simplelist_addline("Codec: %s",
-                           bt_active_codec[0] ? bt_active_codec : "Unknown");
-    }
-    else if (bt_selected_mac[0])
-    {
-        simplelist_addline("Device: Last selected");
-        simplelist_addline("MAC: %s", bt_selected_mac);
-        simplelist_addline("Connected: No");
-    }
-    else
-    {
-        simplelist_addline("Device: Local");
+        bt_route_to_bluetooth(active_mac);
     }
 
-    simplelist_addline("Output: %s", bt_playback_dev);
+    while (1)
+    {
+        int line_idx = 0;
+        int bt_toggle_line;
+        int codec_line = -1;
 
-    info.count = simplelist_get_line_count();
-    simplelist_show_list(&info);
+        active_mac[0] = '\0';
+
+        bt_on = bt_is_enabled();
+
+        simplelist_info_init(&info, "Status", 0, NULL);
+        info.action_callback = bt_simplelist_ok_cancel;
+        info.selection = -1;
+        simplelist_reset_lines();
+
+        simplelist_addline("Bluetooth: %s", bt_on ? "Enabled" : "Disabled");
+        bt_toggle_line = line_idx++;
+
+        if (bt_get_active_mac(active_mac, sizeof(active_mac)))
+        {
+            simplelist_addline("Device: Bluetooth");
+            line_idx++;
+            simplelist_addline("MAC: %s", active_mac);
+            line_idx++;
+            simplelist_addline("Connected: %s",
+                               bt_is_connected(active_mac) ? "Yes" : "No");
+            line_idx++;
+            simplelist_addline("A2DP PCM: %s",
+                               bt_bluealsa_pcm_ready(active_mac) ? "Ready" : "Not ready");
+            line_idx++;
+            simplelist_addline("Codec: %s",
+                               bt_active_codec[0] ? bt_active_codec : "Unknown");
+            codec_line = line_idx++;
+        }
+        else if (bt_selected_mac[0])
+        {
+            simplelist_addline("Device: Last selected");
+            line_idx++;
+            simplelist_addline("MAC: %s", bt_selected_mac);
+            line_idx++;
+            simplelist_addline("Connected: No");
+            line_idx++;
+        }
+        else
+        {
+            simplelist_addline("Device: Local");
+            line_idx++;
+        }
+
+        simplelist_addline("Output: %s", bt_playback_dev);
+        line_idx++;
+
+        info.count = simplelist_get_line_count();
+        simplelist_show_list(&info);
+
+        sel = info.selection;
+        if (sel < 0)
+            break;
+
+        if (sel == bt_toggle_line)
+        {
+            if (bt_on)
+            {
+                system("/usr/bin/bt_suspend");
+            }
+            else
+            {
+                bt_prepare_stack();
+            }
+        }
+        else if (sel == codec_line && active_mac[0])
+        {
+            bt_show_codec_picker(active_mac);
+        }
+        /* other lines: just re-show status */
+    }
 }
 
 int hiby_bluetooth_menu(void)
