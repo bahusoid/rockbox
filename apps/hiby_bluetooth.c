@@ -54,6 +54,8 @@ static bool bt_get_active_mac(char *mac_out, size_t mac_out_len);
 #define BT_SCAN_MENU_LABEL "Scan for new devices"
 #define BT_MAX_CODECS 8
 #define BT_CODEC_NAME_LEN 16
+const int BT_REMOTE_INPUT_IDX = 4;
+
 
 struct bt_device
 {
@@ -598,6 +600,7 @@ static bool bt_route_to_bluetooth(const char *mac)
     {
         hiby_pcm_set_bt_mac(mac);
         bt_kick_audio_if_playing();
+        button_add_input_device(BT_REMOTE_INPUT_IDX);
         return true;
     }
 
@@ -847,6 +850,7 @@ static void bt_disconnect(void)
     char mac[18];
     char cmd[96];
 
+    button_remove_input_device(BT_REMOTE_INPUT_IDX);
     mac[0] = '\0';
     if (!bt_get_active_mac(mac, sizeof(mac)) && bt_selected_mac[0])
         snprintf(mac, sizeof(mac), "%s", bt_selected_mac);
