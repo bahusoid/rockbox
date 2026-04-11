@@ -34,6 +34,7 @@
  *   /dev/input/event1: hyn_ts (touchscreen)
  *   /dev/input/event2: jz adc keyboard (play/volume+/volume-)
  *   /dev/input/event3: earpods_adc
+ *   /dev/input/event4: dynamic input (bluetooth avrcp remote control)
  */
 
 int button_map(int keycode)
@@ -62,6 +63,18 @@ int button_map(int keycode)
             return BUTTON_TOUCH;
 #endif
         }
+
+        //Map bluetooth buttons:
+        case KEY_PLAY:
+        case KEY_PLAYCD:
+        case KEY_PAUSECD:
+            return BUTTON_POWER;
+        case KEY_REWIND:
+        case KEY_PREVIOUSSONG:
+            return BUTTON_LEFT;
+        case KEY_FASTFORWARD:
+            return BUTTON_RIGHT;
+
         default:
             return 0;
     }
