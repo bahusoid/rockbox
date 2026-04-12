@@ -16987,3 +16987,62 @@
     usbdac: "USB ЦАП е активен"
   </voice>
 </phrase>
+<phrase>
+  id: LANG_ANNOUNCE_STATUS
+  desc: announnnce_status plugin
+  user: core
+  <source>
+    *: "Announce Status"
+  </source>
+  <dest>
+    *: "Съобщаване на състоянието"
+  </dest>
+  <voice>
+    *: "Съобщаване на състоянието"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_USE_LED_INDICATORS
+  desc: LED indicators setting
+  user: core
+  <source>
+    *: none
+    general_purpose_led: "Use LED indicators"
+  </source>
+  <dest>
+    *: none
+    general_purpose_led: "Използване на светодиодни индикатори"
+  </dest>
+  <voice>
+    *: none
+    general_purpose_led: "Използване на светодиодни индикатори"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_KEEP_DIRECTORY
+  desc: file browser setting
+  user: core
+  <source>
+    *: "Always remember last folder"
+  </source>
+  <dest>
+    *: "Винаги помни последната папка"
+  </dest>
+  <voice>
+    *: "Винаги помни последната папка"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_USB_MENU
+  desc: in settings_menu
+  user: core
+  <source>
+    *: "USB"
+  </source>
+  <dest>
+    *: "~USB"
+  </dest>
+  <voice>
+    *: "Ю Ес Би"
+  </voice>
+</phrase>
