@@ -54,6 +54,7 @@ static bool bt_get_active_mac(char *mac_out, size_t mac_out_len);
 #define BT_SCAN_MENU_LABEL "Scan for new devices"
 #define BT_MAX_CODECS 8
 #define BT_CODEC_NAME_LEN 16
+#define BOOT_SETTING_FILE ROCKBOX_DIR"/rb_bt_on.txt"
 const int BT_REMOTE_INPUT_IDX = 4;
 
 
@@ -770,6 +771,9 @@ static bool bt_prepare_stack(void)
     splash(0, "Bluetooth is suspended. Resuming may take some time...");
     system("/usr/bin/bt_resume");
     splash(0, "Done.");
+    int fd = open(BOOT_SETTING_FILE, O_RDWR | O_CREAT | O_TRUNC);
+    close(fd);
+
     return bt_enable();
 }
 
@@ -1046,6 +1050,7 @@ static void bt_show_status(void)
             if (bt_on)
             {
                 system("/usr/bin/bt_suspend");
+                remove(BOOT_SETTING_FILE);
             }
             else
             {
