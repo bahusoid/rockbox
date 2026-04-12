@@ -314,12 +314,13 @@ static int is_btn_prev(int btn)
 
 static enum boot_mode get_boot_mode(void)
 {
-    int skip_usb_boot = 0;
+    static int skip_usb_boot = 0;
     enum boot_mode init_mode = load_boot_mode(BOOT_CANARY);
     /* wait for user action */
     enum boot_mode mode = (init_mode == BOOT_CANARY) ? BOOT_ROCKBOX : init_mode;
     int last_activity = current_tick;
-    int timeout = last_activity + get_inactivity_tmo(init_mode == mode);
+    int same_as_last = init_mode == mode;
+    int timeout = last_activity + get_inactivity_tmo(same_as_last);
 #if defined(HAS_BUTTON_HOLD)
     bool hold_status = button_hold();
 #endif
@@ -379,6 +380,7 @@ static enum boot_mode get_boot_mode(void)
         {
             skip_usb_boot = true;
             last_activity = current_tick;
+            same_as_last = false;
         }
 #endif
         /* ignore release, allow repeat */
@@ -400,7 +402,7 @@ static enum boot_mode get_boot_mode(void)
         }
 
          /* on usb detect, immediately boot with last choice */
-        if (adb_running || (!skip_usb_boot && power_input_status() & POWER_INPUT_USB_CHARGER))
+        if (!skip_usb_boot && power_input_status() & POWER_INPUT_USB_CHARGER)
         {
 #ifdef CHARGE_WITH_OF
             return BOOT_OF;
@@ -412,7 +414,7 @@ static enum boot_mode get_boot_mode(void)
         }
 
         /* inactivity detection */
-        timeout = last_activity + get_inactivity_tmo(init_mode == mode);
+        timeout = last_activity + get_inactivity_tmo(same_as_last);
         if(TIME_AFTER(current_tick, timeout))
         {
             /* save last choice */
@@ -495,9 +497,9 @@ int choice_screen(const char *title, bool center, int nr_choices, const char *ch
             btn &= ~BUTTON_REPEAT;
 
         /* left/right/up/down: change mode */
-        if (is_btn_next(btn))
+        if (is_btn_prev(btn))
             choice = (choice + nr_choices - 1) % nr_choices;
-        if(btn == BUTTON_DOWN || btn == BUTTON_RIGHT)
+        if(is_btn_next(btn))
             choice = (choice + 1) % nr_choices;
         /* play -> stop loop and return mode */
         if (is_btn_ok(btn) || is_btn_back(btn))
