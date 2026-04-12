@@ -12281,7 +12281,7 @@
 </phrase>
 <phrase>
   id: LANG_USB_MODE
-  desc: in Settings -> General -> System -> USB Mode
+  desc: in Settings -> General -> System -> USB
   user: core
   <source>
     *: "USB Mode"
@@ -17141,5 +17141,19 @@
   </dest>
   <voice>
     *: "Reset Pitch"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_USB_MENU
+  desc: in settings_menu
+  user: core
+  <source>
+    *: "USB"
+  </source>
+  <dest>
+    *: "USB"
+  </dest>
+  <voice>
+    *: "U S B"
   </voice>
 </phrase>
