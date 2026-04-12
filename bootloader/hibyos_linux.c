@@ -238,6 +238,17 @@ static void mount_storage(int enable)
     }
     mounted = enable;
 }
+static bool is_rb_bluetooth_on(void)
+{
+    mount_storage(true);
+    int fd = open(BASE_DIR  "/.rockbox/rb_bt_on.txt", O_RDONLY);
+    if(fd >= 0)
+    {
+        close(fd);
+        return true;
+    }
+    return false;
+}
 
 /* we store the boot mode in a file so we can reload it between 'boots' */
 static enum boot_mode load_boot_mode(enum boot_mode mode)
@@ -740,7 +751,8 @@ int main(int argc, char **argv)
         {
 #if defined(HIBY_R3PROII) || defined(HIBY_R1)
             /* Suspend bluetooth as it's not currently supported */
-            system("/usr/bin/bt_suspend");
+            if (!is_rb_bluetooth_on())
+                system("/usr/bin/bt_suspend");
 #endif
             fflush(stdout);
             mount_storage(true);
