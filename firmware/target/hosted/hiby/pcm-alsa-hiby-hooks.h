@@ -20,22 +20,22 @@ static void pcm_pump_locked(snd_pcm_t *handle);
 
 static pthread_t hiby_pcm_poll_thread;
 static volatile bool hiby_pcm_poll_thread_stop = false;
-static bool hiby_pcm_poll_thread_running = false;
-static bool hiby_pcm_mutex_initialized = false;
+static volatile bool hiby_pcm_poll_thread_running = false;
+static pthread_once_t hiby_pcm_mutex_once = PTHREAD_ONCE_INIT;
 static unsigned int hiby_pcm_poll_interval_us = 10000;
 
-static void hiby_pcm_mutex_init_once(void)
+static void hiby_pcm_mutex_init(void)
 {
     pthread_mutexattr_t attr;
-
-    if (hiby_pcm_mutex_initialized)
-        return;
-
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
     pthread_mutex_init(&pcm_mtx, &attr);
     pthread_mutexattr_destroy(&attr);
-    hiby_pcm_mutex_initialized = true;
+}
+
+static void hiby_pcm_mutex_init_once(void)
+{
+    pthread_once(&hiby_pcm_mutex_once, hiby_pcm_mutex_init);
 }
 
 static bool hiby_pcm_bt_active(void)
@@ -91,6 +91,7 @@ static void hiby_pcm_stop_poll_thread(void)
     hiby_pcm_poll_thread_stop = true;
     pthread_join(hiby_pcm_poll_thread, NULL);
     hiby_pcm_poll_thread_running = false;
+    hiby_pcm_poll_thread_stop = false;
 }
 
 static void *hiby_pcm_poll_thread_fn(void *arg)
@@ -99,14 +100,14 @@ static void *hiby_pcm_poll_thread_fn(void *arg)
 
     while (!hiby_pcm_poll_thread_stop)
     {
-        if (handle && pthread_mutex_trylock(&pcm_mtx) == 0)
+        if (pthread_mutex_trylock(&pcm_mtx) == 0)
         {
-            pcm_pump_locked(handle);
+            if (handle)
+                pcm_pump_locked(handle);
             pthread_mutex_unlock(&pcm_mtx);
         }
         usleep(hiby_pcm_poll_interval_us);
     }
-
     return NULL;
 }
 
@@ -118,7 +119,6 @@ static void hiby_pcm_start_poll_thread(void)
     if (hiby_pcm_poll_thread_running)
         return;
 
-    hiby_pcm_poll_thread_stop = false;
     err = pthread_create(&hiby_pcm_poll_thread, NULL, hiby_pcm_poll_thread_fn, NULL);
     if (err == 0)
         hiby_pcm_poll_thread_running = true;
