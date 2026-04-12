@@ -2847,8 +2847,13 @@ static int exfat_free_direntries(struct bpb *fat_bpb, struct fat_file *file)
 
     dc_unlock_cache();
 
-    file->exfat_filesize      = 0;
-    file->e.exfat_nofat_chain = false;
+    /* Preserve exfat_filesize and exfat_nofat_chain: these describe the
+     * file's DATA allocation (cluster count & contiguous-chain flag) and are
+     * needed later by fat_remove(FAT_RM_DATA) to free the correct clusters.
+     * Clearing them here caused fat_remove to fall into free_cluster_chain()
+     * which follows FAT entries that were never written for nofat_chain files,
+     * potentially chasing stale data and freeing clusters belonging to other
+     * files/directories (data-loss bug). */
     file->dircluster          = 0;
     file->e.entry             = FAT_DIRSCAN_RW_VAL;
     file->e.entries           = 0;
