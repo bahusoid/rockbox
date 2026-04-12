@@ -567,9 +567,6 @@ static void close_hwdev(void)
     logf("closedev (%p)", handle);
 
     if (handle) {
-#if defined(HIBY_LINUX)
-        hiby_pcm_stop_poll_thread();
-#endif
         snd_pcm_drain(handle);
 #ifdef AUDIOHW_MUTE_ON_STOP
         audiohw_mute(true);
@@ -593,6 +590,9 @@ static void close_hwdev(void)
 
 static void alsadev_cleanup(void)
 {
+#if defined(HIBY_LINUX)
+    hiby_pcm_stop_poll_thread();
+#endif
     free(frames);
     frames = NULL;
     close_hwdev();
