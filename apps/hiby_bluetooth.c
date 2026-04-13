@@ -22,13 +22,8 @@
 
 #ifdef HIBY_LINUX
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+
 #include <ctype.h>
-#include <unistd.h>
-#include <signal.h>
-#include <sys/wait.h>
 
 #include "kernel.h"
 #include "audio.h"
@@ -90,71 +85,6 @@ static bool bt_is_connected(const char *mac);
 static bool bt_prepare_stack(void);
 static void bt_connect_device(const struct bt_device *device);
 static void bt_disconnect(void);
-
-/* Like popen(cmd, mode) but also returns the child PID.
- * Caller must pclose() the FILE and waitpid() the pid when done. */
-static FILE *popen_pid(const char *cmd, const char *mode, pid_t *out_pid)
-{
-    int pipefd[2];
-    pid_t pid;
-    FILE *fp;
-    int is_write = (mode[0] == 'w');
-
-    if (pipe(pipefd) < 0)
-        return NULL;
-
-    pid = fork();
-    if (pid < 0)
-    {
-        close(pipefd[0]);
-        close(pipefd[1]);
-        return NULL;
-    }
-
-    if (pid == 0)
-    {
-        if (is_write)
-        {
-            dup2(pipefd[0], STDIN_FILENO);
-        }
-        else
-        {
-            dup2(pipefd[1], STDOUT_FILENO);
-            dup2(pipefd[1], STDERR_FILENO);
-        }
-        close(pipefd[0]);
-        close(pipefd[1]);
-        execl("/bin/sh", "sh", "-c", cmd, NULL);
-        _exit(127);
-    }
-
-    if (is_write)
-    {
-        close(pipefd[0]);
-        fp = fdopen(pipefd[1], "w");
-    }
-    else
-    {
-        close(pipefd[1]);
-        fp = fdopen(pipefd[0], "r");
-    }
-
-    if (!fp)
-    {
-        close(is_write ? pipefd[1] : pipefd[0]);
-        waitpid(pid, NULL, 0);
-        return NULL;
-    }
-
-    *out_pid = pid;
-    return fp;
-}
-
-static void pclose_pid(FILE *fp, pid_t pid)
-{
-    fclose(fp);
-    waitpid(pid, NULL, 0);
-}
 
 static const char *bt_make_bt_playback_dev(const char *mac)
 {
@@ -387,43 +317,6 @@ static bool bt_ctl_run(const char *subcmd, const char *mac, const char *success_
 
     pclose(fp);
     return success;
-}
-
-/* Run "bluetoothctl <subcmd> <mac>" and return true if success_str appears in output.
- * Pass NULL for success_str to skip output checking. */
-static void bt_sigalrm(int sig) { (void)sig; }
-static bool bt_ctl_run_fork(const char *subcmd, const char *mac, const char *success_str)
-{
-    char grep_arg[128];
-    char cmd[256];
-    pid_t pid;
-
-    if (success_str)
-        snprintf(grep_arg, sizeof(grep_arg), "| grep -q '%s'", success_str);
-    else
-        grep_arg[0] = '\0';
-
-    snprintf(cmd, sizeof(cmd), "bluetoothctl %s %s 2>&1 %s", subcmd, mac, grep_arg);
-
-    pid = fork();
-    if (pid == 0) { execl("/bin/sh", "sh", "-c", cmd, NULL); _exit(127); }
-    if (pid < 0) return false;
-
-    int status;
-    signal(SIGALRM, bt_sigalrm);
-    alarm(15);
-    bool timed_out = waitpid(pid, &status, 0) < 0;
-    alarm(0);
-    signal(SIGALRM, SIG_DFL);
-
-    if (timed_out)
-    {
-        kill(pid, SIGTERM);
-        waitpid(pid, NULL, 0);
-        return false;
-    }
-
-    return success_str ? (WIFEXITED(status) && WEXITSTATUS(status) == 0) : true;
 }
 
 /* Parse "Device XX:XX:XX:XX:XX:XX Name" lines from a bluetoothctl command. */
