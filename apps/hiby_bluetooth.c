@@ -590,11 +590,6 @@ static bool bt_route_to_bluetooth(const char *mac)
     }
 
     bt_set_active_codec(mac);
-    if (!bt_wait_for_bluealsa_pcm(mac, HZ * 3))
-    {
-        bt_route_to_local(false);
-        return false;
-    }
 
     rc = pcm_alsa_switch_playback_device(bt_playback_dev);
     if (rc == 0)
