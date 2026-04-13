@@ -484,7 +484,9 @@ static bool bt_route_to_bluetooth(const char *mac)
 
     bt_set_active_codec(mac);
 
-    rc = pcm_alsa_switch_playback_device(bt_playback_dev);
+    rc = -1;
+    if (*bt_active_codec)
+        rc = pcm_alsa_switch_playback_device(bt_playback_dev);
     if (rc == 0)
     {
         hiby_pcm_set_bt_mac(mac);
@@ -847,11 +849,9 @@ static void bt_show_codec_picker(const char *mac)
     if (info.selection >= 0 && info.selection < count)
     {
         bt_build_pcm_path(mac, pcm_path, sizeof(pcm_path));
-        if (bt_try_set_codec(pcm_path, codecs[info.selection]))
+        if (bt_try_set_codec(pcm_path, codecs[info.selection]) && bt_route_to_bluetooth(mac))
         {
-            bt_route_to_bluetooth(mac);
-            splashf(HZ, "Codec: %s",
-                   bt_active_codec[0] ? bt_active_codec : codecs[info.selection]);
+            splashf(HZ, "Codec: %s", bt_active_codec );
         }
         else
             splash(HZ, "Codec change failed");
