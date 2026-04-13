@@ -977,8 +977,9 @@ static void bt_show_status(void)
     bool bt_on = false;
     int sel;
 
+    bt_on = bt_is_enabled();
     // /* Auto-route to BT if headphone is connected but output is still local */
-    if (bt_get_active_mac(active_mac, sizeof(active_mac)) && strcmp(bt_playback_dev, BT_LOCAL_PLAYBACK_DEVICE) == 0)
+    if (bt_on == 1 && bt_get_active_mac(active_mac, sizeof(active_mac)) && strcmp(bt_playback_dev, BT_LOCAL_PLAYBACK_DEVICE) == 0)
     {
         bt_route_to_bluetooth(active_mac);
     }
@@ -991,8 +992,6 @@ static void bt_show_status(void)
 
         active_mac[0] = '\0';
 
-        bt_on = bt_is_enabled();
-
         simplelist_info_init(&info, "Status", 0, NULL);
         info.action_callback = bt_simplelist_ok_cancel;
         info.selection = -1;
@@ -1001,7 +1000,7 @@ static void bt_show_status(void)
         simplelist_addline("Bluetooth: %s", bt_on ? "Enabled" : "Disabled");
         bt_toggle_line = line_idx++;
 
-        if (bt_get_active_mac(active_mac, sizeof(active_mac)))
+        if (bt_on && bt_get_active_mac(active_mac, sizeof(active_mac)))
         {
             simplelist_addline("Device: Bluetooth");
             line_idx++;
@@ -1009,9 +1008,6 @@ static void bt_show_status(void)
             line_idx++;
             simplelist_addline("Connected: %s",
                                bt_is_connected(active_mac) ? "Yes" : "No");
-            line_idx++;
-            simplelist_addline("A2DP PCM: %s",
-                               bt_bluealsa_pcm_ready(active_mac) ? "Ready" : "Not ready");
             line_idx++;
             simplelist_addline("Codec: %s",
                                bt_active_codec[0] ? bt_active_codec : "Unknown");
@@ -1046,12 +1042,14 @@ static void bt_show_status(void)
         {
             if (bt_on)
             {
+                button_remove_input_device(BT_REMOTE_INPUT_IDX);
                 system("/usr/bin/bt_suspend");
                 remove(BOOT_SETTING_FILE);
+                bt_on = false;
             }
             else
             {
-                bt_prepare_stack();
+                bt_on = bt_prepare_stack();
             }
         }
         else if (sel == codec_line && active_mac[0])
