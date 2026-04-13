@@ -752,15 +752,14 @@ static bool bt_enable(void)
 {
     FILE* fp;
 
-    //fp = popen("/usr/bin/bt_enable | grep 'Powered:'", "r");
-    fp = popen("bluetoothctl power on | grep 'power on succeeded'", "r");
-    if (!fp)
-        return false;
+    //fp = popen("/usr/bin/bt_enable | grep 'Powered: 1'", "r");
+    fp = popen("bluetoothctl power on | grep -q 'power on succeeded'", "r");
 
-    bool eof = fgetc(fp) == EOF;
-    pclose(fp);
+    if (fp && pclose(fp) == 0)
+        return true;
 
-    return !eof;
+    //splash(0, "FAILED TO POWER ON");
+    return false;
 }
 
 static bool bt_prepare_stack(void)
@@ -874,18 +873,16 @@ static void bt_disconnect(void)
 static bool bt_is_enabled(void)
 {
     FILE *fp;
-    char line[64];
-    bool result = false;
 
-    fp = popen("bt-adapter -i 2>/dev/null | grep 'Powered:'", "r");
-    if (!fp)
-        return false;
+    fp = popen("bluetoothctl show 2>/dev/null | grep -q 'Powered: yes'", "r");
+    //fp = popen("bt-adapter -i 2>/dev/null | grep 'Powered: 1'", "r");
 
-    if (fgets(line, sizeof(line), fp))
-        result = strstr(line, ": 1") != NULL;
-
-    pclose(fp);
-    return result;
+    if (fp && pclose(fp) == 0)
+    {
+        return true;
+    }
+    //splash(0,"NOT ENABLED!");
+    return false;
 }
 
 static int bt_get_available_codecs(const char *mac,
