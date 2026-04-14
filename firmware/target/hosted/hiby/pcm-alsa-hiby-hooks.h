@@ -15,6 +15,7 @@
 #include "pcm-alsa-hiby.h"
 
 static void open_hwdev(const char *device, snd_pcm_stream_t mode);
+static void close_hwdev(void);
 static void pcm_dma_apply_settings_nolock(void);
 static void pcm_pump_locked(snd_pcm_t *handle);
 
@@ -67,6 +68,12 @@ int pcm_alsa_switch_playback_device(const char *device)
     rc = (current_alsa_device == playback_dev) ? 0 : -1;
     pthread_mutex_unlock(&pcm_mtx);
     return rc;
+}
+
+void pcm_alsa_close_device(const char *device)
+{
+    if (playback_dev == device)
+        close_hwdev();
 }
 
 static bool hiby_pcm_keep_hwdev(const char *device, snd_pcm_stream_t mode)
