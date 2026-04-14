@@ -28,6 +28,7 @@
 #include "kernel.h"
 #include "audio.h"
 #include "action.h"
+#include "button-devinput.h"
 #include "menu.h"
 #include "misc.h"
 #include "splash.h"
@@ -37,6 +38,7 @@
 /* HiBy hosted build provides dynamic output routing helper in its
  * target-specific PCM implementation. */
 int pcm_alsa_switch_playback_device(const char *device);
+void pcm_alsa_close_device(const char *device);
 void hiby_pcm_set_bt_mac(const char *mac);
 static bool bt_ctl_run(const char *subcmd, const char *mac, const char *success_str);
 static bool bt_get_active_mac(char *mac_out, size_t mac_out_len);
@@ -86,13 +88,16 @@ static bool bt_prepare_stack(void);
 static void bt_connect_device(const struct bt_device *device);
 static void bt_disconnect(void);
 
-static const char *bt_make_bt_playback_dev(const char *mac)
+static const char *bt_make_bt_playback_dev(const char *mac, const char *codec)
 {
     char *route = bt_bt_playback_dev[bt_bt_playback_dev_next];
 
     bt_bt_playback_dev_next ^= 1;
+
+    char* codec_str = codec ? ",CODEC=": "";
+    codec = codec ? codec : "";
     snprintf(route, sizeof(bt_bt_playback_dev[0]),
-             "bluealsa:DEV=%s,PROFILE=a2dp", mac);
+             "bluealsa:DEV=%s,PROFILE=a2dp%s%s", mac, codec_str, codec);
     return route;
 }
 
@@ -467,14 +472,14 @@ static void bt_route_to_local(bool show_message)
         splash(HZ, "Output: Local");
 }
 
-static bool bt_route_to_bluetooth(const char *mac)
+static bool bt_route_to_bluetooth(const char *mac, const char* codec)
 {
     int rc;
 
     if (!mac || !mac[0])
         return false;
 
-    bt_playback_dev = bt_make_bt_playback_dev(mac);
+    bt_playback_dev = bt_make_bt_playback_dev(mac, codec);
 
     if (!bt_wait_for_bluealsa_pcm(mac, HZ * 6))
     {
@@ -482,7 +487,13 @@ static bool bt_route_to_bluetooth(const char *mac)
         return false;
     }
 
-    bt_set_active_codec(mac);
+    if (!codec)
+        bt_set_active_codec(mac);
+    else
+    {
+        //bt_set_active_codec hangs if called after codec switching. So just believe...
+        strcpy(bt_active_codec, codec);
+    }
 
     rc = -1;
     if (*bt_active_codec)
@@ -618,7 +629,8 @@ static void bt_set_active_codec(const char *mac)
 
     bt_active_codec[0] = '\0';
     bt_build_pcm_path(mac, pcm_path, sizeof(pcm_path));
-    snprintf(cmd, sizeof(cmd), "bluealsa-cli codec '%s' 2>/dev/null", pcm_path);
+    //snprintf(cmd, sizeof(cmd), "bluealsa-cli codec '%s' 2>/dev/null", pcm_path);
+    snprintf(cmd, sizeof(cmd), "bluealsa-cli info '%s' 2>/dev/null", pcm_path);
     fp = popen(cmd, "r");
     if (!fp)
         return;
@@ -732,7 +744,7 @@ static void bt_connect_device(const struct bt_device *device)
 
     bt_set_selected_mac(mac);
 
-    if (bt_route_to_bluetooth(mac))
+    if (bt_route_to_bluetooth(mac, NULL))
         splash(HZ, "BT connected");
     else
         splash(HZ * 2, "BT connected, no audio route");
@@ -848,13 +860,15 @@ static void bt_show_codec_picker(const char *mac)
 
     if (info.selection >= 0 && info.selection < count)
     {
-        bt_build_pcm_path(mac, pcm_path, sizeof(pcm_path));
-        if (bt_try_set_codec(pcm_path, codecs[info.selection]) && bt_route_to_bluetooth(mac))
+        //bt_build_pcm_path(mac, pcm_path, sizeof(pcm_path));
+        pcm_alsa_close_device(bt_playback_dev);
+        if (bt_route_to_bluetooth(mac, codecs[info.selection]))
         {
+            //bt_set_active_codec(mac);
             splashf(HZ, "Codec: %s", bt_active_codec );
         }
         else
-            splash(HZ, "Codec change failed");
+            splash(HZ, "Codec change failed.");
     }
 }
 
@@ -869,7 +883,7 @@ static void bt_show_status(void)
     // /* Auto-route to BT if headphone is connected but output is still local */
     if (bt_on == 1 && bt_get_active_mac(active_mac, sizeof(active_mac)) && strcmp(bt_playback_dev, BT_LOCAL_PLAYBACK_DEVICE) == 0)
     {
-        bt_route_to_bluetooth(active_mac);
+        bt_route_to_bluetooth(active_mac, NULL);
     }
 
     while (1)
@@ -931,6 +945,7 @@ static void bt_show_status(void)
             if (bt_on)
             {
                 button_remove_input_device(BT_REMOTE_INPUT_IDX);
+                bt_route_to_local(false);
                 system("/usr/bin/bt_suspend");
                 remove(BOOT_SETTING_FILE);
                 bt_on = false;
