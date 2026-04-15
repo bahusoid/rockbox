@@ -1,0 +1,51 @@
+name: Build convttf for Windows
+
+on: [workflow_dispatch, push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: convttf Windows
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install MinGW-w64
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mingw-w64
+
+    - name: Cache FreeType2 Windows build
+      id: cache-freetype
+      uses: actions/cache@v3
+      with:
+        path: freetype-win
+        key: freetype-mingw64-2.13.3
+
+    - name: Cross-compile FreeType2 for Windows
+      if: steps.cache-freetype.outputs.cache-hit != 'true'
+      run: |
+        wget -q https://download.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.gz
+        tar -xzf freetype-2.13.3.tar.gz
+        cd freetype-2.13.3
+        ./configure --host=x86_64-w64-mingw32 \
+          --prefix=$(pwd)/../freetype-win \
+          --without-bzip2 --without-png --without-harfbuzz --without-zlib
+        make -j
+        make install
+
+    - name: Build convttf.exe
+      run: |
+        x86_64-w64-mingw32-gcc -lm -std=c99 -O2 -Wall -static \
+          -I freetype-win/include \
+          -I freetype-win/include/freetype2 \
+          tools/convttf.c \
+          -L freetype-win/lib \
+          -lfreetype \
+          -o convttf.exe
+
+    - name: Upload convttf.exe artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: convttf-windows
+        path: convttf.exe
