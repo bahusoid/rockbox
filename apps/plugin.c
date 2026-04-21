@@ -49,6 +49,7 @@
 #include "core_keymap.h"
 #include "language.h"
 #include "statusbar-skinned.h"
+#include "panic.h"
 
 #if CONFIG_CHARGING
 #include "power.h"
@@ -890,6 +891,7 @@ static const struct plugin_api rockbox_api = {
     gui_synclist_scroll_stop,
     add_event_ex,
     remove_event_ex,
+    panicf,
 };
 
 static int plugin_buffer_handle;

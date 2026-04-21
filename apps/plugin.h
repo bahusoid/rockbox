@@ -1052,6 +1052,7 @@ struct plugin_api {
                                             void *event_data,
                                             void *user_data),
                             void *user_data);
+    void (*panicf)(const char *msg, ...);
 };
 
 /* plugin header */
