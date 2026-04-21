@@ -7,9 +7,7 @@
 *                     \/            \/     \/    \/            \/
 * $Id$
 *
-* Copyright (C) 2009 by Michael Sevakis
-*
-* Miscellaneous compiler support routines.
+* Copyright (C) 2026 by Aidan MacDonald
 *
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -20,45 +18,12 @@
 * KIND, either express or implied
 *
 ****************************************************************************/
-#include "plugin.h"
+#include "panic.h"
+#include <stdint.h>
 
-#if defined(ARM_NEED_DIV0)
-void __attribute__((naked)) __div0(void)
-{
-    asm volatile("bx %0" : : "r"(rb->__div0));
-}
-
-#if defined(CPU_ARM_MICRO)
-void __aeabi_idiv0(void) __attribute__((alias("__div0")));
-void __aeabi_ldiv0(void) __attribute__((alias("__div0")));
-#endif
-#endif
-
-#if defined(USE_STACK_PROTECTOR)
-const uint32_t __stack_chk_guard = 0x3BADC0DE;
+const uint32_t __stack_chk_guard = 0x1BADC0DE;
 
 void __stack_chk_fail(void)
 {
-    rb->panicf("plugin smashed stack");
-}
-#endif
-
-void *memcpy(void *dest, const void *src, size_t n)
-{
-    return rb->memcpy(dest, src, n);
-}
-
-void *memset(void *dest, int c, size_t n)
-{
-    return rb->memset(dest, c, n);
-}
-
-void *memmove(void *dest, const void *src, size_t n)
-{
-    return rb->memmove(dest, src, n);
-}
-
-int memcmp(const void *s1, const void *s2, size_t n)
-{
-    return rb->memcmp(s1, s2, n);
+    panicf("stack smashing detected");
 }

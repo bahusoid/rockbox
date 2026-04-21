@@ -24,3 +24,7 @@ lcd-as-memframe-24bit.c
 lcd-as-memframe.c
 #endif
 #endif
+
+#if defined(USE_STACK_PROTECTOR)
+stack-protector.c
+#endif
