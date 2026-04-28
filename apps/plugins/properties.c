@@ -187,7 +187,8 @@ static int browse_file_or_dir(struct dir_stats *stats)
             continue;
         switch(button)
         {
-            case ACTION_STD_OK:;
+            case ACTION_STD_OK:
+                rb->gui_synclist_scroll_stop(&properties_lists);
                 int sel_pos = rb->gui_synclist_get_sel_pos(&properties_lists);
 
                 /* "Show Track Info..." selected? */
@@ -197,17 +198,10 @@ static int browse_file_or_dir(struct dir_stats *stats)
                     return -1;
                 else
                 {
+                    const unsigned char* const *props = (props_type == PROPS_DIR) ?
+                                                        props_dir : props_file;
                     /* Display field in fullscreen */
-                    FOR_NB_SCREENS(i)
-                        rb->viewportmanager_theme_enable(i, false, NULL);
-                    if (props_type == PROPS_DIR)
-                        view_text((char *) p2str(props_dir[sel_pos]),
-                                  (char *)       props_dir[sel_pos + 1]);
-                    else
-                        view_text((char *) p2str(props_file[sel_pos]),
-                                  (char *)       props_file[sel_pos + 1]);
-                    FOR_NB_SCREENS(i)
-                        rb->viewportmanager_theme_undo(i, false);
+                    view_text((char *) p2str(props[sel_pos]), props[sel_pos + 1]);
 
                     rb->gui_synclist_set_title(&properties_lists,
                                rb->str(props_type == PROPS_DIR ?
