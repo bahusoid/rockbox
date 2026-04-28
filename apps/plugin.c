@@ -884,6 +884,9 @@ static const struct plugin_api rockbox_api = {
     gesture_flick_get_in_vp,
     gesture_flick_get,
 #endif
+    gui_synclist_scroll_stop,
+    add_event_ex,
+    remove_event_ex,
 };
 
 static int plugin_buffer_handle;
@@ -902,7 +905,10 @@ int plugin_load(const char* plugin, const void* parameter)
     const char *sepch = strrchr(plugin, PATH_SEPCH);
     bool theme_enabled = sepch && (!strcmp("properties.rock", sepch + 1) ||
                                    !strcmp("main_menu_config.rock", sepch + 1) ||
-                                   !strcmp("disktidy.rock", sepch + 1));
+                                   !strcmp("text_viewer.rock", sepch + 1) ||
+                                   !strcmp("view_text.rock", sepch + 1) ||
+                                   !strcmp("disktidy.rock", sepch + 1) ||
+                                   !strcmp("open_plugins.rock", sepch + 1));
 
     if (current_plugin_handle)
     {

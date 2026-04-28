@@ -1037,6 +1037,17 @@ struct plugin_api {
                                    const struct viewport *vp);
     int (*gesture_flick_get)(const struct gesture_event *gevt);
 #endif
+    void (*gui_synclist_scroll_stop)(struct gui_synclist *lists);
+    bool (*add_event_ex)(unsigned short id, bool oneshot,
+                         void (*handler)(unsigned short id,
+                                         void *event_data,
+                                         void *user_data),
+                         void *user_data);
+    void (*remove_event_ex)(unsigned short id,
+                            void (*handler)(unsigned short id,
+                                            void *event_data,
+                                            void *user_data),
+                            void *user_data);
 };
 
 /* plugin header */
