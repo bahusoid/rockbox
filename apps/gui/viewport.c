@@ -91,13 +91,12 @@ static void toggle_events(bool enable)
 #endif
 }
 
-static void set_clear_update_valid_vp(enum screen_type screen, struct viewport *vp)
+static void set_clear_valid_vp(enum screen_type screen, struct viewport *vp)
 {
     if (vp->width && vp->height)
     {
         screens[screen].set_viewport(vp);
         screens[screen].clear_viewport();
-        screens[screen].update_viewport();
     }
 }
 
@@ -134,21 +133,21 @@ static void toggle_theme(enum screen_type screen, bool force)
             deadspace.y = 0;
             deadspace.width = screens[screen].lcdwidth;
             deadspace.height = user.y;
-            set_clear_update_valid_vp(screen, &deadspace);
+            set_clear_valid_vp(screen, &deadspace);
             /* below */
             deadspace.y = user.y + user.height;
             deadspace.height = screens[screen].lcdheight - deadspace.y;
-            set_clear_update_valid_vp(screen, &deadspace);
+            set_clear_valid_vp(screen, &deadspace);
             /* left */
             deadspace.x = 0;
             deadspace.y = 0;
             deadspace.width = user.x;
             deadspace.height = screens[screen].lcdheight;
-            set_clear_update_valid_vp(screen, &deadspace);
+            set_clear_valid_vp(screen, &deadspace);
             /* below */
             deadspace.x = user.x + user.width;
             deadspace.width = screens[screen].lcdwidth - deadspace.x;
-            set_clear_update_valid_vp(screen, &deadspace);
+            set_clear_valid_vp(screen, &deadspace);
 
             screens[screen].set_viewport(last_vp);
         }
