@@ -6,15 +6,6 @@
 #                     \/            \/     \/    \/            \/
 # $Id$
 #
-# Patched by rockbox-hiby-r1-bt:
-#   mkdepfile now uses GNU Make $(file) to write source paths to a response
-#   file, then passes "@rspfile" to multigcc.pl.  This avoids the
-#   "Argument list too long" ARG_MAX error that occurs on GitHub Actions
-#   runners where every source path is ~90+ chars and there are hundreds of
-#   files.
-#
-#   Requires: GNU Make >= 4.0 (runner uses 4.3), multigcc.pl from the
-#   companion overlay (which understands @FILE response-file arguments).
 
 # preprocess - run preprocessor on a file and return the result as a string
 #
@@ -37,7 +28,7 @@ preprocess2file = $(shell $(CC) $(PPCFLAGS) $(3) -E -P -x c -include config.h $(
 		grep -v '^$(_hash_)' | grep -v "^$$" > $(2))
 
 asmdefs2file = $(SILENT)$(CC) $(PPCFLAGS) $(3) -S -x c -o - -include config.h $(1) | \
-	perl -ne 'if(/^_?AD_(\w+):$/){$$var=$$1}else{/^\W\.(?:word|long)\W(.*)$/ && $$var && print "\#define $$var $$1\n";$$var=0}' > $(2)
+	perl -ne 'if(/^_?AD_(\w+):$$/){$$var=$$1}else{/^\W\.(?:word|long)\W(.*)$$/ && $$var && print "\#define $$var $$1\n";$$var=0}' > $(2)
 
 c2obj = $(addsuffix .o,$(basename $(call full_path_subst,$(ROOTDIR)/%,$(BUILDDIR)/%,$(1))))
 
@@ -47,43 +38,32 @@ a2lnk = $(patsubst lib%.a,-l%,$(notdir $(1)))
 # handles the $(1) == $(2) case too
 ifndef APP_TYPE
 objcopy = $(OC) $(if $(filter yes, $(USE_ELF)), -S -x, -O binary) $(1) $(2)	# objcopy native
-objcopy_plugin = $(OC) $(if $(filter yes, $(PLUGIN_USE_ELF)), -S -x, -O binary) $(1) $(2)
 else ifneq (,$(findstring sdl-sim,$(APP_TYPE)))
 objcopy = cp $(1) $(1).tmp;mv -f $(1).tmp $(2)		# objcopy simulator
-objcopy_plugin = $(objcopy)
 else ifneq (,$(findstring ctru,$(MODELNAME))) 		# 3dsxtool requires symbols
 objcopy = cp $(1) $(1).tmp;mv -f $(1).tmp $(2)
-objcopy_plugin = $(objcopy)
 else
   ifdef DEBUG
     objcopy = cp $(1) $(1).tmp;mv -f $(1).tmp $(2)	# objcopy hosted (DEBUG)
-    objcopy_plugin = $(objcopy)
   else
     objcopy = $(OC) -S -x $(1) $(2)					# objcopy hosted (!DEBUG)
-    objcopy_plugin = $(objcopy)
    endif
 endif
 
 # calculate dependencies for a list of source files $(2) and output them to $(1)
-#
-# Use a GNU Make response file ($(file >...,)) so that the filenames are never
-# expanded on the shell command line - this avoids ARG_MAX errors when the
-# build path is long (e.g. GitHub Actions).  multigcc.pl in this tree has been
-# patched to accept @FILE response-file arguments.
-mkdepfile_counter :=
-mkdepfile = $(eval mkdepfile_counter += 1)$(file >$(1)_$(words $(mkdepfile_counter)).rsp,$(2))$(SILENT)perl $(TOOLSDIR)/multigcc.pl $(CC) $(PPCFLAGS) $(OTHER_INC) -MG -MM -include config.h -- @$(1)_$(words $(mkdepfile_counter)).rsp | \
+mkdepfile = $(SILENT)perl $(TOOLSDIR)/multigcc.pl $(CC) $(PPCFLAGS) $(OTHER_INC) -MG -MM -include config.h -- $(2) | \
 	sed -e "s: lang.h: lang/lang.h:" \
 	-e 's:_asmdefs.o:_asmdefs.h:' \
 	-e "s: max_language_size.h: lang/max_language_size.h:" | \
 	$(TOOLSDIR)/addtargetdir.pl $(ROOTDIR) $(BUILDDIR) \
-	>> $(1); rm -f $(1)_$(words $(mkdepfile_counter)).rsp
+	>> $(1)
 
 # function to create .bmp dependencies
 bmpdepfile = $(SILENT) \
 	for each in $(2); do \
 	    obj=`echo $$each | sed -e 's/\.bmp/.o/' -e 's:$(ROOTDIR):$(BUILDDIR):'`; \
 	    src=`echo $$each | sed -e 's/\.bmp/.c/' -e 's:$(ROOTDIR):$(BUILDDIR):'`; \
-	    hdr=`echo $$each | sed -e 's/.*\/\(.*\)\\..*\\.bmp/bitmaps\/\1\.h/'`; \
+	    hdr=`echo $$each | sed -e 's/.*\/\(.*\)\..*\.bmp/bitmaps\/\1\.h/'`; \
 	    echo $$obj: $$src; \
 	    echo $$src: $$each; \
 	    echo $(BUILDDIR)/$$hdr: $$src; \
