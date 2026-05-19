@@ -20,7 +20,7 @@
 
 #include "config.h"
 
-#ifdef HIBY_LINUX
+#if defined(HIBY_LINUX) && !defined(SIMULATOR)
 
 
 #include <ctype.h>

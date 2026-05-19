@@ -1,13 +1,4 @@
 #!/usr/bin/perl
-#
-# multigcc.pl - patched to accept @FILE response-file arguments so the
-# shell does not need to expand thousands of full-path source filenames on
-# a single command line (which trips ARG_MAX on GitHub Actions runners).
-#
-# Usage is identical to the upstream version; the only addition is that any
-# argument of the form @/path/to/file causes the contents of that file to be
-# spliced into the file list in-place.
-#
 use List::Util 'shuffle'; # standard from Perl 5.8 and later
 
 my $tempfile = "multigcc.out";
@@ -22,23 +13,6 @@ for my $a (@ARGV) {
         next;
     }
 
-    # Response-file support: @/path/to/file -> read filenames from that file.
-    # GNU Make $(file >f,$(SRC)) writes all filenames space-separated on one
-    # line; we split on whitespace so both newline- and space-delimited files
-    # are handled correctly.
-    if ($list == \@files && $a =~ /^\@(.+)$/) {
-        my $rsp = $1;
-        if (open my $fh, '<', $rsp) {
-            local $/;           # slurp whole file
-            my $content = <$fh>;
-            close $fh;
-            push @files, grep { $_ ne '' } split /\s+/, $content;
-        } else {
-            warn "multigcc.pl: cannot open response file '$rsp': $!\n";
-        }
-        next;
-    }
-
     push @{$list}, $a;
 }
 
@@ -47,7 +21,7 @@ exit if (not @files);
 my $command = join " ", @params;
 
 # shuffle the file list to spread the load as evenly as we can
-@files = shuffle(@files);
+@files = shuffle(@files);  
 
 # count number of cores
 my $cores;
@@ -63,6 +37,10 @@ elsif ($^O eq 'solaris') {
 else {
     chomp($cores = `/usr/bin/nproc`);
     $cores = 1 if ($?);
+#    if (open CPUINFO, "</proc/cpuinfo") {
+#        $cores = scalar grep /^processor/i, <CPUINFO>;
+#        close CPUINFO;
+#    }
 }
 
 # fork children

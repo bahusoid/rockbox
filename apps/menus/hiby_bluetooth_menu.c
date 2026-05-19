@@ -20,7 +20,7 @@
 
 #include "config.h"
 
-#ifdef HIBY_LINUX
+#if defined(HIBY_LINUX) && !defined(SIMULATOR)
 
 #include "menu.h"
 #include "hiby_bluetooth.h"

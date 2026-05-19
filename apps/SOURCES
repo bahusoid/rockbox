@@ -56,7 +56,7 @@ root_menu.c
 screens.c
 settings.c
 settings_list.c
-#ifdef HIBY_LINUX
+#if defined(HIBY_LINUX) && !defined(SIMULATOR)
 hiby_bluetooth.c
 #endif
 shortcuts.c
