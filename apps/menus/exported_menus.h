@@ -43,7 +43,7 @@ extern const struct menu_item_ex
         audiohw_eq_tone_controls,   /* audiohw_eq_menu.c */
 #endif
         radio_settings_menu,        /* radio_menu.c     */
-#ifdef HIBY_LINUX
+#if defined(HIBY_LINUX) && !defined(SIMULATOR)
         hiby_bluetooth_root_item,   /* hiby_bluetooth_menu.c */
 #endif
         theme_menu;                 /* theme_menu.c     */
