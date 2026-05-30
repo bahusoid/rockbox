@@ -335,6 +335,7 @@ bool set_option(const char* string, const void* variable, enum optiontype type,
                 const struct opt_items* options, int numoptions, void (*function)(int));
 
 const char* setting_get_cfgvals(const struct settings_list *setting);
+bool rename_temp_file(const char *tempfile, const char *file);
 
 /** global_settings and global_status struct definitions **/
 

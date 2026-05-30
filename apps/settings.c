@@ -128,11 +128,21 @@ static void debug_available_settings(void);
 static char *debug_get_flags(uint32_t flags);
 #endif
 
-static inline void rename_temp_file(const char *tempfile,
+bool rename_temp_file(const char *tempfile,
                             const char *file)
 {
+    int fd = open(tempfile, O_RDONLY);
+    if (fd < 0)
+        return false;
+
+    bool empty_file = lseek(fd, 1, SEEK_SET) <= 0;
+    close(fd);
+    if (empty_file)
+        return false;
+
     remove(file);
     rename(tempfile, file);
+    return true;
 }
 
 const char* setting_get_cfgvals(const struct settings_list *setting)
