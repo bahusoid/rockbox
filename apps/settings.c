@@ -122,17 +122,29 @@ static char *debug_get_flags(uint32_t flags);
 static void debug_available_settings(void);
 
 #define CONFIGFILE_TEMP CONFIGFILE ".tmp"
+#define CONFIGFILE_OLD CONFIGFILE ".old"
 #define RESUMEFILE_TEMP RESUMEFILE ".tmp"
+#define RESUMEFILE_OLD RESUMEFILE ".old"
 
 #ifdef LOGF_ENABLE
 static char *debug_get_flags(uint32_t flags);
 #endif
 
-static inline void rename_temp_file(const char *tempfile,
+bool rename_temp_file(const char *tempfile,
                             const char *file)
 {
+    int fd = open(tempfile, O_RDONLY);
+    if (fd < 0)
+        return false;
+
+    bool empty_file = lseek(fd, 1, SEEK_SET) <= 0;
+    close(fd);
+    if (empty_file)
+        return false;
+
     remove(file);
     rename(tempfile, file);
+    return true;
 }
 
 const char* setting_get_cfgvals(const struct settings_list *setting)
@@ -166,8 +178,11 @@ void settings_load(void)
     logf("\r\n%s()\r\n", __func__);
     debug_available_settings();
 
-    settings_load_config(CONFIGFILE, false); /* load user_settings items */
-    settings_load_config(RESUMEFILE, false); /* load system_status items */
+    if (!settings_load_config(CONFIGFILE, false))/* load user_settings items */
+        settings_load_config(CONFIGFILE_OLD, false);
+
+    if (!settings_load_config(RESUMEFILE, false)) /* load system_status items */
+        settings_load_config(RESUMEFILE_OLD, false);
 
     /* fixed settings file has final say on user_settings AND system_status items */
     settings_load_config(FIXEDSETTINGSFILE, false);
@@ -370,8 +385,10 @@ bool settings_load_config(const char* file, bool apply)
     if (fd < 0)
         return false;
 
+    bool empty = true;
     while (read_line(fd, line, sizeof line) > 0)
     {
+        empty = false;
         char *name, *value;
         if (!settings_parseline(line, &name, &value))
             continue;
@@ -379,6 +396,11 @@ bool settings_load_config(const char* file, bool apply)
     } /* while(...) */
 
     close(fd);
+
+    // Empty file is considered broken (at least header comment is expected)
+    if (empty)
+        return false;
+
     if (apply)
     {
         settings_save();
@@ -607,6 +629,7 @@ static void write_system_status(void)
     logf("Writing system_status to disk");
     if (settings_write_config(RESUMEFILE_TEMP, SETTINGS_SAVE_RESUMEINFO))
     {
+        rename_temp_file(RESUMEFILE, RESUMEFILE_OLD);
         rename_temp_file(RESUMEFILE_TEMP, RESUMEFILE);
     }
 }
@@ -637,6 +660,7 @@ static void flush_config_block_callback(void)
         }
         else
         {
+            rename_temp_file(CONFIGFILE, CONFIGFILE_OLD);
             rename_temp_file(CONFIGFILE_TEMP, CONFIGFILE);
         }
     }

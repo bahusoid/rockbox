@@ -430,10 +430,7 @@ static bool add_bookmark(const char* bookmark_file_name, const char* bookmark,
     }
     close(temp_bookmark_file);
 
-    remove(bookmark_file_name);
-    rename(global_temp_buffer, bookmark_file_name);
-
-    return true;
+    return rename_temp_file(global_temp_buffer, bookmark_file_name);;
 }
 
 /* GCC 7 and up complain about the snprintf in create_bookmark() when
@@ -1011,10 +1008,7 @@ static bool delete_bookmark(const char* bookmark_file_name, int bookmark_id)
     }
     close(temp_bookmark_file);
 
-    remove(bookmark_file_name);
-    rename(global_temp_buffer, bookmark_file_name);
-
-    return true;
+    return rename_temp_file(global_temp_buffer, bookmark_file_name);
 }
 
 /* ----------------------------------------------------------------------- */
