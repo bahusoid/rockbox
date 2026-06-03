@@ -972,7 +972,7 @@ bool simplelist_show_list(struct simplelist_info *info)
 
     while(1)
     {
-        list_do_action(CONTEXT_LIST, info->timeout, &lists, &action);
+        list_do_action(CONTEXT_TREE, info->timeout, &lists, &action);
 
         /* We must yield in this case or no other thread can run */
         if (info->timeout == TIMEOUT_NOBLOCK)
@@ -996,6 +996,11 @@ bool simplelist_show_list(struct simplelist_info *info)
         if (action == ACTION_STD_CANCEL || action == ACTION_STD_MENU)
         {
             info->selection = -1;
+            break;
+        }
+        else if (action == ACTION_TREE_WPS)
+        {
+            info->selection = -2;
             break;
         }
         else if (action == ACTION_STD_OK)
