@@ -750,10 +750,14 @@ int do_shortcut_menu(void *ignored)
         list.get_talk = global_settings.talk_menu ? shortcut_menu_speak_item : NULL;
 
         if (simplelist_show_list(&list))
-            break; /* some error happened?! */
-
+            break; /* returning from USB screen */
         if (list.selection == -1)
+            break; /* canceled */
+        if (list.selection == -2)
+        {
+            done = GO_TO_WPS;
             break;
+        }
         else
         {
             sc = get_shortcut(list.selection, NULL);
