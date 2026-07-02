@@ -2309,6 +2309,10 @@ static int audio_finish_load_track(struct track_info *infop)
             // audio_finish_load_track_exit not needed as playback restart is already initiated
             return trackstat;
 
+        // If previous track is small enough audio buffer might still wait for more data - flush it
+        if (skip_pending == TRACK_SKIP_AUTO_NEW_PLAYLIST)
+            pcmbuf_start_track_change(TRACK_CHANGE_END_OF_DATA);
+
         goto audio_finish_load_track_exit;
     }
 #endif
@@ -2904,6 +2908,7 @@ static bool audio_can_change_track(int *trackstat, enum pcm_track_change_type *t
                resequencing - the playlist must now be advanced in order to
                continue since a peek ahead to the next track is not possible */
             skip_pending = TRACK_SKIP_AUTO_NEW_PLAYLIST;
+            //*type = TRACK_CHANGE_END_OF_DATA;
             end_of_playlist = playlist_next(1) < 0;
         }
 
