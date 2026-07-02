@@ -52,7 +52,7 @@
 #endif
 
 #if defined(HIBY_R3PROII) || defined(HIBY_R1)
-#include "usb-hiby.h"
+#include "usb-hiby-gadget.h"
 #endif
 
 #if defined(IPOD_ACCESSORY_PROTOCOL)

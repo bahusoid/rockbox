@@ -30,7 +30,11 @@
 #include "usb.h"
 #include "sysfs.h"
 #include "power.h"
-#include "usb-hiby.h"
+#include "usb-hiby-gadget.h"
+
+#ifdef HAVE_GENERAL_PURPOSE_LED
+#include "led-general-purpose.h"
+#endif
 
 #define LOGF_ENABLE
 #include "logf.h"
@@ -80,6 +84,9 @@ void hiby_set_usb_mode(int mode) {
 /* TODO: implement usb detection properly */
 int usb_detect(void)
 {
+#ifdef HAVE_GENERAL_PURPOSE_LED
+    led_hw_on();
+#endif
     return power_input_status() == POWER_INPUT_USB_CHARGER ? USB_INSERTED : USB_EXTRACTED;
 }
 

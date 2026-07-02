@@ -160,7 +160,7 @@ target/hosted/power-linux.c
 #endif
 
 #if defined(HIBY_R3PROII) && !defined(SIMULATOR)
-target/hosted/hiby/usb-hiby.c
+target/hosted/hiby/usb-hiby-gadget.c
 target/hosted/hiby/r3proii/button-r3proii.c
 target/hosted/hiby/r3proii/powermgmt-r3proii.c
 #ifndef BOOTLOADER
@@ -170,7 +170,7 @@ target/hosted/hiby/hibylinux_codec.c
 #endif
 
 #if defined(HIBY_R1) && !defined(SIMULATOR)
-target/hosted/hiby/usb-hiby.c
+target/hosted/hiby/usb-hiby-gadget.c
 target/hosted/hiby/r1/button-r1.c
 target/hosted/hiby/r1/powermgmt-r1.c
 #ifndef BOOTLOADER
