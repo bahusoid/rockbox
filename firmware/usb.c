@@ -163,9 +163,7 @@ static inline bool usb_do_screendump(void)
 void usb_set_mode(int mode)
 {
     usb_mode = mode;
-#if defined(DX50) || defined(DX90)
-    ibasso_set_usb_mode(mode);
-#elif defined(HIBY_R3PROII) || defined(HIBY_R1)
+#if defined(HIBY_R3PROII) || defined(HIBY_R1)
     hiby_set_usb_mode(mode);
 #endif
 }
