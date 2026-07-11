@@ -42,7 +42,7 @@
 
 static int _usb_mode = -1;
 static bool _usb_init = false;
-static bool is_adb_running = false;
+static bool is_bootloader_adb_running = false;
 
 void enable_adb(void);
 void enable_mass_storage(void);
@@ -60,13 +60,11 @@ void startup_rbhome(void);
 
 void hiby_set_usb_mode(int mode) {
     logf(">>>>>>>>>>>>>>>>> hiby_set_usb_mode(%d)\n", mode);
-    if (!_usb_init) {
-        logf("Need to init usb!\n");
-        usb_init_device();
-    }
 
     if (_usb_mode == mode)
         return;
+
+    usb_init_device();
 
     switch(mode) {
     case USB_MODE_MASS_STORAGE:
@@ -168,6 +166,8 @@ void enable_charging(void) {
 
 void enable_adb(void) {
     logf(">>>>>>>>>>>>>>>>> set_adb()\n");
+    if (is_bootloader_adb_running)
+        return;
 
     // Disable mass storage if it was running
     disable_mass_storage();
@@ -225,6 +225,7 @@ void disable_adb(void) {
     if (!system("mountpoint -q /dev/usb-ffs/adb")) {
         system("umount -l /dev/usb-ffs/adb");
     }
+    is_bootloader_adb_running = false;
 }
 
 void enable_mass_storage(void) {
@@ -236,11 +237,7 @@ void enable_mass_storage(void) {
     system("mkdir -p /sys/kernel/config/usb_gadget/adb_demo/functions/mass_storage.0/lun.0");
     system("mkdir -p /sys/kernel/config/usb_gadget/adb_demo/configs/c.1/strings/0x409");
 
-    if (is_adb_running) {
-        sysfs_set_string("/sys/kernel/config/usb_gadget/adb_demo/configs/c.1/strings/0x409/configuration", "adb,storage");
-    } else {
-        sysfs_set_string("/sys/kernel/config/usb_gadget/adb_demo/configs/c.1/strings/0x409/configuration", "storage");
-    }
+    sysfs_set_string("/sys/kernel/config/usb_gadget/adb_demo/configs/c.1/strings/0x409/configuration", "storage");
     sysfs_set_int("/sys/kernel/config/usb_gadget/adb_demo/configs/c.1/MaxPower", 120);
 
     system("ln -s /sys/kernel/config/usb_gadget/adb_demo/functions/mass_storage.0 /sys/kernel/config/usb_gadget/adb_demo/configs/c.1/");
@@ -285,13 +282,10 @@ void disable_usb_audio(void) {}
 
 void usb_init_device(void)
 {
-    logf(">>>>>>>>>>>>>>>>> usb_init_device()\n");
-    if (_usb_init) {
-        logf("usb is already init, skipping!\n");
+    if (_usb_init)
         return;
-    }
 
-    char functions[128] = {0};
+    logf(">>>>>>>>>>>>>>>>> usb_init_device()\n");
 
     /* Before we can do anything here we need to mount configfs */
     int is_mounted = !system("mountpoint -q /sys/kernel/config");
@@ -303,15 +297,8 @@ void usb_init_device(void)
 
     _usb_init = true;
 
-    system("ls -la /sys/kernel/config/usb_gadget");
-
     /* os_mkdir doesn't seem to work here for whatever reason */
-    system("mkdir -p /sys/kernel/config/usb_gadget/adb_demo");
     system("mkdir -p /sys/kernel/config/usb_gadget/adb_demo/strings/0x409");
-
-    system("ls -la /sys/kernel/config/usb_gadget/adb_demo");
-    system("ls -la /sys/kernel/config/usb_gadget/adb_demo/configs/");
-
     system("mkdir -p /sys/kernel/config/usb_gadget/adb_demo/configs/c.1/strings/0x409");
 
     /* Check if ADB was activated in bootloader */
@@ -319,11 +306,12 @@ void usb_init_device(void)
 
     if (access("/sys/kernel/config/usb_gadget/adb_demo/configs/c.1/strings/0x409/configuration", F_OK) == 0) {
         logf("found usb config string!\n");
-
+        char functions[128] = {0};
         sysfs_get_string("/sys/kernel/config/usb_gadget/adb_demo/configs/c.1/strings/0x409/configuration", functions, sizeof(functions));
-        is_adb_running = (strstr(functions, "adb") == NULL) ? false : true;
+        is_bootloader_adb_running = (strstr(functions, "adb") == NULL) ? false : true;
+        if (is_bootloader_adb_running)
+            return;
     }
-
     sysfs_set_string("/sys/kernel/config/usb_gadget/adb_demo/strings/0x409/manufacturer", "Rockbox.org");
     sysfs_set_string("/sys/kernel/config/usb_gadget/adb_demo/strings/0x409/product", "Rockbox media player");
     sysfs_set_string("/sys/kernel/config/usb_gadget/adb_demo/strings/0x409/serialnumber", "0123456789ABCDEF");
