@@ -348,7 +348,8 @@ static const char graphic_numeric[] = "graphic,numeric";
 #elif LCD_HEIGHT <= 480 && LCD_WIDTH < 800
   #define DEFAULT_FONT_HEIGHT 27
 #else
-  #define DEFAULT_FONT_HEIGHT 35
+  #define DEFAULT_FONT_HEIGHT 32
+  #define DEFAULT_FONTNAME "32-Terminus"
 #endif
 #define DEFAULT_GLYPHS 250
 #define MIN_GLYPHS 50
