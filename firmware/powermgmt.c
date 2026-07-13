@@ -1181,12 +1181,23 @@ void set_keypress_restarts_sleep_timer(bool enable)
 }
 
 #ifndef BOOTLOADER
+int usb_drive_inserted(void)
+{
+    return usb_inserted()
+#ifdef HAVE_USB_POWER
+    && !usb_powered_only()
+#endif
+    ;
+}
+
 static void handle_sleep_timer(void)
 {
     if (TIME_AFTER(current_tick, sleeptimer_endtick)) {
-        if (usb_inserted()
-#if CONFIG_CHARGING
-            || charger_input_state != NO_CHARGER
+        if (usb_drive_inserted()
+#if CONFIG_CHARGING >= CHARGING_MONITOR
+             || charge_state != DISCHARGING
+#elif CONFIG_CHARGING
+             || charger_input_state != NO_CHARGER
 #endif
         ) {
             DEBUGF("Sleep timer timeout. Stopping...\n");
@@ -1226,8 +1237,10 @@ void handle_auto_poweroff(void)
      * unplugged, wait for a timeout period and then shut down.
      */
     if (audio_stat == AUDIO_STATUS_PLAY
-#if CONFIG_CHARGING
-        || charger_input_state == CHARGER
+#if CONFIG_CHARGING >= CHARGING_MONITOR
+             || charge_state != DISCHARGING
+#elif CONFIG_CHARGING
+             || charger_input_state == CHARGER
 #endif
     ) {
         last_event_tick = current_tick;
@@ -1242,7 +1255,7 @@ void handle_auto_poweroff(void)
 #if CONFIG_TUNER
         !(get_radio_status() & FMRADIO_PLAYING) &&
 #endif
-        !usb_inserted() &&
+        !usb_drive_inserted() &&
         (audio_stat == 0 ||
          audio_stat == (AUDIO_STATUS_PLAY | AUDIO_STATUS_PAUSE)))
     {
