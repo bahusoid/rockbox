@@ -111,6 +111,9 @@
 %T(70,0,70,75,ffwd, repeat_press)
 %T(70,0,70,75,next)
 
+%V(8,0,-,30,0)
+%al%bl%%%ar%?cc<%?St(time format)<%cH|%cI>:%cM|--:--> 
+
 # needs to be at the end since touch regions need to be declared
 # before %Tl can be used
 %?Tl(small_vol,2.0)<%vs(show_vol,set,3)|%?mv(2.0)<%vs(show_vol,set,3)|%?Tl<%vs(show_vol,set,2)|%vs(show_vol,set,1)>>>
