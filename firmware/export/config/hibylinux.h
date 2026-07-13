@@ -92,6 +92,7 @@
 
 /* Define this if you have a software controlled poweroff */
 #define HAVE_SW_POWEROFF
+#define HAVE_POWEROFF_WHILE_CHARGING
 
 /* Supports attaching to external USB drive */
 #define CONFIG_STORAGE (STORAGE_HOSTFS|STORAGE_USB)
