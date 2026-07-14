@@ -1192,23 +1192,13 @@ int usb_drive_inserted(void)
 
 static void handle_sleep_timer(void)
 {
-    if (TIME_AFTER(current_tick, sleeptimer_endtick)) {
-        if (usb_drive_inserted()
-#if CONFIG_CHARGING >= CHARGING_MONITOR
-             || charge_state != DISCHARGING
-#elif CONFIG_CHARGING
-             || charger_input_state != NO_CHARGER
-#endif
-        ) {
-            DEBUGF("Sleep timer timeout. Stopping...\n");
-            audio_pause();
-            set_sleep_timer(0);
-            backlight_off(); /* Nighty, nighty... */
-        }
-        else {
-            DEBUGF("Sleep timer timeout. Shutting off...\n");
-            sys_poweroff();
-        }
+    if (TIME_AFTER(current_tick, sleeptimer_endtick))
+    {
+        DEBUGF("Sleep timer timeout. Pausing...\n");
+        audio_pause();
+
+        last_event_tick = current_tick;
+        set_sleep_timer(sleeptimer_duration);
     }
 }
 #endif /* BOOTLOADER */
@@ -1251,13 +1241,14 @@ void handle_auto_poweroff(void)
         sys_poweroff();
     }
 
+    int audio_stopped_or_paused = (audio_stat == 0 ||
+        audio_stat == (AUDIO_STATUS_PLAY | AUDIO_STATUS_PAUSE));
     if (timeout &&
 #if CONFIG_TUNER
         !(get_radio_status() & FMRADIO_PLAYING) &&
 #endif
         !usb_drive_inserted() &&
-        (audio_stat == 0 ||
-         audio_stat == (AUDIO_STATUS_PLAY | AUDIO_STATUS_PAUSE)))
+        audio_stopped_or_paused)
     {
         if (TIME_AFTER(tick, last_event_tick + timeout)
 #if !(CONFIG_PLATFORM & PLATFORM_HOSTED)
@@ -1268,7 +1259,7 @@ void handle_auto_poweroff(void)
         }
     }
 
-    if (sleeptimer_active)
+    if (sleeptimer_active && !audio_stopped_or_paused)
         handle_sleep_timer();
 #endif
 }
