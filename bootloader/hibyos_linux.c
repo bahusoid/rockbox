@@ -121,7 +121,7 @@
 #define ICON_NAME bm_hibyicon
 #define OF_NAME "HIBY PLAYER"
 #define LEFT_RIGHT_FOR_SELECT
-#define CHARGE_WITH_OF
+//#define CHARGE_WITH_OF
 #include "bitmaps/hibyicon.h"
 #else
 #error "must define ICON_WIDTH/HEIGHT"
@@ -207,7 +207,7 @@ static int get_inactivity_tmo(int same_as_last)
     else
 #endif
         if (same_as_last)
-            return 3 * HZ; /* Timeout when mode is the same as the previous mode */
+            return 1 * HZ; /* Timeout when mode is the same as the previous mode */
         else
             return 10 * HZ; /* Default timeout */
 }
