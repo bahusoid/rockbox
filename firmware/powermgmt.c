@@ -1181,13 +1181,23 @@ void set_keypress_restarts_sleep_timer(bool enable)
 }
 
 #ifndef BOOTLOADER
-int usb_drive_inserted(void)
+int usb_inserted_and_active(void)
 {
-    return usb_inserted()
+    if (!usb_inserted())
+        return false;
+
+#if !defined(HAVE_POWEROFF_WHILE_CHARGING) || defined(SIMULATOR)
+    return true;
+#else
+
 #ifdef HAVE_USB_POWER
-    && !usb_powered_only()
+    if (usb_get_mode() == USB_MODE_MASS_STORAGE)
+        return !usb_powered_only();
 #endif
-    ;
+
+    //Assume it's not active only for charging
+    return usb_get_mode() != USB_MODE_CHARGE;
+#endif //HAVE_POWEROFF_WHILE_CHARGING
 }
 
 static void handle_sleep_timer(void)
@@ -1218,45 +1228,43 @@ static void handle_sleep_timer(void)
 void handle_auto_poweroff(void)
 {
 #ifndef BOOTLOADER
+    if (!shutdown_timeout && query_force_shutdown()) {
+        backlight_on();
+        sys_poweroff();
+        return;
+    }
+
     long timeout = poweroff_timeout*60*HZ;
     int audio_stat = audio_status();
     long tick = current_tick;
+    int audio_stopped_or_paused = (audio_stat == 0 || audio_stat == (AUDIO_STATUS_PLAY | AUDIO_STATUS_PAUSE));
 
     /*
      * Inhibit shutdown as long as the charger is plugged in.  If it is
      * unplugged, wait for a timeout period and then shut down.
      */
-    if (audio_stat == AUDIO_STATUS_PLAY
-#if CONFIG_CHARGING >= CHARGING_MONITOR
-             || charge_state != DISCHARGING
-#elif CONFIG_CHARGING
-             || charger_input_state == CHARGER
-#endif
-    ) {
-        last_event_tick = current_tick;
-    }
-
-    if (!shutdown_timeout && query_force_shutdown()) {
-        backlight_on();
-        sys_poweroff();
-    }
-
-    int audio_stopped_or_paused = (audio_stat == 0 ||
-        audio_stat == (AUDIO_STATUS_PLAY | AUDIO_STATUS_PAUSE));
-    if (timeout &&
+    if (!audio_stopped_or_paused
 #if CONFIG_TUNER
-        !(get_radio_status() & FMRADIO_PLAYING) &&
+        || (get_radio_status() & FMRADIO_PLAYING)
 #endif
-        !usb_drive_inserted() &&
-        audio_stopped_or_paused)
+#if defined(HAVE_POWEROFF_WHILE_CHARGING) &&  CONFIG_CHARGING >= CHARGING_MONITOR
+        || charge_state != DISCHARGING
+#elif CONFIG_CHARGING
+        || charger_input_state == CHARGER
+#endif
+        || usb_inserted_and_active()
+    )
     {
-        if (TIME_AFTER(tick, last_event_tick + timeout)
+        last_event_tick = tick;
+    }
+    else if (timeout && TIME_AFTER(tick, last_event_tick + timeout)
 #if !(CONFIG_PLATFORM & PLATFORM_HOSTED)
-            && TIME_AFTER(tick, storage_last_disk_activity() + timeout)
+        && TIME_AFTER(tick, storage_last_disk_activity() + timeout)
 #endif
-        ) {
-            sys_poweroff();
-        }
+    )
+    {
+        sys_poweroff();
+        return;
     }
 
     if (sleeptimer_active && !audio_stopped_or_paused)

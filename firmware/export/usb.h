@@ -234,6 +234,7 @@ void usb_charging_maxcurrent_change(int maxcurrent);
 int usb_charging_maxcurrent(void);
 #endif /* HAVE_USB_CHARGING_ENABLE */
 void usb_set_mode(int mode);
+int usb_get_mode(void);
 #endif /* HAVE_USB_POWER */
 #ifdef HAVE_USBSTACK
 /* USB driver call this function to notify that a transfer has completed */
