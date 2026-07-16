@@ -160,6 +160,10 @@ static inline bool usb_do_screendump(void)
 }
 
 #ifdef HAVE_USB_POWER
+int usb_get_mode(void)
+{
+    return usb_mode;
+}
 void usb_set_mode(int mode)
 {
     usb_mode = mode;
