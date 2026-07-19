@@ -34,6 +34,7 @@
 #include "splash.h"
 #include "gui/list.h"
 #include "pcm-alsa.h"
+#include "yesno.h"
 
 /* HiBy hosted build provides dynamic output routing helper in its
  * target-specific PCM implementation. */
@@ -87,6 +88,11 @@ static bool bt_is_connected(const char *mac);
 static bool bt_prepare_stack(void);
 static void bt_connect_device(const struct bt_device *device);
 static void bt_disconnect(void);
+
+static void bt_suspend(void)
+{
+    system("/usr/bin/bt_suspend");
+}
 
 static const char *bt_make_bt_playback_dev(const char *mac, const char *codec)
 {
@@ -650,6 +656,18 @@ static void bt_set_active_codec(const char *mac)
     pclose(fp);
 }
 
+static bool bt_disable(void)
+{
+    FILE* fp;
+
+    fp = popen("bluetoothctl power off | grep -q 'power off succeeded'", "r");
+
+    if (fp && pclose(fp) == 0)
+        return true;
+
+    return false;
+}
+
 static bool bt_enable(void)
 {
     FILE* fp;
@@ -684,10 +702,22 @@ static void bt_show_devices(void)
     int count;
     int idx;
 
-    if (!bt_prepare_stack())
+    if (!bt_enable())
     {
-        splash(HZ * 2, "BT unavailable");
-        return;
+        static const char *lines[] = {"Bluetooth is suspended.",
+                              "Enable it?"};
+        static const struct text_message message = {lines, 2};
+
+        if (gui_syncyesno_run(&message, NULL, NULL) != YESNO_YES)
+            return;
+
+        if (!bt_prepare_stack())
+        {
+            //try to suspend again to avoid leaving it in a weird state
+            bt_suspend();
+            splash(HZ * 2, "BT unavailable");
+            return;
+        }
     }
 
     count = bt_load_devices_via_bluetoothctl(devices, BT_MAX_DEVICES);
@@ -942,17 +972,34 @@ static void bt_show_status(void)
 
         if (sel == bt_toggle_line)
         {
-            if (bt_on)
-            {
-                button_remove_input_device(BT_REMOTE_INPUT_IDX);
-                bt_route_to_local(false);
-                system("/usr/bin/bt_suspend");
-                remove(BOOT_SETTING_FILE);
-                bt_on = false;
-            }
-            else
+            static const char *const toggle_items[] = { "On", "Off", "Suspend" };
+            struct simplelist_info t_info;
+            simplelist_info_init(&t_info, "Bluetooth", 3, (void *)toggle_items);
+            t_info.get_name = bt_action_name_cb;
+            t_info.action_callback = bt_simplelist_ok_cancel;
+            t_info.selection = -1;
+            simplelist_show_list(&t_info);
+
+            if (t_info.selection == 0)
             {
                 bt_on = bt_prepare_stack();
+            }
+            else if (t_info.selection > 0)
+            {
+                bool suspend = t_info.selection == 2; 
+                button_remove_input_device(BT_REMOTE_INPUT_IDX);
+                bt_route_to_local(false);
+                if (suspend)
+                {
+                    bt_suspend();
+                    remove(BOOT_SETTING_FILE);
+                }
+                else
+                {
+                    bt_disable();
+                }
+                
+                bt_on = false;
             }
         }
         else if (sel == codec_line && active_mac[0])
