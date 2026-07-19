@@ -21,15 +21,18 @@
 
 #include "plugin.h"
 
-/* Debug logging to file */
+/* Enable this define when file logging is needed for troubleshooting. */
+/* #define MP4CHAPTERS_DEBUG */
+
+#ifdef MP4CHAPTERS_DEBUG
 static int debug_fd = -1;
 
 static void mp4_debug_init(const char *audio_path) {
     if (debug_fd >= 0) return; /* Already initialized */
-    
+
     char log_path[MAX_PATH];
     char *dot;
-    
+
     /* Create log filename based on audio file */
     rb->strlcpy(log_path, audio_path, MAX_PATH);
     dot = rb->strrchr(log_path, '.');
@@ -38,19 +41,19 @@ static void mp4_debug_init(const char *audio_path) {
     } else {
         rb->strlcat(log_path, ".log", MAX_PATH);
     }
-    
+
     debug_fd = rb->open(log_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 }
 
 static void debug_log(const char *format, ...) {
     if (debug_fd < 0) return;
-    
+
     va_list args;
     va_start(args, format);
     char buffer[512];
     rb->vsnprintf(buffer, sizeof(buffer), format, args);
     va_end(args);
-    
+
     rb->write(debug_fd, buffer, rb->strlen(buffer));
     rb->write(debug_fd, "\n", 1);
 }
@@ -61,6 +64,11 @@ static void mp4_debug_close(void) {
         debug_fd = -1;
     }
 }
+#else
+#define debug_log(...) do { } while (0)
+static void mp4_debug_init(const char *audio_path) { (void)audio_path; }
+static void mp4_debug_close(void) { }
+#endif
 
 /* Global buffer management */
 static char *g_buffer = NULL;
