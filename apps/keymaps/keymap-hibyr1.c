@@ -125,19 +125,15 @@ static const struct button_mapping button_context_tree[]  = {
     { ACTION_TREE_WPS,   BUTTON_POWER|BUTTON_REL,      BUTTON_POWER },
     { ACTION_STD_MENU,   BUTTON_LEFT|BUTTON_REPEAT,      BUTTON_LEFT },
     //TODO: { ACTION_TREE_HOTKEY, BUTTON_REC|BUTTON_REL,        BUTTON_REC },
-    
+
+    { ACTION_TREE_PGLEFT,   BUTTON_RIGHT|BUTTON_UP,               BUTTON_NONE },
+    { ACTION_TREE_ROOT_INIT,BUTTON_RIGHT|BUTTON_UP|BUTTON_REPEAT, BUTTON_RIGHT|BUTTON_UP },
+    { ACTION_TREE_PGLEFT,   BUTTON_RIGHT|BUTTON_UP|BUTTON_REPEAT, BUTTON_NONE },
+    { ACTION_TREE_PGRIGHT,  BUTTON_RIGHT|BUTTON_DOWN,              BUTTON_NONE },
+    { ACTION_TREE_PGRIGHT,  BUTTON_RIGHT|BUTTON_DOWN|BUTTON_REPEAT,BUTTON_NONE },
+
     LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_LIST),
 }; /* button_context_tree */
-
-static const struct button_mapping button_context_listtree_scroll_with_combo[]  = {
-    // { ACTION_TREE_PGLEFT,   BUTTON_UP|BUTTON_LEFT,               BUTTON_NONE },
-    // { ACTION_TREE_ROOT_INIT,BUTTON_UP|BUTTON_LEFT|BUTTON_REPEAT, BUTTON_UP|BUTTON_LEFT },
-    // { ACTION_TREE_PGLEFT,   BUTTON_UP|BUTTON_LEFT|BUTTON_REPEAT, BUTTON_NONE },
-    // { ACTION_TREE_PGRIGHT,  BUTTON_UP|BUTTON_RIGHT,              BUTTON_NONE },
-    // { ACTION_TREE_PGRIGHT,  BUTTON_UP|BUTTON_RIGHT|BUTTON_REPEAT,BUTTON_NONE },
-
-    LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_CUSTOM|CONTEXT_TREE),
-}; /* button_context_listtree_scroll_with_combo */
 
 static const struct button_mapping button_context_yesno[]  = {
 
@@ -242,7 +238,6 @@ const struct button_mapping* target_get_context_mapping(int context)
             return button_context_list;
         case CONTEXT_TREE:
         case CONTEXT_MAINMENU:
-                return button_context_listtree_scroll_with_combo;
         case CONTEXT_CUSTOM|CONTEXT_TREE:
             return button_context_tree;
 
