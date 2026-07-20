@@ -313,6 +313,6 @@ codec_aac_he
 lto
 #endif
 
-#if defined(USB_ENABLE_AUDIO)
+#if defined(USB_ENABLE_AUDIO) || defined(HAVE_HOST_USB_AUDIO)
 usbdac
 #endif
