@@ -1091,6 +1091,9 @@ void settings_apply(bool read_disk)
 #elif defined(HAVE_USB_POWER) && !defined(USB_NONE) && !defined(SIMULATOR)
     usb_set_mode(global_settings.usb_mode);
 #endif
+#if defined(USB_ENABLE_AUDIO) || defined(HAVE_HOST_USB_AUDIO)
+    usb_set_audio(global_settings.usb_audio);
+#endif
 #if defined(HAVE_GENERAL_PURPOSE_LED)
     led_hw_set_mode(global_settings.use_led_indicators);
 #endif
