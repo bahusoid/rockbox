@@ -115,6 +115,20 @@ static int bt_simplelist_ok_cancel(int action, struct gui_synclist *lists)
         return ACTION_STD_CANCEL;
     return action;
 }
+
+static int bt_simplelist_ok_cancel_return_action(int action, struct gui_synclist *lists)
+{
+    if (lists->data)
+        *((int*)lists->data) = action;
+
+    if (action == ACTION_STD_CONTEXT)
+        return ACTION_STD_OK;
+    if (action == ACTION_STD_OK)
+        return ACTION_STD_CANCEL;
+
+    return action;
+}
+
 static int bt_devicelist_callback(int action, struct gui_synclist *lists)
 {
     (void)lists;
@@ -823,7 +837,8 @@ static void bt_disconnect(void)
 {
     button_remove_input_device(BT_REMOTE_INPUT_IDX);
 
-    bt_set_selected(NULL);
+    //bt_set_selected(NULL);
+    bt_active_codec[0] = 0;
     bt_route_to_local();
 
     char mac[18];
@@ -831,11 +846,12 @@ static void bt_disconnect(void)
 
     if (bt_get_active_mac(mac, sizeof(mac)))
     {
+        splash(0, "Disconnecting...");
         snprintf(cmd, sizeof(cmd), "bluetoothctl disconnect %s >/dev/null 2>&1", mac);
         system(cmd);
     }
 
-    splash(HZ, "Disconnected");
+    splash(HZ/4, "Disconnected");
 }
 
 static bool bt_is_enabled(void)
@@ -950,59 +966,58 @@ static void bt_show_status(void)
     int sel;
 
     bt_on = bt_is_enabled();
-    /* Auto-route to BT if headphone is connected but output is still local */
-    if (bt_on && strcmp(bt_playback_dev, BT_LOCAL_PLAYBACK_DEVICE) == 0 
-        && bt_get_active_mac(active_mac, sizeof(active_mac)))
-    {
-        //TODO: Auto connection seems to ignore codec preference
-        // Should we do full reconnection?
-        if (strcmp(bt_selected_mac, active_mac) != 0)
-        {
-            bt_get_device_name(active_mac, bt_selected_name);
-            strcpy(bt_selected_mac, active_mac);
-        }
-        bt_route_to_bluetooth(active_mac, NULL);
-    }
 
     while (1)
     {
+        bool bt_connected = bt_on && bt_get_active_mac(active_mac, sizeof(active_mac));
+        bool active_mac_changed = bt_connected && (strcmp(bt_selected_mac, active_mac) != 0);
+        /* Auto-route to BT if headphone is connected but output is still local (connected by Hiby OS) */
+        if (bt_connected && 
+            (active_mac_changed || strcmp(bt_playback_dev, BT_LOCAL_PLAYBACK_DEVICE) == 0 ))
+        {
+            splash(0, "Bluetooth connection detected.\nRouting audio to Bluetooth...");
+            //TODO: Auto connection seems to ignore codec preference
+            // Should we do full reconnection?
+            if (active_mac_changed)
+            {
+                bt_get_device_name(active_mac, bt_selected_name);
+                strcpy(bt_selected_mac, active_mac);
+            }
+            bt_route_to_bluetooth(active_mac, NULL);
+            splash(HZ/5, "Done.");
+        }
+
         int line_idx = 0;
         int bt_toggle_line;
         int codec_line = -1;
         int device_line = -1;
-        active_mac[0] = '\0';
+        int executed_action = -1;
 
-        simplelist_info_init(&info, "Status", 0, NULL);
-        info.action_callback = bt_simplelist_ok_cancel;
+        simplelist_info_init(&info, "Status", 0, &executed_action);
+        info.action_callback = bt_simplelist_ok_cancel_return_action;
         info.selection = -1;
         simplelist_reset_lines();
 
         simplelist_addline("Bluetooth: %s", bt_on ? "Enabled" : "Disabled");
         bt_toggle_line = line_idx++;
 
-        if (bt_on && bt_get_active_mac(active_mac, sizeof(active_mac)))
+        if (bt_selected_mac[0])
         {
-            simplelist_addline("Device: %s", bt_selected_name[0] ? bt_selected_name : "Bluetooth");
+            simplelist_addline("Device: %s", bt_selected_name[0] ? bt_selected_name :  "Bluetooth");
             device_line = line_idx++;
 
-            simplelist_addline("Codec: %s",
-                   bt_active_codec[0] ? bt_active_codec : "Unknown");
-            codec_line = line_idx++;
-            simplelist_addline("MAC: %s", active_mac);
-            line_idx++;
-            simplelist_addline("Connected: %s",
-                               bt_is_connected(active_mac) ? "Yes" : "No");
-            line_idx++;
-
-        }
-        else if (bt_selected_mac[0])
-        {
-            simplelist_addline("Device: %s", bt_selected_name[0] ? bt_selected_name : "Last selected");
-            device_line = line_idx++;
+            if (bt_connected)
+            {
+                simplelist_addline("Codec: %s",
+                       bt_active_codec[0] ? bt_active_codec : "Unknown");
+                codec_line = line_idx++;
+            }
             simplelist_addline("MAC: %s", bt_selected_mac);
             line_idx++;
-            simplelist_addline("Connected: No");
+            simplelist_addline("Connected: %s",
+                               bt_connected ? "Yes" : "No");
             line_idx++;
+
         }
         else
         {
@@ -1058,6 +1073,11 @@ static void bt_show_status(void)
         }
         else if (sel == device_line && bt_on && bt_selected_mac[0])
         {
+            if (bt_connected && executed_action == ACTION_STD_CONTEXT)
+            {
+                bt_disconnect();
+                continue;
+            }
             struct bt_device device;
             strcpy(device.mac, bt_selected_mac);
             strcpy(device.name, bt_selected_name);
