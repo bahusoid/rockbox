@@ -2,6 +2,8 @@
  * This config file is for the HiBy R1
  */
 
+//#define ROCKBOX_HAS_LOGF
+
 /* For Rolo and boot loader */
 #define MODEL_NUMBER 124
 #define MODEL_NAME   "HIBY R1"
