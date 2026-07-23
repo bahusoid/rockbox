@@ -34,7 +34,7 @@
  *   /dev/input/event1: hyn_ts (touchscreen)
  *   /dev/input/event2: jz adc keyboard (play/volume+/volume-)
  *   /dev/input/event3: earpods_adc
- *   /dev/input/event4: dynamic input (bluetooth avrcp remote control)
+ *   /dev/input/event4: dynamic input devices start at 4 and increment (Bluetooth AVRCP remote control)
  */
 
 int button_map(int keycode)
