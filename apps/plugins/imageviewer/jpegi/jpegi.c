@@ -181,11 +181,38 @@ static int load_image(char *filename, struct image_info *info,
         int dscale = 1;
         if (scale == 1)
         {
-            int height_dscale = LCD_HEIGHT/(bmp.height % LCD_HEIGHT);
-            int width_dscale = LCD_WIDTH/(bmp.width % LCD_WIDTH);
-            dscale = MAX(height_dscale, width_dscale);
-            scale = dscale + 1;
+            // We have image that is bigger than LCD_WIDTH and/or LCD_HEIGHT.
+            // But it's less than 2x bigger, so no zoom possible with our default logic.
+            // Let's try to increase decoded size using fractional (dscale+1)/dscale scale factor.
+            // Ideally we want image with dimensions closer to original and fully fills the screen on resize
+
+            //Find image dimension that fills screen
+            struct dim resize_dim = {.width = LCD_WIDTH, .height = LCD_HEIGHT};
+            recalc_dimension(&resize_dim, &img_dim );
+
+            // Find fractional scale factor that gives image dimension not bigger than original 
+            int height_dscale = img_dim.height % resize_dim.height;
+            int width_dscale = img_dim.width % resize_dim.width;
+            //TODO: I need a break... Need to figure out if my math makes sense and how to properly handle 0 cases
+            if (height_dscale && width_dscale)
+            {
+                height_dscale = img_dim.height/height_dscale;
+                width_dscale = img_dim.width/width_dscale;
+
+                dscale = MAX(height_dscale, width_dscale);
+
+                //No point in large dscale that gives only few pixels increase
+                if (dscale > 1 && dscale < 10)
+                {
+                    scale = dscale + 1;
+                }
+                else
+                {
+                    dscale = 1;
+                }
+            }
         }
+
         format |= FORMAT_RESIZE|FORMAT_KEEP_ASPECT|FORMAT_DITHER;
         do 
         {
@@ -205,6 +232,7 @@ static int load_image(char *filename, struct image_info *info,
                 {
                     dsd_map[2] = dscale;
                     ds_map[2] = scale;
+                   break;
                 }
                 dscale = 1;
                 scale = 1;
