@@ -60,35 +60,27 @@ static int muted = -1;
 static int bt_absvol_last_step = -1;
 static char bt_absvol_last_mac[18];
 
-static int hiby_volume_to_absvol_step(int volume_cb)
+static int hwvolume_to_percent(int volume_cb)
 {
     int min_vol = sound_min(SOUND_VOLUME);
     int max_vol = sound_max(SOUND_VOLUME);
-    int limit_vol = global_settings.volume_limit;
-    int span;
-    int pct;
-    int step;
 
-    if (limit_vol < max_vol)
-        max_vol = limit_vol;
-    if (max_vol < min_vol)
-        max_vol = min_vol;
-
-    if (volume_cb < min_vol)
-        volume_cb = min_vol;
-    if (volume_cb > max_vol)
-        volume_cb = max_vol;
-
-    span = max_vol - min_vol;
+    int span = max_vol - min_vol;
     if (span <= 0)
         return 0;
 
-    pct = ((volume_cb - min_vol) * 100 + span / 2) / span;
-    if (pct < 0)
-        pct = 0;
-    if (pct > 100)
-        pct = 100;
+    int i_from_span = volume_cb - min_vol;
+    int pct = (i_from_span * 100 + span / 2) / span;
 
+    return pct;
+}
+
+static int hiby_volume_to_absvol_step(int volume_cb)
+{
+    int pct = hwvolume_to_percent(volume_cb);
+
+    int step;
+    
     step = (pct * HIBY_ABSVOL_MAX + 50) / 100;
     if (step < 0)
         step = 0;
@@ -262,10 +254,10 @@ void audiohw_set_frequency(int fsel)
 {
     (void)fsel;
 }
+void bt_bluealsa_change_volume(int l, int r, char* mac);
 
 void audiohw_set_volume(int vol_l, int vol_r)
 {
-    int vol_avg;
     logf("hw vol %d %d", vol_l, vol_r);
 
     long l,r;
@@ -282,8 +274,12 @@ void audiohw_set_volume(int vol_l, int vol_r)
     alsa_controls_set_ints("Left Playback Volume", 1, &l);
     alsa_controls_set_ints("Right Playback Volume", 1, &r);
 
-    vol_avg = (vol_l + vol_r) / 2;
+    int vol_avg = (vol_l + vol_r) / 2;
     hiby_notify_bt_absvol(vol_avg);
+
+    // It won't work as is, too many system calls will cause lag and audio dropouts
+    //int vol_percents = hwvolume_to_percent(vol_avg);
+    //bt_bluealsa_change_volume(vol_percents, vol_percents, hiby_pcm_get_bt_mac());
 }
 
 void audiohw_set_filter_roll_off(int value)
