@@ -676,6 +676,20 @@ static void bt_build_pcm_path(const char *mac, char *path, size_t path_len)
     snprintf(path, path_len, "/org/bluealsa/hci0/dev_%s/a2dpsrc/sink", mac_u);
 }
 
+void bt_bluealsa_change_volume(int l, int r, const char* mac)
+{
+    if (!mac || !mac[0])
+        return;
+
+    //With hardware volume, smaller value is used as volume, so keep that in mind
+    char pcm_path[96];
+    bt_build_pcm_path(mac, pcm_path, sizeof(pcm_path));
+    char cmd[256];
+
+    snprintf(cmd, sizeof(cmd), "bluealsa-cli volume '%s' %d %d >/dev/null 2>&1", pcm_path, l, r);
+    system(cmd);
+}
+
 static void bt_set_active_codec(const char *mac)
 {
     char pcm_path[96];
