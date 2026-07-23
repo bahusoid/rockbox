@@ -55,7 +55,7 @@
 static int num_devices = 0;
 static struct pollfd poll_fds[NR_POLL_DESC];
 
-void button_add_input_device(int i)
+bool button_add_input_device(int i)
 {
     int fd = poll_fds[i].fd;
     if (fd >= 0)
@@ -72,6 +72,7 @@ void button_add_input_device(int i)
         if (num_devices <= i)
             num_devices = i + 1;
     }
+    return fd >= 0;
 }
 
 void button_init_device(void)

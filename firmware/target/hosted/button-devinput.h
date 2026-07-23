@@ -22,7 +22,7 @@
 #define __BUTTON_DEVINPUT_H__
 
 void button_close_device(void);
-void button_add_input_device(int i);
+bool button_add_input_device(int i);
 void button_remove_input_device(int i);
 
 #endif
