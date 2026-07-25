@@ -48,8 +48,17 @@
 #define DEFAULT_MARGIN 6
 #define KBD_BUF_SIZE 500
 
+/* Sentinel picker cell, drawn as an icon (the UI font has no glyph for it):
+ * KBD_SPACE inserts a space. */
+#define KBD_SPACE 0x2423
+
 #ifdef HAVE_TOUCHSCREEN
+/* Increase grid size so it responds better to taps */
+#if LCD_WIDTH >= 320
+#define MIN_GRID_SIZE   44
+#else
 #define MIN_GRID_SIZE   16
+#endif
 #define GRID_SIZE(s, x)   \
         ((s) == SCREEN_MAIN && MIN_GRID_SIZE > (x) ? MIN_GRID_SIZE: (x))
 #endif
@@ -390,6 +399,27 @@ static ucschar_t get_kbd_ch(struct keyboard_parameters *pm, int x, int y)
     k = k * pm->max_chars + x;
     return (*pbuf != 0xFEFF && k < *pbuf)? pbuf[k+1]: ' ';
 }
+
+/* Number of real characters in the grid row drawn at picker row y. */
+static int get_kbd_row_len(struct keyboard_parameters *pm, int y)
+{
+    unsigned int n, i, k = pm->page*pm->lines + y;
+    ucschar_t *pbuf;
+    for (pbuf = pm->kbd_buf_ptr; (i = *pbuf) != 0xFEFF; pbuf += i + 1)
+    {
+        n = i ? (i + pm->max_chars - 1) / pm->max_chars : 1;
+        if (k < n)
+        {
+            int len = (int)i - (int)(k * pm->max_chars);
+            if (len > (int)pm->max_chars)
+                len = pm->max_chars;
+            return len < 0 ? 0 : len;
+        }
+        k -= n;
+    }
+    return 0;
+}
+
 static void kbd_calc_pm_params(struct keyboard_parameters *pm,
                             struct screen *sc, struct edit_state *state);
 static void kbd_calc_vp_params(struct keyboard_parameters *pm,
@@ -431,10 +461,14 @@ int kbd_input(char* text, int buflen, ucschar_t *kbd)
     }
 
 #ifdef HAVE_TOUCHSCREEN
+    enum touchscreen_mode old_mode = touchscreen_get_mode();
+#if LCD_WIDTH >= 320
+    touchscreen_set_mode(TOUCHSCREEN_POINT);
+#else
     /* keyboard is unusuable in pointing mode so force 3x3 for now.
      * TODO - fix properly by using a bigger font and changing the layout */
-    enum touchscreen_mode old_mode = touchscreen_get_mode();
     touchscreen_set_mode(TOUCHSCREEN_BUTTON);
+#endif
 #endif
     /* initialize state */
     state.text = text;
@@ -459,6 +493,33 @@ int kbd_input(char* text, int buflen, ucschar_t *kbd)
             const unsigned char *p;
             int len = 0;
 
+#if defined(HAVE_TOUCHSCREEN) && (LCD_WIDTH >= 320) && (LCD_HEIGHT >= 640)
+            /* Two pages of eight lines; page two is page one shifted, cell
+             * for cell. Needs a panel tall enough to show all eight at once. */
+            if (touchscreen_get_mode() == TOUCHSCREEN_POINT)
+            {
+                p = "1234567890\n"
+                    "qwertyuiop\n"
+                    "asdfghjkl;\n"
+                    "zxcvbnm,./\n"
+                    "àáâäåçèéêë\n"
+                    "ìíîïñòóôöù\n"
+                    "úûüÿ'\n"
+                    "`-=␣␣␣␣[]\\\n"
+                    "!@#$%^&*()\n"
+                    "QWERTYUIOP\n"
+                    "ASDFGHJKL:\n"
+                    "ZXCVBNM<>?\n"
+                    "ÀÁÂÄÅÇÈÉÊË\n"
+                    "ÌÍÎÏÑÒÓÔÖÙ\n"
+                    "ÚÛÜŸ\"\n"
+                    "~_+␣␣␣␣{}|";
+                pm->default_lines = 8;
+                pm->max_line_len = 10;
+            }
+            else
+#endif
+            {
 #if LCD_WIDTH >= 160 && LCD_HEIGHT >= 96
             struct screen *sc = &screens[l];
 
@@ -529,6 +590,7 @@ int kbd_input(char* text, int buflen, ucschar_t *kbd)
                 pm->max_line_len = 18;
             }
 #endif
+            }
             pbuf = pm->kbd_buf;
             while (*p)
             {
@@ -850,6 +912,11 @@ static void kbd_calc_pm_params(struct keyboard_parameters *pm,
                                 (touchscreen_get_mode() == TOUCHSCREEN_POINT));
 #endif
 
+#ifdef HAVE_TOUCHSCREEN
+    if (touchscreen_get_mode() == TOUCHSCREEN_POINT)
+        pm->curfont = sc->getuifont();
+    else
+#endif
     pm->curfont = pm->default_lines ? FONT_SYSFIXED : sc->getuifont();
     font = font_get(pm->curfont);
     pm->font_h = font->height;
@@ -908,6 +975,11 @@ static void kbd_calc_vp_params(struct keyboard_parameters *pm,
     icon_w = get_icon_width(sc->screen_type);
 
     sc_w = vp->width; /**sc->getwidth();**/
+#ifdef HAVE_TOUCHSCREEN
+    if (touchscreen_get_mode() == TOUCHSCREEN_POINT)
+        pm->font_w = sc_w / pm->max_line_len;   /* fill width, allow >10 cols */
+    else
+#endif
     if (pm->font_w < sc_w / pm->max_line_len)
         pm->font_w = sc_w / pm->max_line_len;
     pm->max_chars = sc_w / pm->font_w;
@@ -1076,22 +1148,47 @@ static void kbd_draw_picker(struct keyboard_parameters *pm,
         {
             for (i = 0; i < pm->max_chars; i++)
             {
+                int cx = i*pm->font_w, cy = j*pm->font_h;
                 ch = get_kbd_ch(pm, i, j);
+                if (ch == KBD_SPACE)
+                {
+                    /* space bar: a bar with short upturned ends. Cells join;
+                     * the run's first/last cell adds the vertical end tick. */
+                    int th = MAX(2, pm->font_h/14);
+                    int by = cy + (pm->font_h*2)/3;
+                    int tk = pm->font_h/6;
+                    int rx = cx + pm->font_w - th;
+                    sc->fillrect(cx, by, pm->font_w, th);
+                    if (i == 0 || get_kbd_ch(pm, i-1, j) != KBD_SPACE)
+                        sc->fillrect(cx, by - tk, th, tk + th);
+                    if (get_kbd_ch(pm, i+1, j) != KBD_SPACE)
+                        sc->fillrect(rx, by - tk, th, tk + th);
+                    continue;
+                }
                 utf8 = utf8encode(ch, outline);
                 *utf8 = 0;
 
                 sc->getstringsize(outline, &w, &h);
-                sc->putsxy(i*pm->font_w + (pm->font_w-w) / 2,
-                           j*pm->font_h + (pm->font_h-h) / 2, outline);
+                sc->putsxy(cx + (pm->font_w-w) / 2,
+                           cy + (pm->font_h-h) / 2, outline);
             }
         }
 
         if (!pm->line_edit)
         {
-            /* highlight the key that has focus */
+            /* highlight the focused key; the space bar spans several cells and
+             * highlights as one */
+            int hx = pm->x, hw = 1;
+            if (get_kbd_ch(pm, hx, pm->y) == KBD_SPACE)
+            {
+                while (hx > 0 && get_kbd_ch(pm, hx - 1, pm->y) == KBD_SPACE)
+                    hx--;
+                while (get_kbd_ch(pm, hx + hw, pm->y) == KBD_SPACE)
+                    hw++;
+            }
             sc->set_drawmode(DRMODE_COMPLEMENT);
-            sc->fillrect(pm->font_w*pm->x, pm->font_h*pm->y,
-                         pm->font_w, pm->font_h);
+            sc->fillrect(pm->font_w*hx, pm->font_h*pm->y,
+                         pm->font_w*hw, pm->font_h);
             sc->set_drawmode(DRMODE_SOLID);
         }
     }
@@ -1338,8 +1435,8 @@ static void kbd_draw_buttons(struct keyboard_parameters *pm, struct screen *sc)
     /* draw buttons */
     if (pm->pages > 1)
     {
-        /* button to flip page. */
-        vp.y = pm->lines*pm->font_h;
+        /* button to flip page */
+        vp.y = pm->kbd_viewports[eKBD_VP_PICKER].y + pm->lines*pm->font_h;
         sc->hline(0, sc_w - 1, 0);
         sc->putsxy(0, text_y, ">");
     }
@@ -1379,22 +1476,32 @@ static int keyboard_touchscreen(struct keyboard_parameters *pm,
 #endif
     if (x < 0 || y < 0)
         return ACTION_NONE;
-    if (y < pm->lines*pm->font_h)
+    /* The picker grid is drawn in its own viewport, below the edit line, so
+     * translate the absolute touch into that viewport (see kbd_draw_picker). */
+    struct viewport *picker_vp = &pm->kbd_viewports[eKBD_VP_PICKER];
+    int picker_x = x - picker_vp->x;
+    int picker_y = y - picker_vp->y;
+    if (picker_y >= 0 && picker_y < pm->lines*pm->font_h)
     {
-        if (x/pm->font_w < pm->max_chars)
+        int row = picker_y/pm->font_h;
+        /* ignore taps past the end of a short row */
+        if (picker_x >= 0 && picker_x/pm->font_w < get_kbd_row_len(pm, row))
         {
             /* picker area */
             state->changed = CHANGED_PICKER;
-            pm->x = x/pm->font_w;
-            pm->y = y/pm->font_h;
+            pm->x = picker_x/pm->font_w;
+            pm->y = row;
             pm->line_edit = false;
             if (button == BUTTON_REL)
                 return ACTION_KBD_SELECT;
         }
     }
-    else if (y < pm->main_y - pm->keyboard_margin)
+    else if (pm->pages > 1 && picker_y >= pm->lines*pm->font_h &&
+             picker_y < pm->lines*pm->font_h +
+                        GRID_SIZE(sc->screen_type, sc->getcharheight()))
     {
-        /* button to flip page */
+        /* flip-page button, drawn just below the grid; test the same band in
+         * picker-relative coords so ">" is tappable. */
         if (button == BUTTON_REL)
             return ACTION_KBD_PAGE_FLIP;
     }
@@ -1432,6 +1539,9 @@ static void kbd_insert_selected(struct keyboard_parameters *pm,
 {
     /* find input char */
     ucschar_t ch = get_kbd_ch(pm, pm->x, pm->y);
+
+    if (ch == KBD_SPACE)
+        ch = ' ';
 
     /* check for hangul input */
     if (ch >= 0x3131 && ch <= 0x3163)
