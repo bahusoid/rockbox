@@ -92,10 +92,9 @@ bool logfdisplay(void)
     struct font* font;
     int user_index;/* user_index will be number of the first line to display (warning: line!=logf entry) */
     char buf[2];
-    
-    fontnr = lcd_getfont();
+    fontnr = screens[SCREEN_MAIN].getuifont();
     font = font_get(fontnr);
-    
+
     /* get the horizontal size of each line */
     font_getstringsize("A", NULL, &delta_y, fontnr);
     
