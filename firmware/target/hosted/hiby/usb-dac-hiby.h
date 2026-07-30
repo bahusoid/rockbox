@@ -20,6 +20,8 @@
 #ifndef __USB_DAC_HIBY_H__
 #define __USB_DAC_HIBY_H__
 
+extern const int USB_DAC_SAMPLE_RATE;
+
 /**
  * Host-PCM pump for the HiBy USB DAC gadget mode: drains /dev/uac_sa
  * into the PCM mixer. Started/stopped by the USB gadget driver when the
