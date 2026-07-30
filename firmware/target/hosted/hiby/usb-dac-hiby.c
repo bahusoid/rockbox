@@ -43,6 +43,7 @@
 
 #include "config.h"
 #include "kernel.h"
+#include "pcm.h"
 #include "pcm_mixer.h"
 #include "pcm_sampr.h"
 #include "system.h"
@@ -147,7 +148,7 @@ static void *dac_pump_thread(void *arg)
 
 bool usb_dac_start(void)
 {
-    static const struct mixer_play_cbs cbs = { .get_more = dac_get_more };
+    //static const struct mixer_play_cbs cbs = { .get_more = dac_get_more };
     int st[3] = {0, 0, 0};
     unsigned int rate;
 
@@ -188,7 +189,7 @@ bool usb_dac_start(void)
     }
 
     mixer_channel_set_amplitude(PCM_MIXER_CHAN_USBAUDIO, MIX_AMP_UNITY);
-    mixer_channel_play_data(PCM_MIXER_CHAN_USBAUDIO, &cbs, NULL, 0);
+    mixer_channel_play_data(PCM_MIXER_CHAN_USBAUDIO, dac_get_more, NULL, 0);
     return true;
 }
 
