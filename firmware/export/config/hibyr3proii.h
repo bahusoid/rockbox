@@ -58,6 +58,7 @@
 
 /* Audio codec */
 #define HAVE_HIBY_LINUX_CODEC
+#define HAVE_HIBY_BLUETOOTH
 
 /* We don't have hardware controls */
 #define HAVE_SW_TONE_CONTROLS

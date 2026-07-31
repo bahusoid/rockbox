@@ -92,6 +92,14 @@
 #include "playback.h"
 #include "voice_thread.h"
 
+#if defined(HAVE_HIBY_BLUETOOTH)
+#include "hiby_bluetooth.h"
+const char *hiby_pcm_get_bt_mac(void);
+bool bt_is_enabled_fast(void);
+bool bt_disconnect(void);
+bool bt_can_autoconnect(void);
+#endif
+
 #ifdef BOOTFILE
 #if !defined(USB_NONE) && !defined(USB_HANDLED_BY_OF) \
         || defined(HAVE_HOTSWAP_STORAGE_AS_MAIN)
@@ -718,6 +726,27 @@ long default_event_handler_ex(long event, void (*callback)(void *), void *parame
             system_restore();
         }
             return SYS_FS_CHANGED;
+#endif
+#ifdef HAVE_HIBY_BLUETOOTH
+    case SYS_BT_PLUGGED:
+        {
+            char active_mac[18];
+            bt_autoconnection_route_to_bluetooth(active_mac, true);
+            return SYS_BT_PLUGGED;
+        }
+
+    case SYS_BT_UNPLUGGED:
+        if (bt_can_autoconnect() && hiby_pcm_get_bt_mac() != NULL)
+        {
+            audio_pause();
+            //This works only with stopped playback, otherwise it will cause a crash
+            //But with active playback we are f**ed anyway (we are just deferring it...)
+            //if ((audio_status() & (AUDIO_STATUS_PLAY | AUDIO_STATUS_PAUSE)) == 0)
+            {
+                bt_route_to_local();
+            }
+        }
+        return SYS_BT_UNPLUGGED;
 #endif
 #ifdef HAVE_HEADPHONE_DETECTION
         case SYS_PHONE_PLUGGED:
