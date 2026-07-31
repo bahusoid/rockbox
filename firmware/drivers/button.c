@@ -33,6 +33,7 @@
 #include "serial.h"
 #include "power.h"
 #include "powermgmt.h"
+#include "splash.h"
 #if defined(HAVE_SDL)
 #include <SDL.h>
 #if (SDL_MAJOR_VERSION > 1)
@@ -50,6 +51,11 @@
 
 #if defined(IPOD_ACCESSORY_PROTOCOL) && (defined(IPOD_COLOR) || defined(IPOD_4G) || defined(IPOD_MINI) || defined(IPOD_MINI2G))
 #include "iap.h"
+#endif
+#if defined(HAVE_HIBY_BLUETOOTH)
+#include "hiby_bluetooth.h"
+const char *hiby_pcm_get_bt_mac(void);
+bool bt_is_enabled_fast(void);
 #endif
 
 static long lastbtn;   /* Last valid button status */
@@ -156,6 +162,22 @@ static void check_audio_peripheral_state(void)
         lineout_present = !lineout_present;
         timeout_register(&lo_detect_timeout, lo_detect_callback,
                          HZ/2, lineout_present);
+    }
+#endif
+#if defined(HAVE_HIBY_BLUETOOTH)
+    {
+        bool bt_connected = bt_is_connected_fast();
+        const char *bt_mac = hiby_pcm_get_bt_mac();
+        if (!bt_mac && bt_connected)
+        {
+            button_queue_post_remove_head(SYS_BT_PLUGGED, 0);
+
+        }
+        else if (bt_mac && !bt_connected)
+        {
+            button_queue_post_remove_head(SYS_BT_UNPLUGGED, 0);
+
+        }
     }
 #endif
 }

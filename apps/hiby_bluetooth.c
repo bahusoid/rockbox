@@ -24,6 +24,7 @@
 
 
 #include <ctype.h>
+#include <dirent.h>
 
 #include "kernel.h"
 #include "audio.h"
@@ -53,6 +54,8 @@ static bool bt_get_active_mac(char *mac_out, size_t mac_out_len);
 #define BT_MAX_CODECS 8
 #define BT_CODEC_NAME_LEN 16
 #define BOOT_SETTING_FILE ROCKBOX_DIR"/rb_bt_on.txt"
+#define BT_SYS_PATH "/sys/class/bluetooth"
+
 const int BT_REMOTE_INPUT_IDX = 4;
 
 
@@ -89,6 +92,43 @@ static bool bt_is_connected(const char *mac);
 static bool bt_prepare_stack(void);
 static void bt_connect_device(const struct bt_device *device);
 static void bt_disconnect(void);
+static bool is_busy = false;
+
+int count_items(const char *path, int max_count){
+    
+    DIR *dir = opendir(path);
+    if (!dir) return -1;
+
+    int count = 0;
+    struct dirent *entry;
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] == '.') {
+            if (entry->d_name[1] == '\0' || 
+               (entry->d_name[1] == '.' && entry->d_name[2] == '\0')) {
+                continue;
+               }
+        }
+        if (++count >= max_count) {
+            break;
+        }
+    }
+
+    closedir(dir);
+    return count;
+}
+
+bool check = false;
+bool bt_is_enabled_fast(void)
+{
+    return check;
+    //return count_items(BT_SYS_PATH, 1) > 0;
+}
+
+bool bt_is_connected_fast(void)
+{
+    return count_items(BT_SYS_PATH, 2) > 1;
+}
 
 static void bt_suspend(void)
 {
@@ -489,7 +529,7 @@ static void bt_kick_audio_if_playing(void)
     }
 }
 
-static void bt_route_to_local(void)
+void bt_route_to_local(void)
 {
     bt_playback_dev = BT_LOCAL_PLAYBACK_DEVICE;
     bt_active_codec[0] = '\0';
@@ -821,6 +861,7 @@ static void bt_connect_device(const struct bt_device *device)
         splash(HZ * 2, "BT unavailable");
         return;
     }
+    is_busy = true;
 
     if (!device->paired)
     {
@@ -828,6 +869,7 @@ static void bt_connect_device(const struct bt_device *device)
         if (!bt_ctl_run("pair", mac, "Pairing successful"))
         {
             splash(HZ * 2, "BT pair failed");
+            is_busy = false;
             return;
         }
         //sleep(HZ / 2);
@@ -836,6 +878,7 @@ static void bt_connect_device(const struct bt_device *device)
     if (!bt_ctl_run("connect", mac, "Connection successful"))
     {
         splash(HZ * 2, "BT connect failed");
+        is_busy = false;
         return;
     }
 
@@ -845,10 +888,13 @@ static void bt_connect_device(const struct bt_device *device)
         splash(HZ, "BT connected");
     else
         splash(HZ * 2, "BT connected, no audio route");
+
+    is_busy = false;
 }
 
 static void bt_disconnect(void)
 {
+    is_busy = true;
     button_remove_input_device(BT_REMOTE_INPUT_IDX);
 
     //bt_set_selected(NULL);
@@ -865,6 +911,7 @@ static void bt_disconnect(void)
         system(cmd);
     }
 
+    is_busy = false;
     splash(HZ/4, "Disconnected");
 }
 
@@ -972,6 +1019,38 @@ static void bt_show_codec_picker(const char *mac)
     }
 }
 
+bool bt_can_autoconnect(void)
+{
+    return !is_busy && pcm_is_initialized();
+}
+
+bool bt_autoconnection_route_to_bluetooth(char* active_mac, bool bt_on)
+{
+    if (is_busy)
+        return false;
+
+    is_busy = true;
+    bool bt_connected = bt_on && bt_get_active_mac(active_mac, 18);
+    bool active_mac_changed = bt_connected && (strcmp(bt_selected_mac, active_mac) != 0);
+    /* Auto-route to BT if headphone is connected but output is still local (connected by Hiby OS) */
+    if (bt_connected && 
+        (active_mac_changed || strcmp(bt_playback_dev, BT_LOCAL_PLAYBACK_DEVICE) == 0 ))
+    {
+       //splash(0, "Bluetooth connection detected.\nRouting audio to Bluetooth...");
+        //TODO: Auto connection seems to ignore codec preference
+        // Should we do full reconnection?
+        if (active_mac_changed)
+        {
+            bt_get_device_name(active_mac, bt_selected_name);
+            strcpy(bt_selected_mac, active_mac);
+        }
+        bt_route_to_bluetooth(active_mac, NULL);
+        //splash(HZ/5, "Done.");
+    }
+    is_busy = false;
+    return bt_connected;
+}
+
 static void bt_show_status(void)
 {
     struct simplelist_info info;
@@ -983,23 +1062,7 @@ static void bt_show_status(void)
 
     while (1)
     {
-        bool bt_connected = bt_on && bt_get_active_mac(active_mac, sizeof(active_mac));
-        bool active_mac_changed = bt_connected && (strcmp(bt_selected_mac, active_mac) != 0);
-        /* Auto-route to BT if headphone is connected but output is still local (connected by Hiby OS) */
-        if (bt_connected && 
-            (active_mac_changed || strcmp(bt_playback_dev, BT_LOCAL_PLAYBACK_DEVICE) == 0 ))
-        {
-            splash(0, "Bluetooth connection detected.\nRouting audio to Bluetooth...");
-            //TODO: Auto connection seems to ignore codec preference
-            // Should we do full reconnection?
-            if (active_mac_changed)
-            {
-                bt_get_device_name(active_mac, bt_selected_name);
-                strcpy(bt_selected_mac, active_mac);
-            }
-            bt_route_to_bluetooth(active_mac, NULL);
-            splash(HZ/5, "Done.");
-        }
+        bool bt_connected = bt_autoconnection_route_to_bluetooth(active_mac, bt_on);
 
         int line_idx = 0;
         int bt_toggle_line;
@@ -1124,6 +1187,7 @@ int hiby_bluetooth_menu(void)
         info.action_callback = bt_simplelist_ok_cancel;
         info.selection = -1;
         info.title_icon = Icon_Submenu;
+        check = true;
 
         simplelist_show_list(&info);
         action = info.selection;
