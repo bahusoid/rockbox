@@ -61,10 +61,13 @@
 #define UAC_SA_FRAME_SIZE 8
 
 /* Ring of S16 stereo frames. A power of two so head/tail wrap cleanly. */
-#define DAC_RING_FRAMES   8192  /* ~186 ms at 44.1 kHz */
+#define DAC_RING_FRAMES   8192  /* ~170 ms at 48 kHz */
 #define DAC_CHUNK_FRAMES  512   /* mixer buffer granularity */
-/* one read()'s worth. Must stay <= the kernel ring/2 */
-#define DAC_READ_BYTES    (DAC_CHUNK_FRAMES * UAC_SA_FRAME_SIZE)
+/* Pump reads smaller chunks than the mixer consumes so the ring level is
+ * refreshed frequently and short-term host jitter does not underrun. */
+#define DAC_READ_FRAMES   128   /* must stay <= the kernel ring/2 frames */
+/* one read()'s worth */
+#define DAC_READ_BYTES    (DAC_READ_FRAMES * UAC_SA_FRAME_SIZE)
 
 static int16_t dac_ring[DAC_RING_FRAMES * 2];
 static volatile unsigned int dac_head;  /* frames produced; pump only */
@@ -121,7 +124,7 @@ static void *dac_pump_thread(void *arg)
         unsigned int head = dac_head;
 
         /* Leave room for a full read; else wait for the mixer to drain */
-        if (head - dac_tail > DAC_RING_FRAMES - DAC_CHUNK_FRAMES)
+        if (head - dac_tail > DAC_RING_FRAMES - DAC_READ_FRAMES)
         {
             usleep(1000);
             continue;
