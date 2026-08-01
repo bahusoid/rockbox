@@ -44,6 +44,7 @@ void pcm_alsa_close_device(const char *device);
 void hiby_pcm_set_bt_mac(const char *mac);
 static bool bt_ctl_run(const char *arg1, const char *arg2, const char *success_str);
 static bool bt_get_active_mac(char *mac_out, size_t mac_out_len);
+static bool bt_enable(void);
 
 #define BT_MAX_DEVICES 32
 #define BT_NAME_LEN 80
@@ -177,14 +178,15 @@ static int bt_devicelist_callback(int action, struct gui_synclist *lists)
     if (action == ACTION_STD_CONTEXT)
     {
         struct bt_device_menu_data* ctx = lists->data;
-        struct bt_device bt_device = ctx->devices[lists->selected_item - 1];
-        if (bt_device.paired && confirm_delete_yesno(bt_device.name) == 0)
+        struct bt_device* bt_device = &ctx->devices[lists->selected_item - 1];
+        if (bt_device->paired && confirm_delete_yesno(bt_device->name) == YESNO_YES)
         {
-            if (*bt_active_codec && strcmp(bt_selected_mac, bt_device.mac) == 0)
+            bt_enable();
+            if (*bt_active_codec && strcmp(bt_selected_mac, bt_device->mac) == 0)
                 bt_disconnect();
 
-            bt_ctl_run("remove", bt_device.mac, NULL);
-            bt_device.paired = false;
+            if (bt_ctl_run("remove", bt_device->mac, "has been removed"))
+                bt_device->paired = false;
             return ACTION_REDRAW;
         }
     }
