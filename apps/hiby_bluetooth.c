@@ -42,7 +42,7 @@
 int pcm_alsa_switch_playback_device(const char *device);
 void pcm_alsa_close_device(const char *device);
 void hiby_pcm_set_bt_mac(const char *mac);
-static bool bt_ctl_run(const char *subcmd, const char *mac, const char *success_str);
+static bool bt_ctl_run(const char *arg1, const char *arg2, const char *success_str);
 static bool bt_get_active_mac(char *mac_out, size_t mac_out_len);
 
 #define BT_MAX_DEVICES 32
@@ -363,26 +363,14 @@ static int bt_device_sort_cmp(const void *a, const void *b)
 
 /* Run "bluetoothctl <subcmd> <mac>" and return true if success_str appears in output.
  * Pass NULL for success_str to skip output checking. */
-static bool bt_ctl_run(const char *subcmd, const char *mac, const char *success_str)
+static bool bt_ctl_run(const char *arg1, const char *arg2, const char *success_str)
 {
-    char cmd[128];
-    char line[256];
-    bool success = false;
-    FILE *fp;
-
-    snprintf(cmd, sizeof(cmd), "bluetoothctl %s %s 2>&1", subcmd, mac);
-    fp = popen(cmd, "r");
-    if (!fp)
-        return false;
-
-    while (fgets(line, sizeof(line), fp))
-    {
-        if (success_str && strstr(line, success_str))
-            success = true;
-    }
-
-    pclose(fp);
-    return success;
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "bluetoothctl %s %s | grep -q '%s'", arg1, arg2, success_str);
+    int status = system(cmd);
+    if (status == 0)
+        return true;
+    return false;
 }
 
 /* Parse "Device XX:XX:XX:XX:XX:XX Name" lines from a bluetoothctl command. */
@@ -765,28 +753,13 @@ static void bt_set_active_codec(const char *mac)
 
 static bool bt_disable(void)
 {
-    FILE* fp;
-
-    fp = popen("bluetoothctl power off | grep -q 'power off succeeded'", "r");
-
-    if (fp && pclose(fp) == 0)
-        return true;
-
-    return false;
+    return bt_ctl_run("power", "off", "power off succeeded");
 }
 
 static bool bt_enable(void)
 {
-    FILE* fp;
-
-    //fp = popen("/usr/bin/bt_enable | grep 'Powered: 1'", "r");
-    fp = popen("bluetoothctl power on | grep -q 'power on succeeded'", "r");
-
-    if (fp && pclose(fp) == 0)
-        return true;
-
-    //splash(0, "FAILED TO POWER ON");
-    return false;
+     return bt_ctl_run("power", "on", "power on succeeded");
+    //system("/usr/bin/bt_enable | grep 'Powered: 1'", "r") == 0;
 }
 
 static bool bt_prepare_stack(void)
