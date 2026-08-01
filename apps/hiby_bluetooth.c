@@ -25,6 +25,10 @@
 
 #include <ctype.h>
 #include <dirent.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <unistd.h>
 
 #include "kernel.h"
 #include "audio.h"
@@ -56,6 +60,7 @@ static bool bt_enable(void);
 #define BT_CODEC_NAME_LEN 16
 #define BOOT_SETTING_FILE ROCKBOX_DIR"/rb_bt_on.txt"
 #define BT_SYS_PATH "/sys/class/bluetooth"
+#define BT_DEBUG_LOG_FILE "/data/mnt/sd_0/rockbox-bt-debug.log"
 
 const int BT_REMOTE_INPUT_IDX = 4;
 
@@ -94,6 +99,33 @@ static bool bt_prepare_stack(void);
 static void bt_connect_device(const struct bt_device *device);
 static void bt_disconnect(void);
 static bool is_busy = false;
+
+void hiby_debug_log(const char *format, ...)
+{
+    return;
+    char line[512];
+    va_list ap;
+    int fd;
+    int len;
+
+    va_start(ap, format);
+    len = vsnprintf(line, sizeof(line) - 1, format, ap);
+    va_end(ap);
+
+    if (len < 0)
+        return;
+    if (len >= (int)sizeof(line) - 1)
+        len = sizeof(line) - 2;
+    line[len++] = '\n';
+
+    fd = open(BT_DEBUG_LOG_FILE, O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (fd < 0)
+        return;
+
+    write(fd, line, len);
+    fsync(fd);
+    close(fd);
+}
 
 int count_items(const char *path, int max_count){
     
