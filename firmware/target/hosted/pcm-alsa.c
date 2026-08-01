@@ -441,6 +441,10 @@ static void pcm_pump_locked(snd_pcm_t *handle)
 #if defined(HIBY_LINUX)
     if (state == SND_PCM_STATE_OPEN || !hiby_pcm_params_ready())
         return;
+    if (state == SND_PCM_STATE_DISCONNECTED)
+    {
+        return;
+    }
 #endif
 
     if (state == SND_PCM_STATE_XRUN)
@@ -577,7 +581,8 @@ static void close_hwdev(void)
             ahandler = NULL;
         }
 #endif
-        snd_pcm_close(handle);
+        if (snd_pcm_state(handle) != SND_PCM_STATE_DISCONNECTED)
+            snd_pcm_close(handle);
 
         handle = NULL;
     }
@@ -625,7 +630,14 @@ static void open_hwdev(const char *device, snd_pcm_stream_t mode)
     /* Close old handle */
     close_hwdev();
 
-    if ((err = snd_pcm_open(&handle, device, mode, 0)) < 0)
+#if defined(HIBY_LINUX)
+    /* A dead BlueALSA transport must never block the PCM mutex owner. */
+    err = snd_pcm_open(&handle, device, mode,
+                       hiby_pcm_is_bluealsa_device(device) ? SND_PCM_NONBLOCK : 0);
+#else
+    err = snd_pcm_open(&handle, device, mode, 0);
+#endif
+    if (err < 0)
     {
         panicf("%s(): Cannot open device %s: %s", __func__, device, snd_strerror(err));
     }
