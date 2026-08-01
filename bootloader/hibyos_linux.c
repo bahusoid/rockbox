@@ -737,6 +737,10 @@ int main(int argc, char **argv)
         else if(mode == BOOT_ROCKBOX)
         {
 #if defined(HIBY_R3PROII) || defined(HIBY_R1)
+            /* Suspend wifi*/
+            system("/usr/bin/wifi_down");
+            system("echo \"mmc0:0001:2\" > /sys/bus/sdio/drivers/bcmsdh_sdmmc/unbind");
+
             /* Suspend bluetooth as it's not currently supported */
             if (!is_rb_bluetooth_on())
                 system("/usr/bin/bt_suspend");
