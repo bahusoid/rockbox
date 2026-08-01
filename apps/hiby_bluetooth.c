@@ -793,7 +793,8 @@ static bool bt_disable(void)
 static bool bt_enable(void)
 {
      return bt_ctl_run("power", "on", "power on succeeded");
-    //system("/usr/bin/bt_enable | grep 'Powered: 1'", "r") == 0;
+    //return system("/usr/bin/bt_enable | grep 'Powered: 1'", "r") == 0;
+    //return system("bt-adapter --set \"Powered\" \"On\" | grep 'Powered: 1'") == 0;
 }
 
 static bool bt_prepare_stack(void)
