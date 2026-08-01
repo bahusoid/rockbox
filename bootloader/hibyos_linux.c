@@ -121,7 +121,6 @@
 #define ICON_NAME bm_hibyicon
 #define OF_NAME "HIBY PLAYER"
 #define LEFT_RIGHT_FOR_SELECT
-//#define CHARGE_WITH_OF
 #include "bitmaps/hibyicon.h"
 #else
 #error "must define ICON_WIDTH/HEIGHT"
@@ -314,7 +313,6 @@ static int is_btn_prev(int btn)
 
 static enum boot_mode get_boot_mode(void)
 {
-    static int skip_usb_boot = 0;
     enum boot_mode init_mode = load_boot_mode(BOOT_CANARY);
     /* wait for user action */
     enum boot_mode mode = (init_mode == BOOT_CANARY) ? BOOT_ROCKBOX : init_mode;
@@ -378,7 +376,6 @@ static enum boot_mode get_boot_mode(void)
 #else
         if(btn & BUTTON_MAIN)
         {
-            skip_usb_boot = true;
             last_activity = current_tick;
             same_as_last = false;
         }
@@ -399,18 +396,6 @@ static enum boot_mode get_boot_mode(void)
         if (is_btn_prev(btn)) {
             mode = (mode + 1) % BOOT_COUNT;
             init_mode = BOOT_CANARY;
-        }
-
-         /* on usb detect, immediately boot with last choice */
-        if (!skip_usb_boot && power_input_status() & POWER_INPUT_USB_CHARGER)
-        {
-#ifdef CHARGE_WITH_OF
-            return BOOT_OF;
-#else
-            /* save last choice */
-            save_boot_mode(mode);
-            return mode;
-#endif
         }
 
         /* inactivity detection */
