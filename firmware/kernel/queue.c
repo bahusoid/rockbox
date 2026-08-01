@@ -277,9 +277,12 @@ void queue_wait(struct event_queue *q, struct queue_event *ev)
     unsigned int rd;
 
 #ifdef HAVE_PRIORITY_SCHEDULING
-    KERNEL_ASSERT(QUEUE_GET_THREAD(q) == NULL ||
-                  QUEUE_GET_THREAD(q) == __running_self_entry(),
-                  "queue_wait->wrong thread\n");
+    struct thread_entry *owner = QUEUE_GET_THREAD(q);
+    struct thread_entry *current = __running_self_entry();
+
+    KERNEL_ASSERT(owner == NULL || owner == current,
+                  "queue_wait wrong thread event_queue=%p own=%s cur=%s\n", q,
+                  owner ? owner->name : "(none)", current->name);
 #endif
 
     oldlevel = disable_irq_save();
@@ -332,9 +335,12 @@ void queue_wait_w_tmo(struct event_queue *q, struct queue_event *ev, int ticks)
     unsigned int rd, wr;
 
 #ifdef HAVE_EXTENDED_MESSAGING_AND_NAME
-    KERNEL_ASSERT(QUEUE_GET_THREAD(q) == NULL ||
-                  QUEUE_GET_THREAD(q) == __running_self_entry(),
-                  "queue_wait_w_tmo->wrong thread\n");
+    struct thread_entry *owner = QUEUE_GET_THREAD(q);
+    struct thread_entry *current = __running_self_entry();
+
+    KERNEL_ASSERT(owner == NULL || owner == current,
+                  "queue_wait_w_tmo wrong thread event_queue=%p own=%s cur=%s\n", q,
+                  owner ? owner->name : "(none)", current->name);
 #endif
 
     oldlevel = disable_irq_save();
