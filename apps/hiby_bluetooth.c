@@ -19,6 +19,7 @@
  ****************************************************************************/
 
 #include "config.h"
+#include "hiby_bluetooth.h"
 
 #if defined(HIBY_LINUX) && !defined(SIMULATOR)
 
@@ -48,7 +49,6 @@ void pcm_alsa_close_device(const char *device);
 void hiby_pcm_set_bt_mac(const char *mac);
 static bool bt_ctl_run(const char *arg1, const char *arg2, const char *success_str);
 static bool bt_get_active_mac(char *mac_out, size_t mac_out_len);
-static bool bt_enable(void);
 
 #define BT_MAX_DEVICES 32
 #define BT_NAME_LEN 80
@@ -151,11 +151,10 @@ int count_items(const char *path, int max_count){
     return count;
 }
 
-bool check = false;
+
 bool bt_is_enabled_fast(void)
 {
-    return check;
-    //return count_items(BT_SYS_PATH, 1) > 0;
+    return count_items(BT_SYS_PATH, 1) > 0;
 }
 
 bool bt_is_connected_fast(void)
@@ -785,12 +784,12 @@ static void bt_set_active_codec(const char *mac)
     pclose(fp);
 }
 
-static bool bt_disable(void)
+bool bt_disable(void)
 {
     return bt_ctl_run("power", "off", "power off succeeded");
 }
 
-static bool bt_enable(void)
+bool bt_enable(void)
 {
      return bt_ctl_run("power", "on", "power on succeeded");
     //return system("/usr/bin/bt_enable | grep 'Powered: 1'", "r") == 0;
@@ -1195,7 +1194,6 @@ int hiby_bluetooth_menu(void)
         info.action_callback = bt_simplelist_ok_cancel;
         info.selection = -1;
         info.title_icon = Icon_Submenu;
-        check = true;
 
         simplelist_show_list(&info);
         action = info.selection;
