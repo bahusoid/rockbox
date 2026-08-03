@@ -33,7 +33,7 @@
 #include <ctype.h>
 
 typedef unsigned chartype;
-#if 0
+#if defined(PREFER_SIZE_OVER_SPEED) || defined(__OPTIMIZE_SIZE__)
 char* strcasestr (const char* haystack, const char* needle)
 {
     const char* match, *needle_search;
