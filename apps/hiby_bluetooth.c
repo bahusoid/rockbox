@@ -154,7 +154,7 @@ int count_items(const char *path, int max_count){
 
 bool bt_is_enabled_fast(void)
 {
-    return count_items(BT_SYS_PATH, 1) > 0;
+    return access(BT_SYS_PATH"/hci0", F_OK) == 0;
 }
 
 bool bt_is_connected_fast(void)
