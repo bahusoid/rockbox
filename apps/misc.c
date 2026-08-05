@@ -727,7 +727,7 @@ long default_event_handler_ex(long event, void (*callback)(void *), void *parame
         }
             return SYS_FS_CHANGED;
 #endif
-#ifdef HAVE_HIBY_BLUETOOTH
+#if  defined(HAVE_HIBY_BLUETOOTH) && !defined(SIMULATOR)
     case SYS_BT_PLUGGED:
         {
             char active_mac[18];
