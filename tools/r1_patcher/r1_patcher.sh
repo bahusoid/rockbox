@@ -273,7 +273,7 @@ if [[ "$do_cleanup" -eq 1 ]]; then
     rm -rf "$workingdir"
 else
   if [[ "$do_unpack" -eq 1 ]]; then
-    echo "Extracted to: $workingdir"
+    echo "Extracted to: $workingdir/in/rootfs/extracted"
   fi 
 fi
 if [[ "$do_pack" -eq 1 ]]; then
