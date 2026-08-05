@@ -151,10 +151,10 @@ int count_items(const char *path, int max_count){
     return count;
 }
 
-
-bool bt_is_enabled_fast(void)
+bool bt_is_suspended_fast(void)
 {
-    return access(BT_SYS_PATH"/hci0", F_OK) == 0;
+    return access(BT_SYS_PATH"/hci0", F_OK) != 0 
+    && access(PIVOT_ROOT BOOT_SETTING_FILE, F_OK) != 0;
 }
 
 bool bt_is_connected_fast(void)
@@ -1065,7 +1065,9 @@ static void bt_show_status(void)
     bool bt_on = false;
     int sel;
 
-    bt_on = bt_is_enabled();
+    bool suspended = bt_is_suspended_fast();
+    if (!suspended)
+        bt_on = bt_is_enabled();
 
     while (1)
     {
@@ -1082,7 +1084,7 @@ static void bt_show_status(void)
         info.selection = -1;
         simplelist_reset_lines();
 
-        simplelist_addline("Bluetooth: %s", bt_on ? "Enabled" : "Disabled");
+        simplelist_addline("Bluetooth: %s", bt_on ? "Enabled" : (suspended ? "Suspended" : "Disabled"));
         bt_toggle_line = line_idx++;
 
         if (bt_selected_mac[0])
@@ -1128,6 +1130,7 @@ static void bt_show_status(void)
             t_info.action_callback = bt_simplelist_ok_cancel;
             t_info.selection = -1;
             simplelist_show_list(&t_info);
+            bool suspend = t_info.selection == 2; 
 
             if (t_info.selection == 0)
             {
@@ -1135,7 +1138,6 @@ static void bt_show_status(void)
             }
             else if (t_info.selection > 0)
             {
-                bool suspend = t_info.selection == 2; 
                 button_remove_input_device(BT_REMOTE_INPUT_IDX);
                 bt_route_to_local();
                 if (suspend)
@@ -1150,6 +1152,7 @@ static void bt_show_status(void)
                 
                 bt_on = false;
             }
+            suspended = !bt_on && suspend;
         }
         else if (sel == codec_line && active_mac[0])
         {
