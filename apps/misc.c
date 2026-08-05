@@ -740,7 +740,8 @@ long default_event_handler_ex(long event, void (*callback)(void *), void *parame
         {
             audio_pause();
             //This works only with stopped playback, otherwise it will cause a crash
-            //But with active playback we are f**ed anyway (we are just deferring it...)
+            //But with active playback we are f**ed anyway 
+            //(we are just deferring it... pcm threading code needs some looking into)
             //if ((audio_status() & (AUDIO_STATUS_PLAY | AUDIO_STATUS_PAUSE)) == 0)
             {
                 bt_route_to_local();
