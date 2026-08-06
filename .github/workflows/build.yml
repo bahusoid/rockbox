@@ -51,6 +51,15 @@ jobs:
             arch: y
             platform: hibyr1
             type: B
+          
+          - name: Hiby R3 PRO II
+            arch: y
+            platform: hibyr3proii
+
+          - name: Hiby R3 PRO II bootloader
+            arch: y
+            platform: hibyr3proii
+            type: B
 
           - name: Sansa E200v2
             arch: a
