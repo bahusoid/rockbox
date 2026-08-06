@@ -1,40 +1,49 @@
-### Keymap changes
+### Keymap Changes: Touchless Rockbox Navigation
 
-The idea is to make Rockbox fully functional without a touchscreen (didn’t touch most plugins, only a few) and to add the Rewind button.
+The goal of this keymap is to make Rockbox fully functional without a touchscreen (applying to the core and a few key plugins) and add a **Rewind** button.
 
 Essentially, we have 4 navigation keys + the Power button. Pretty limited.  
 So consider the following mapping:
 
-**In Lists/Menus:**
-- Power → Playback resume button. Works as Cancel in menus
-- Long Power → Stops playback
-- Vol Up/Down → Up/Down in list
-- Play/Next → Left/Right. Play (Left) works as Back, Next (Right) as Select
-- Long Play → Main menu (see it as long Back)
-- Long Next → Context menu (see it as long Select)
+#### 1. In Lists and Menus
 
-**Combos:**
-- Power + Vol Up → Lock
-- Power + Vol Down → Quickscreen
-- Next + Vol Up/Down → Tree scrolling (to see what is it: try Next + Vol Down on long filename in File/DB Browser)
+| Button / Combo | Action |
+| :--- | :--- |
+| **Power** | Resume Playback *(Acts as **Cancel** in menus)* |
+| **Long Power** | Stop playback |
+| **Vol Up / Vol Down** | Move Up / Down in list |
+| **Play** (Left) | Go Back |
+| **Long Play** | Main Menu *(Think of it as a "Long Back")* |
+| **Next** (Right) | Select |
+| **Long Next** | Context Menu *(Think of it as a "Long Select")* |
+| `Power` + `Vol Up` | **Lock** device |
+| `Power` + `Vol Down` | **Quickscreen** |
+| `Next` + `Vol Up/Down` | **Tree scrolling** *(To test: try Next + Vol Down on a long filename in the File/DB Browser)* |
 
-**In WPS (While Playing Screen):**
-- Power → Play/Pause
-- Long Power → WPS context menu (Stops playback in locked state)
-- Vol Up → Browse (Vol+ in locked state)
-- Long Vol Up → Volume Up
-- Vol Down → WPS Hotkey (View Playlist by default) (Vol– in locked state)
-- Long Vol Down → Volume Down
-- Play → Prev track/Rewind
-- Next → Next track/ffwd
+---
 
-**Combos:**
-- Power + Vol Up → Lock
-- Power + Vol Down → Quickscreen (Long Power in Quickscreen opens Shortcuts)
-- Power + Play → Main menu
-- Power + Next → Pitchscreen
+#### 2. While Playing Screen (WPS)
+This keymap restores standard media controls while keeping essential Rockbox menus accessible.
 
-**Notes:**
+| Button / Combo | Action                                                                               |
+| :--- |:-------------------------------------------------------------------------------------|
+| **Power** | Play / Pause                                                                         |
+| **Long Power** | WPS Context Menu *(Stops playback if the device is locked)*                          |
+| **Play** | Previous Track / Rewind                                                              |
+| **Next** | Next Track / Fast Forward                                                            |
+| **Vol Up** | Browse *(Acts as Volume Up if the device is locked)*                                 |
+| **Long Vol Up** | Volume Up                                                                            |
+| **Vol Down** | WPS Hotkey (View current Playlist/Cue by default ) *(Acts as Volume Down if locked)* |
+| **Long Vol Down** | Volume Down                                                                          |
+| `Power` + `Vol Up` | **Lock** device                                                                      |
+| `Power` + `Vol Down` | **Quickscreen** *(Note: Long Power inside Quickscreen opens Shortcuts)*              |
+| `Power` + `Play` | **Main Menu**                                                                        |
+| `Power` + `Next` | **Pitchscreen**                                                                      |
+
+---
+
+#### Notes 
+
 - I had to sacrifice single presses of the volume buttons in WPS (but they still work after Lock). So use long presses for volume changes.
 - Quickest way to stop playback — long press Power twice (the first opens the Context Menu, the second stops playback).
 - If you just want to turn on the screen, press Power + Vol Up (Lock combo).
