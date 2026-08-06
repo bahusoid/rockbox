@@ -1,6 +1,6 @@
 name: Build convttf for Windows
 
-on: [workflow_dispatch, push, pull_request]
+on: [workflow_dispatch]
 
 jobs:
   build:
