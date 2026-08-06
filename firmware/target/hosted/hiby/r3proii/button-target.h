@@ -6,7 +6,6 @@
  *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
  *                     \/            \/     \/    \/            \/
  *
- * Copyright (C) 2017 by Marcin Bukat
  * Copyright (C) 2025 by Melissa Autumn
  *
  * This program is free software; you can redistribute it and/or
@@ -50,8 +49,8 @@
 #define POWEROFF_BUTTON BUTTON_POWER
 #define POWEROFF_COUNT 25
 
-/* Make plugins compile for the simulator */
-#ifdef SIMULATOR
+/* For the simulator/sdl plugins/xworld */
+#ifndef BOOTLOADER
 #define BUTTON_LEFT        BUTTON_NEXT
 #define BUTTON_RIGHT       BUTTON_PREV
 #endif
