@@ -447,29 +447,6 @@ static unsigned long exfat_allocated_clusters(struct bpb *fat_bpb,
     return MAX(by_size, by_pos);
 }
 
-static int exfat_materialize_chain(struct bpb *fat_bpb,
-                                   struct fat_file *file,
-                                   long upto_cluster)
-{
-    if (!exfat_file_has_nofat_chain(fat_bpb, file) || !file->firstcluster)
-        return 0;
-
-    unsigned long count = exfat_allocated_clusters(fat_bpb, file, upto_cluster);
-    if (!count)
-        return 0;
-
-    for (unsigned long i = 0; i < count; i++)
-    {
-        unsigned long c = file->firstcluster + i;
-        unsigned long n = (i + 1 < count) ? c + 1 : fat_eof_mark(fat_bpb);
-        int rc = update_fat_entry(fat_bpb, c, n);
-        if (rc < 0)
-            return rc;
-    }
-
-    return exfat_set_nofat_flag(fat_bpb, file, false);
-}
-
 static void cache_commit(struct bpb *fat_bpb)
 {
     dc_lock_cache();
@@ -1637,6 +1614,29 @@ static int mount_exfat_internal(struct bpb *fat_bpb, const uint8_t *buf)
     fat_bpb->is_fat16 = false;
 #endif
     return 0;
+}
+
+static int exfat_materialize_chain(struct bpb *fat_bpb,
+                                   struct fat_file *file,
+                                   long upto_cluster)
+{
+    if (!exfat_file_has_nofat_chain(fat_bpb, file) || !file->firstcluster)
+        return 0;
+
+    unsigned long count = exfat_allocated_clusters(fat_bpb, file, upto_cluster);
+    if (!count)
+        return 0;
+
+    for (unsigned long i = 0; i < count; i++)
+    {
+        unsigned long c = file->firstcluster + i;
+        unsigned long n = (i + 1 < count) ? c + 1 : fat_eof_mark(fat_bpb);
+        int rc = update_fat_entry(fat_bpb, c, n);
+        if (rc < 0)
+            return rc;
+    }
+
+    return exfat_set_nofat_flag(fat_bpb, file, false);
 }
 
 static int fat_mount_internal(struct bpb *fat_bpb)
