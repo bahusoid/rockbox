@@ -17,9 +17,10 @@ jobs:
             arch: y
             platform: 242
 
-          - name: Samsung YP-R0
-            arch: x
-            platform: samsungypr0
+# Build is broken for the latest ubuntu
+#          - name: Samsung YP-R0
+#            arch: x
+#            platform: samsungypr0
 
           - name: clipZip
             arch: a
