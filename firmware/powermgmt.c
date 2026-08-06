@@ -1186,18 +1186,15 @@ int usb_inserted_and_active(void)
     if (!usb_inserted())
         return false;
 
-#if !defined(HAVE_POWEROFF_WHILE_CHARGING) || defined(SIMULATOR)
+#if !defined(HAVE_POWEROFF_WHILE_CHARGING) || !defined(HAVE_USB_POWER) || defined(SIMULATOR)
     return true;
-#else
-
-#ifdef HAVE_USB_POWER
+#elif defined(HAVE_USB_POWER)
     if (usb_get_mode() == USB_MODE_MASS_STORAGE)
         return !usb_powered_only();
-#endif
 
     //Assume it's not active only for charging
     return usb_get_mode() != USB_MODE_CHARGE;
-#endif //HAVE_POWEROFF_WHILE_CHARGING
+#endif
 }
 
 static void handle_sleep_timer(void)
