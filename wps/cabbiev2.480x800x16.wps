@@ -24,7 +24,7 @@
 %?vg(show_vol)<%?C<%Vd(d)|%Vd(b)>|%Vd(t)|%Vd(vol)>
 
 # track & next track info - no AA
-%Vl(a,0,102,-,180,-)
+%Vl(a,0,102,-,220,-)
 # tap on current title info for playlist (ie. where albumart would normally be)
 %T(0,0,275,275,playlist)
 
@@ -32,7 +32,7 @@
 %s%ac%?id<%id|%?d(1)<%d(1)|%(root%)>>
 %s%ac%?ia<%ia|%?iA<%iA|%?d(2)<%d(2)|%(root%)>>>
 %ac%?iy<%iy|>
-%Vl(b,0,400,-,180,-)
+%Vl(b,0,390,-,220,-)
 %ac%?ig<%ig|>
 %ac%fb kbps%?fv< %(vbr%)|> %fc %fk kHz
 %s%ac%?Ia<%Ia|%?IA<%IA|%?D(2)<%D(2)|%(root%)>>>
