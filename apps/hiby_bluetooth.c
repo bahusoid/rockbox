@@ -889,9 +889,16 @@ static void bt_connect_device(const struct bt_device *device)
 
     if (!bt_ctl_run("connect", mac, "Connection successful"))
     {
-        splash(HZ * 2, "BT connect failed");
-        is_busy = false;
-        return;
+        char active_mac[18];
+        // Make sure it's not a race with firmware auto-connection
+        sleep(HZ/2);
+        bt_get_active_mac(active_mac, sizeof(active_mac));
+        if (strcmp(active_mac, mac) != 0)
+        {
+            splash(HZ * 2, "BT connect failed");
+            is_busy = false;
+            return;
+        }
     }
 
     bt_set_selected(device);
