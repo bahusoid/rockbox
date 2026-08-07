@@ -861,6 +861,11 @@ static void bt_connect_device(const struct bt_device *device)
         return;
 
     mac = device->mac;
+
+    // disallow for now multiple connections.
+    if (bt_active_codec[0] && bt_selected_mac[0] && strcmp(bt_selected_mac, mac) != 0)
+        bt_disconnect();
+
     splash(0, "Connecting...");
 
     if (!bt_prepare_stack())
