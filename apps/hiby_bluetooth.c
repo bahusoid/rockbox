@@ -824,6 +824,8 @@ static bool bt_prepare_stack(void)
     return bt_enable();
 }
 
+static void bt_show_status(void);
+
 static void bt_show_devices(void)
 {
     wait_for_bt_init();
@@ -864,7 +866,13 @@ static void bt_show_devices(void)
         }
 
         if (idx >= 0 && idx < count)
+        {
             bt_connect_device(&devices[idx]);
+            if (bt_active_codec[0])
+                bt_show_status();
+            else
+                continue;
+        }
         return;
     }
 }
