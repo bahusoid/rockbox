@@ -20,7 +20,6 @@ This build integrates [bidhata's patches](https://github.com/bidhata/hiby-r1-roc
 
 *   **Custom Bootloader Recommended:** The default Rockbox bootloader runs a `bt_suspend` script on boot, killing all BT services and unloading the drivers. This results in a *"Bluetooth is suspended. Resuming may take some time..."* waiting screen. To avoid this, install my modified bootloader, which persists your chosen BT state (enabled or suspended) across reboots.
 *   **CRASH WARNING:** Do not switch off your Bluetooth headphones during active playback. This will currently crash Rockbox. The PCM threading code needs some looking into.
-*   **Boot Initialization Lag:** Rockbox boots faster than the Bluetooth services can initialize. Opening the BT menus immediately after boot may feel slightly laggy while the background services spin up.
 *   **Troubleshooting Glitches:** If Bluetooth begins to behave erratically, simply Suspend and re-enable it.
 *   **Unpairing Devices:** To remove a paired device, long-press its name in the **Devices** list.
 *   **Quick Connect:** The fastest way to connect is to navigate straight to `Bluetooth -> Devices`. There if the device is already ON and paired, it will usually connect automatically. 
