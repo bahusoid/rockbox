@@ -789,6 +789,20 @@ bool bt_disable(void)
     return bt_ctl_run("power", "off", "power off succeeded");
 }
 
+void wait_for_bt_init(void)
+{
+    static bool initialized = false;
+    if (initialized)
+        return;
+
+    initialized = true;
+
+    while (system("pgrep -f 'bt_init' > /dev/null 2>&1") == 0) 
+    {
+        splash(HZ/4,"BT initializing...");
+    }
+}
+
 bool bt_enable(void)
 {
      return bt_ctl_run("power", "on", "power on succeeded");
@@ -812,6 +826,8 @@ static bool bt_prepare_stack(void)
 
 static void bt_show_devices(void)
 {
+    wait_for_bt_init();
+
     static struct bt_device devices[BT_MAX_DEVICES];
     int count;
     int idx;
@@ -1079,8 +1095,10 @@ static void bt_show_status(void)
 
     bool suspended = bt_is_suspended_fast();
     if (!suspended)
+    {
+        wait_for_bt_init();
         bt_on = bt_is_enabled();
-
+    }
     while (1)
     {
         bool bt_connected = bt_autoconnection_route_to_bluetooth(active_mac, bt_on);
