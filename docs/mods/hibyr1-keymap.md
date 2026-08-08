@@ -48,4 +48,4 @@ This keymap restores standard media controls while keeping essential Rockbox men
 - Quickest way to stop playback — long press Power twice (the first opens the Context Menu, the second stops playback).
 - If you just want to turn on the screen, press Power + Vol Up (Lock combo).
 - In Pitchscreen, use Long Power to change mode (or tap right OK on screen).
-- In most non‑WPS contexts, OK = Next and Cancel = Play. This takes some getting used to. If Left/Right buttons are required in such contexts, try Power + Play/Next (one example - keyboard).
+- In most non‑WPS contexts, OK = Next and Cancel = Play. This takes some getting used to. If Left/Right buttons are required in current context, try Power + Play/Next (one example - keyboard).
