@@ -493,7 +493,7 @@ static int bt_scan_devices(struct bt_device *devices, int count, int max_devices
     return count;
 }
 
-static int bt_choose_device(const char *title, struct bt_device *devices, int count)
+static int bt_choose_device(const char *title, struct bt_device *devices, int count, int selection)
 {
     struct bt_device_menu_data data;
     struct simplelist_info info;
@@ -511,7 +511,7 @@ static int bt_choose_device(const char *title, struct bt_device *devices, int co
     simplelist_info_init(&info, (char *)title, total_count, &data);
     info.get_name = bt_device_name_cb;
     info.action_callback = bt_devicelist_callback;
-    info.selection = -1;
+    info.selection = selection + 1; /* +1 for the "Scan" entry */
     info.title_icon = Icon_Submenu;
 
     simplelist_show_list(&info);
@@ -832,7 +832,6 @@ static void bt_show_devices(void)
 
     static struct bt_device devices[BT_MAX_DEVICES];
     int count;
-    int idx;
 
     if (!bt_enable())
     {
@@ -853,10 +852,11 @@ static void bt_show_devices(void)
     }
 
     count = bt_load_devices_via_bluetoothctl(devices, BT_MAX_DEVICES);
+    int idx = -1;
 
     while (1)
     {
-        idx = bt_choose_device("Devices", devices, count);
+        idx = bt_choose_device("Devices", devices, count, idx);
         if (idx == BT_DEVICE_PICK_SCAN)
         {
             count = bt_scan_devices(devices, count, BT_MAX_DEVICES);
