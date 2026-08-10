@@ -103,6 +103,10 @@ static bool try_exts(char *path, int len)
 #define try_exts(path, len) file_exists(path)
 #endif
 
+#ifdef HIBY_LINUX
+#define HAVE_CASE_SENSITIVE_FS
+#endif
+
 /* Look for the first matching album art bitmap in the following list:
  *  ./<trackname><size>.{jpeg,jpg,bmp}
  *  ./<albumname><size>.{jpeg,jpg,bmp}
@@ -188,6 +192,15 @@ bool search_albumart_files(const struct mp3entry *id3, const char *size_string,
             pathlen = snprintf(path, sizeof(path),
                             "%scover%s." EXT, dir, size_string);
             found = try_exts(path, pathlen);
+#ifdef  HAVE_CASE_SENSITIVE_FS
+            // Skip size check. It requires manual preparation - it is the user's responsibility to name those correctly
+            if (!found && !*size_string)
+            {
+                pathlen = snprintf(path, sizeof(path),
+                                "%sCover." EXT, dir);
+                found = try_exts(path, pathlen);
+            }
+#endif
         }
 
 #ifdef USE_JPEG_COVER
@@ -195,6 +208,13 @@ bool search_albumart_files(const struct mp3entry *id3, const char *size_string,
         {
             snprintf (path, sizeof(path), "%sfolder.jpg", dir);
             found = file_exists(path);
+#ifdef HAVE_CASE_SENSITIVE_FS
+            if (!found)
+            {
+                snprintf (path, sizeof(path), "%sFolder.jpg", dir);
+                found = file_exists(path);
+            }
+#endif
         }
 #endif
 
@@ -242,6 +262,14 @@ bool search_albumart_files(const struct mp3entry *id3, const char *size_string,
                 pathlen = snprintf(path, sizeof(path),
                                 "%scover%s." EXT, dir, size_string);
                 found = try_exts(path, pathlen);
+#ifdef HAVE_CASE_SENSITIVE_FS
+                if (!found && !*size_string)
+                {
+                    pathlen = snprintf(path, sizeof(path),
+                                    "%sCover." EXT, dir);
+                    found = try_exts(path, pathlen);
+                }
+#endif
             }
         }
         if (found)
