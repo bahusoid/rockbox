@@ -163,15 +163,11 @@ int os_relate(const char *ospath1, const char *ospath2)
 
 bool os_file_exists(const char *ospath)
 {
-    int sim_fd = os_open(ospath, O_RDONLY | O_CLOEXEC, 0);
-    if (sim_fd < 0)
-        return false;
-
-    int errnum = errno;
-    os_close(sim_fd);
-    errno = errnum;
-
-    return true;
+    //NOTE: This also returns true for folder (same as old code with open/close file)
+    // R_OK checks BOTH existence and read permissions
+    return access(ospath, R_OK) == 0;
+    // Checks read access using effective UID/GID
+    //return (faccessat(AT_FDCWD, ospath, R_OK, AT_EACCESS) == 0);
 }
 
 int os_opendirfd(const char *osdirname)
