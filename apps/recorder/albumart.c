@@ -33,6 +33,7 @@
 
 /* Define LOGF_ENABLE to enable logf output in this file */
 /*#define LOGF_ENABLE*/
+#include "dir.h"
 #include "logf.h"
 
 #if defined(HAVE_JPEG) || defined(PLUGIN)
@@ -150,6 +151,10 @@ bool search_albumart_files(const struct mp3entry *id3, const char *size_string,
     dirlen = strlen(dir);
     albumlen = id3->album ? strlen(id3->album) : 0;
 
+    static int rb_album_art_dir_exists = -1;
+    if (rb_album_art_dir_exists == -1)
+        rb_album_art_dir_exists = dir_exists(ROCKBOX_DIR "/albumart");
+
     for(pass = 0; pass < 2 - track_first; pass++)
     {
         if (track_first || pass)
@@ -195,7 +200,7 @@ bool search_albumart_files(const struct mp3entry *id3, const char *size_string,
 
         artist = id3->albumartist != NULL ? id3->albumartist : id3->artist;
 
-        if (!found && artist && id3->album)
+        if (rb_album_art_dir_exists && !found && artist && id3->album)
         {
             /* look in the albumart subdir of .rockbox */
             pathlen = snprintf(path, sizeof(path),
