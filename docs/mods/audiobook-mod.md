@@ -17,7 +17,7 @@ Alternatively, you can [download](./configs/audiobook-mod-config.cfg) it manuall
 * Sleep Timer is set to 45 minutes, with the timer resetting upon pressing any button.
 
 **To see chapters in M4B:**
-Open the context menu for the M4B file -> *Open with...* -> *m4b_to_chapters*. A .cue file with the book's chapters will be generated next to the file.
+Open the context menu for the M4B file -> *Open with...* -> *mp4chapters_to_cue*. A .cue file with the book's chapters will be generated next to the file.
 
 **IMPORTANT**
 Copy audiobooks to the **ABooks** or **Audiobooks** folder (case-sensitive!).
