@@ -57,6 +57,10 @@ const char *hiby_pcm_get_bt_mac(void);
 bool bt_is_enabled_fast(void);
 bool bt_can_autoconnect(void);
 #endif
+#ifndef BOOTLOADER
+#include "settings.h"
+#include "misc.h"
+#endif
 
 static long lastbtn;   /* Last valid button status */
 static long last_read; /* Last button status, for debouncing/filtering */
@@ -334,6 +338,10 @@ static void button_tick(void)
 #endif
                                 repeat_count > POWEROFF_COUNT)
                         {
+#if !defined(BOOTLOADER) && (defined(HAVE_LCD_ENABLE) || defined(HAVE_LCD_SLEEP))
+                            if (!lcd_active()  && repeat_count == POWEROFF_COUNT + 1 && !global_settings.talk_menu)
+                                beep_play(440, 100, 800);
+#endif
                             /* Tell the main thread that it's time to
                                power off */
                             sys_poweroff();
