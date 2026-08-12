@@ -1508,7 +1508,7 @@ static int keyboard_touchscreen(struct keyboard_parameters *pm,
     else if (y < sc_h - button_h)
     {
         /* edit line */
-        if (button & (BUTTON_REPEAT|BUTTON_REL))
+        if (button == BUTTON_REL || button ==  BUTTON_REPEAT)
         {
             if (x < sc_w/2)
                 return ACTION_KBD_CURSOR_LEFT;
