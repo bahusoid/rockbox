@@ -1518,16 +1518,19 @@ static int keyboard_touchscreen(struct keyboard_parameters *pm,
     }
     else
     {
-        /* OK/Del/Cancel button */
-        if (button == BUTTON_REL)
+        if (x < sc_w/3)
         {
-            if (x < sc_w/3)
+            if (button == BUTTON_REL)
                 return ACTION_KBD_DONE;
-            else if (x < (sc_w/3) * 2)
-                return ACTION_KBD_BACKSPACE;
-            else
-                return ACTION_KBD_ABORT;
         }
+        else if (x < (sc_w/3) * 2)
+        {
+            if (button == BUTTON_REL || button ==  BUTTON_REPEAT)
+                return ACTION_KBD_BACKSPACE;
+        }
+        else if (button == BUTTON_REL)
+            return ACTION_KBD_ABORT;
+
     }
     return ACTION_NONE;
 }
