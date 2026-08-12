@@ -736,6 +736,7 @@ int eq_menu_graphical(void)
                 mode = GAIN; /* wrap around */
             break;
 
+        case ACTION_STD_MENU:
         case ACTION_STD_CANCEL:
             exit_request = true;
             result = false;
