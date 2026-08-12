@@ -6,7 +6,7 @@ Eject the SD card from one player, insert it into another, and seamlessly resume
 Two or more players running Rockbox from the same SD card. This usually requires at least one of the players to support multiboot (the ability to place the `.rockbox` installation in a subfolder). For more details, see the [Multiboot Bootloader Wiki](https://www.rockbox.org/wiki/MultibootBootloader.html).
 
 **Limitations**
-* As with bookmarks, this feature does not support dynamic playlists.
+* As with bookmarks, this feature does not support dynamic playlists or other non-bookmarkable states.
 
 **Setup Instructions**
 To make this work, all players must be configured to read and write recent bookmarks to the same location.
