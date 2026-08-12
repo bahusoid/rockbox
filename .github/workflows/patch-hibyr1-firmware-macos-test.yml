@@ -1,0 +1,37 @@
+name: HiBy R1 Firmware Patcher
+
+on:
+  # Trigger manually from the Actions tab
+  workflow_dispatch: 
+
+jobs:
+  patch-firmware:
+    runs-on: macos-latest
+
+    steps:
+      # Step 1: Checkout the repository to access your local script
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Download the required files
+      - name: Download firmware and bootloader
+        run: |
+          brew install p7zip squashfs cdrtools coreutils
+          curl -L -o r1.upt "https://github.com/bidhata/Hiby-R1-Mod/releases/download/file-limit/r1.upt"
+          curl -L -o bootloader.r1 "https://github.com/bahusoid/rockbox/releases/download/x1600_hiby_v1/bootloader.r1"
+
+      # Step 3: Run the patching script
+      - name: Execute patcher
+        run: |
+          # Ensuring the script is executable before running
+          chmod +x ./tools/r1_patcher/r1_patcher.sh
+          
+          # Execute with downloaded files
+          ./tools/r1_patcher/r1_patcher.sh r1.upt bootloader.r1
+
+      # Step 4: Upload the resulting file
+      - name: Upload patched firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1_rb_patched  # Name of the zip file shown on GitHub
+          path: r1_rb.upt      # The generated file in the current working directory
