@@ -99,7 +99,7 @@ static const struct button_mapping button_context_wps_locked[] = {
 }; /* button_context_wps_locked */
 
 static const struct button_mapping button_context_settings[] = {
-        { ACTION_STD_CANCEL,        BUTTON_POWER,               BUTTON_NONE },
+        { ACTION_STD_CANCEL,        BUTTON_POWER|BUTTON_REL,               BUTTON_POWER },
         { ACTION_SETTINGS_INC,      BUTTON_UP,                  BUTTON_NONE },
         { ACTION_SETTINGS_INCREPEAT,BUTTON_UP|BUTTON_REPEAT,    BUTTON_NONE },
         { ACTION_SETTINGS_DEC,      BUTTON_DOWN,                BUTTON_NONE },
@@ -159,14 +159,19 @@ static const struct button_mapping button_context_quickscreen[]  = {
 
 static const struct button_mapping button_context_settings_right_is_inc[]  = {
         { ACTION_SETTINGS_INC,      BUTTON_RIGHT,               BUTTON_NONE },
+        { ACTION_NONE,      BUTTON_RIGHT|BUTTON_REL,               BUTTON_RIGHT },
         { ACTION_SETTINGS_INCREPEAT,BUTTON_RIGHT|BUTTON_REPEAT, BUTTON_NONE },
         { ACTION_SETTINGS_DEC,      BUTTON_LEFT,                BUTTON_NONE },
+        { ACTION_NONE,      BUTTON_LEFT|BUTTON_REL,                BUTTON_LEFT },
         { ACTION_SETTINGS_DECREPEAT,BUTTON_LEFT|BUTTON_REPEAT,  BUTTON_NONE },
         { ACTION_STD_PREV,                  BUTTON_UP,                         BUTTON_NONE },
         { ACTION_STD_PREVREPEAT,            BUTTON_UP|BUTTON_REPEAT,           BUTTON_NONE },
         { ACTION_STD_NEXT,                  BUTTON_DOWN,                       BUTTON_NONE },
         { ACTION_STD_NEXTREPEAT,            BUTTON_DOWN|BUTTON_REPEAT,         BUTTON_NONE },
-
+        { ACTION_STD_OK,            BUTTON_POWER|BUTTON_REL,         BUTTON_POWER },
+        { ACTION_STD_MENU,            BUTTON_POWER|BUTTON_REPEAT,         BUTTON_POWER },
+        { ACTION_STD_CANCEL,            BUTTON_POWER|BUTTON_LEFT,         BUTTON_POWER },
+        { ACTION_STD_OK,            BUTTON_POWER|BUTTON_RIGHT,         BUTTON_POWER },
         LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_SETTINGS),
 }; /* button_context_settings_right_is_inc */
 
