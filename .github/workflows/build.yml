@@ -66,6 +66,10 @@ jobs:
             arch: a
             platform: sansae200v2
 
+          - name: AIGO EROS Q (Native)
+            arch: i
+            platform: erosqnative
+
     runs-on: ubuntu-latest
     name: ${{matrix.name}}
 
