@@ -165,7 +165,7 @@ target/hosted/hiby/r3proii/button-r3proii.c
 target/hosted/hiby/r3proii/powermgmt-r3proii.c
 #ifndef BOOTLOADER
 target/hosted/hiby/r3proii/led-r3proii.c
-target/hosted/hiby/hibylinux_codec.c
+
 #endif
 #endif
 
@@ -175,12 +175,13 @@ target/hosted/hiby/r1/button-r1.c
 target/hosted/hiby/r1/powermgmt-r1.c
 #ifndef BOOTLOADER
 target/hosted/hiby/r1/led-r1.c
-target/hosted/hiby/hibylinux_codec.c
 #endif
 #endif
 
-#if (defined(HIBY_R1) || defined(HIBY_R3PROII)) && !defined(SIMULATOR)
+#if (defined(HIBY_R1) || defined(HIBY_R3PROII)) && !defined(SIMULATOR) && !defined(BOOTLOADER)
 target/hosted/hiby/usb-dac-hiby.c
+target/hosted/hiby/hibylinux_codec.c
+target/hosted/netlink-monitor.c
 #endif
 
 #if defined(AGPTEK_ROCKER) && !defined(SIMULATOR)

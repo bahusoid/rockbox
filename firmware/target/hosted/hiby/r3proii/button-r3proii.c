@@ -20,20 +20,20 @@
  ****************************************************************************/
 #include <linux/input.h>
 
-#include "sysfs.h"
 #include "button.h"
 #include "button-target.h"
-#include "hibylinux_codec.h"
 #include "touchscreen.h"
 #ifdef HAVE_BACKLIGHT
 #include "backlight.h"
 #endif /* HAVE_BACKLIGHT */
 /*
- *   /dev/input/event0: gpios (power/next)
- *   /dev/input/event1: touchscreen
- *   /dev/input/event2: adc (prev/play/left/right)
- *   /dev/input/event3: ????
+ *   /dev/input/event0: md-gpio-keys (power/next)
+ *   /dev/input/event1: hyn_ts (touchscreen)
+ *   /dev/input/event2: jz adc keyboard (play/volume+/volume-)
+ *   /dev/input/event3: earpods_adc
+ *   /dev/input/event4: dynamic input devices start at 4 and increment (Bluetooth AVRCP remote control)
  */
+
 
 
 int button_map(int keycode)
@@ -68,15 +68,4 @@ int button_map(int keycode)
         default:
             return 0;
     }
-}
-
-bool headphones_inserted(void)
-{
-    #ifdef BOOTLOADER
-    int ps = 0;
-    #else
-    int ps = hiby_get_outputs();
-    #endif
-
-    return (ps == 2 || ps == 3);
 }

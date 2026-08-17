@@ -181,25 +181,6 @@ void audiohw_mute(int mute)
     alsa_controls_set_bool("Mute Output", !!mute);
 }
 
-int hiby_has_valid_output(void) {
-    long int ps = 0; // Muted, if nothing is plugged in!
-
-    int status = 0;
-
-    if (!hw_init) return ps;
-
-    const char * const sysfs_hs_switch = "/sys/class/switch/headset/state";
-    const char * const sysfs_bal_switch = "/sys/class/switch/balance/state";
-
-    if (sysfs_get_int(sysfs_hs_switch, &status) && status)
-        ps = 2; // headset
-
-    if (sysfs_get_int(sysfs_bal_switch, &status) && status)
-        ps = 3; // balanced output
-
-    return ps;
-}
-
 int hiby_get_outputs(void){
     long int ps = hiby_has_valid_output();
 
