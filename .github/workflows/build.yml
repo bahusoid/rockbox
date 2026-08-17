@@ -83,6 +83,12 @@ jobs:
         apt-get update
         apt-get install -y sudo
 
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y automake bison build-essential ccache flex libc6-dev libgmp3-dev libmpfr-dev \
+        libsdl1.2-dev libtool-bin texinfo zip gawk wget libmpc-dev gettext gtk-doc-tools
+        
     - name: root suid tar
       # workaround for caching system files
       run: sudo chown root /bin/tar && sudo chmod u+s /bin/tar
@@ -98,18 +104,22 @@ jobs:
           ${{ runner.os }}-toolchain-${{ matrix.arch }}-
           ${{ runner.os }}-toolchain-
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y automake bison build-essential ccache flex libc6-dev libgmp3-dev libmpfr-dev \
-        libsdl1.2-dev libtool-bin texinfo zip gawk wget libmpc-dev gettext gtk-doc-tools
-
     - name: Run rockboxdev.sh
       if: steps.cache-before.outputs.cache-hit != 'true'
       run: |
         cd tools
         chmod +x rockboxdev.sh
         sudo ./rockboxdev.sh --target=${{matrix.arch}} --prefix=/tmp/local
+
+    - name: Cache toolchain dependencies
+      if: steps.cache-before.outputs.cache-hit != 'true'
+      uses: actions/cache@v3
+      with:
+        path: |
+          /tmp/local
+        key: ${{ runner.os }}-toolchain-${{ matrix.arch }}-${{ hashFiles('tools/rockboxdev.sh') }}
+        restore-keys: |
+          ${{ runner.os }}-toolchain-${{ matrix.arch }}-
 
     - name: Add /tmp/local/bin to PATH
       run: |
@@ -122,16 +132,6 @@ jobs:
         ../tools/configure --target=${{matrix.platform}} --type=${{matrix.type || 'N'}}
         make -j
         make zip
-
-    - name: Cache toolchain dependencies
-      if: steps.cache-before.outputs.cache-hit != 'true'
-      uses: actions/cache@v3
-      with:
-        path: |
-          /tmp/local
-        key: ${{ runner.os }}-toolchain-${{ matrix.arch }}-${{ hashFiles('tools/rockboxdev.sh') }}
-        restore-keys: |
-          ${{ runner.os }}-toolchain-${{ matrix.arch }}-
 
     - name: Upload build
       uses: actions/upload-artifact@v4
