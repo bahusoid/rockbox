@@ -71,57 +71,79 @@
 
 #define POWER_STATUS_PATH "/sys/class/power_supply/" POWER_DEV_NAME "/online"
 
+//#undef HAVE_HOSTED_NETLINK_MONITOR
+
+#ifdef HAVE_HOSTED_NETLINK_MONITOR
+long get_last_battery_event(void);
+
+#define GET_CACHED(result_var) \
+static int result_var = -1; \
+static long last_event_tick = -1; \
+long last_battery_event = get_last_battery_event(); \
+if (last_event_tick == last_battery_event) \
+    return result_var; \
+last_event_tick = last_battery_event
+#else
+#define GET_CACHED(result_var) \
+static int result_var = 0; \
+static long last_tick = 0; \
+if (last_tick && (current_tick - last_tick) < HZ/2) \
+    return result_var; \
+last_tick = current_tick
+#endif
+
 #ifdef BATTERY_DEV_NAME
-/* We get called multiple times per tick, let's cut that back! */
-static long last_tick = 0;
-static bool last_power = false;
 
 bool charging_state(void)
 {
-    if ((current_tick - last_tick) > HZ/2 ) {
-        char buf[12] = {0};
-        sysfs_get_string(BATTERY_STATUS_PATH, buf, sizeof(buf));
+    GET_CACHED(last_power);
 
-        last_tick = current_tick;
-        last_power = (strncmp(buf, "Charging", 8) == 0);
-    }
+    char buf[12] = {0};
+    sysfs_get_string(BATTERY_STATUS_PATH, buf, sizeof(buf));
+    last_power = (strncmp(buf, "Charging", 8) == 0);
     return last_power;
 }
 
 #if (CONFIG_BATTERY_MEASURE & VOLTAGE_MEASURE)
 int _battery_voltage(void)
 {
+    GET_CACHED(result);
     int voltage = 0;
     sysfs_get_int(BATTERY_VOLTAGE_PATH, &voltage);
 
-    return (voltage * BATTERY_VOLTAGE_SCALE_MUL) / BATTERY_VOLTAGE_SCALE_DIV;
+    result = (voltage * BATTERY_VOLTAGE_SCALE_MUL) / BATTERY_VOLTAGE_SCALE_DIV;
+    return result;
 }
 #endif
 
 #if (CONFIG_BATTERY_MEASURE & CURRENT_MEASURE)
 int _battery_current(void)
 {
+    GET_CACHED(result);
     int current = 0;
     sysfs_get_int(BATTERY_CURRENT_PATH, &current);
 
-    return (current * BATTERY_CURRENT_SCALE_MUL) / BATTERY_CURRENT_SCALE_DIV;
+    result = (current * BATTERY_CURRENT_SCALE_MUL) / BATTERY_CURRENT_SCALE_DIV;
+    return result;
 }
 #endif
 
 #if (CONFIG_BATTERY_MEASURE & PERCENTAGE_MEASURE)
 int _battery_level(void)
 {
+    GET_CACHED(result);
     int level = 0;
     sysfs_get_int(BATTERY_LEVEL_PATH, &level);
 
-    return (level * BATTERY_LEVEL_SCALE_MUL) / BATTERY_LEVEL_SCALE_DIV;
+    result = (level * BATTERY_LEVEL_SCALE_MUL) / BATTERY_LEVEL_SCALE_DIV;
+    return result;
 }
 #endif
 
 #if (CONFIG_BATTERY_MEASURE & TIME_MEASURE)
 int _battery_time(void)
 {
-    int battery_tte = 0;
+    GET_CACHED(battery_tte);
     sysfs_get_int(BATTERY_TTE_PATH, &battery_tte);
 
     return battery_tte;
@@ -131,6 +153,7 @@ int _battery_time(void)
 
 unsigned int power_input_status(void)
 {
+    GET_CACHED(result);
     int present = 0;
     sysfs_get_int(POWER_STATUS_PATH, &present);
 
@@ -138,5 +161,6 @@ unsigned int power_input_status(void)
     usb_enable(present ? true : false);
 #endif
 
-    return present ? POWER_INPUT_USB_CHARGER : POWER_INPUT_NONE;
+    result = present ? POWER_INPUT_USB_CHARGER : POWER_INPUT_NONE;
+    return result;
 }

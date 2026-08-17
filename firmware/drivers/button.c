@@ -98,6 +98,12 @@ static bool enable_sw_poweroff = true;
 
 static int lastdata = 0;
 static int button_read(int *data);
+#ifdef HAVE_HOSTED_NETLINK_MONITOR
+void init_netlink_monitor(void);
+void drain_netlink_events(void);
+long get_last_devices_event(void);
+#endif
+
 
 #ifdef HAVE_TOUCHSCREEN
 static long last_touchscreen_touch;
@@ -144,6 +150,10 @@ static int lo_detect_callback(struct timeout *tmo)
 
 static void check_audio_peripheral_state(void)
 {
+#ifdef HAVE_HOSTED_NETLINK_MONITOR
+     drain_netlink_events();
+#endif
+
 #if defined(HAVE_HEADPHONE_DETECTION)
     static struct timeout hp_detect_timeout; /* Debouncer for headphone plug/unplug */
     static bool phones_present = false;
@@ -170,7 +180,7 @@ static void check_audio_peripheral_state(void)
 #endif
 #if defined(HAVE_HIBY_BLUETOOTH) && !defined(SIMULATOR)
     static long last_bt_event_check = 0;
-    if (bt_can_autoconnect() && TIME_AFTER(current_tick, last_bt_event_check + HZ/2))
+    if (bt_can_autoconnect() && TIME_BEFORE(current_tick, get_last_devices_event() + 5*HZ) && TIME_AFTER(current_tick, last_bt_event_check + HZ/2))
     {
         bool bt_connected = bt_is_connected_fast();
         const char *bt_mac = hiby_pcm_get_bt_mac();
@@ -471,6 +481,10 @@ void button_init(void)
 #ifdef HAVE_TOUCHSCREEN
     last_touchscreen_touch = -1;
 #endif
+#ifdef HAVE_HOSTED_NETLINK_MONITOR
+    init_netlink_monitor();
+#endif
+
     /* Start polling last */
     tick_add_task(button_tick);
 }
