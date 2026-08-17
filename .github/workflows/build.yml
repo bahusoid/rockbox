@@ -1,6 +1,15 @@
 name: Rockbox build
-on: [workflow_dispatch, push, pull_request]
- 
+on:
+  workflow_dispatch:
+    inputs:
+      upload_debug:
+        description: 'Upload debug files'
+        required: false
+        type: boolean
+        default: false
+  push:
+  pull_request:
+
 jobs:
   build:
     strategy:
@@ -148,6 +157,7 @@ jobs:
         path: build/bootloader*
 
     - name: Upload debug files
+      if: github.event.inputs.upload_debug
       uses: actions/upload-artifact@v7
       with:
         name: ${{matrix.name}}-debug
