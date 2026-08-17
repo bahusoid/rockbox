@@ -17,10 +17,10 @@ jobs:
             arch: y
             platform: 242
 
-# Build is broken for the latest ubuntu
-#          - name: Samsung YP-R0
-#            arch: x
-#            platform: samsungypr0
+          - name: Samsung YP-R0
+            arch: x
+            platform: samsungypr0
+            container: ubuntu:22.04
 
           - name: clipZip
             arch: a
@@ -71,10 +71,17 @@ jobs:
             platform: erosqnative
 
     runs-on: ubuntu-latest
+    container: ${{matrix.container}} 
     name: ${{matrix.name}}
 
     steps:
     - uses: actions/checkout@v3
+
+    - name: Prepare container
+      if: matrix.container != null
+      run: |
+        apt-get update
+        apt-get install -y sudo
 
     - name: root suid tar
       # workaround for caching system files
