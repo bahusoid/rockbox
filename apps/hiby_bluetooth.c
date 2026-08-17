@@ -19,6 +19,8 @@
  ****************************************************************************/
 
 #include "config.h"
+#include "lang.h"
+#include "settings.h"
 #include "hiby_bluetooth.h"
 
 #if defined(HIBY_LINUX) && !defined(SIMULATOR)
@@ -55,7 +57,6 @@ static bool bt_get_active_mac(char *mac_out, size_t mac_out_len);
 #define BT_LOCAL_PLAYBACK_DEVICE "plughw:0,0"
 #define BT_DEVICE_PICK_CANCEL (-1)
 #define BT_DEVICE_PICK_SCAN (-2)
-#define BT_SCAN_MENU_LABEL "Scan for new devices"
 #define BT_MAX_CODECS 8
 #define BT_CODEC_NAME_LEN 16
 #define BOOT_SETTING_FILE ROCKBOX_DIR"/rb_bt_on.txt"
@@ -244,7 +245,7 @@ static const char *bt_device_name_cb(int selected_item, void *data,
     struct bt_device_menu_data *ctx = data;
     if (selected_item == 0)
     {
-        snprintf(buffer, buffer_len, "%s", BT_SCAN_MENU_LABEL);
+        snprintf(buffer, buffer_len, "%s", (const char *)str(LANG_BT_SCAN_FOR_NEW));
         return buffer;
     }
     selected_item--;
@@ -473,7 +474,7 @@ static int bt_scan_devices(struct bt_device *devices, int count, int max_devices
     const int timeout = 15;
     while (waited < timeout)
     {
-        splashf(0, "Scanning for %d/%d secs... Press any key to stop", waited, timeout);
+        splashf(0, ID2P(LANG_BT_SCANNING_PROGRESS), waited, timeout);
         action = get_action(CONTEXT_STD, HZ);
         if (action != ACTION_NONE)
             break;
@@ -501,7 +502,7 @@ static int bt_choose_device(const char *title, struct bt_device *devices, int co
 
     if (total_count <= 0)
     {
-        splash(HZ, "No devices");
+        splash(HZ, ID2P(LANG_BT_NO_DEVICES));
         return BT_DEVICE_PICK_CANCEL;
     }
 
@@ -799,7 +800,7 @@ void wait_for_bt_init(void)
 
     while (system("pgrep -f 'bt_init' > /dev/null 2>&1") == 0) 
     {
-        splash(HZ/4,"BT initializing...");
+        splash(HZ/4, ID2P(LANG_BT_INITIALIZING));
     }
 }
 
@@ -815,9 +816,9 @@ static bool bt_prepare_stack(void)
     if (bt_enable())
         return true;
 
-    splash(0, "Bluetooth is suspended. Resuming may take some time...");
+    splash(0, ID2P(LANG_BT_SUSPENDED_RESUMING));
     system("/usr/bin/bt_resume");
-    splash(0, "Done.");
+    splash(0, ID2P(LANG_BT_DONE));
     int fd = open(BOOT_SETTING_FILE, O_RDWR | O_CREAT | O_TRUNC);
     close(fd);
 
@@ -835,9 +836,9 @@ static void bt_show_devices(void)
 
     if (!bt_enable())
     {
-        static const char *lines[] = {"Bluetooth is suspended.",
-                              "Enable it?"};
-        static const struct text_message message = {lines, 2};
+        const char *lines[] = {(const char *)str(LANG_BT_IS_SUSPENDED),
+                              (const char *)str(LANG_BT_ENABLE_IT)};
+        const struct text_message message = {lines, 2};
 
         if (gui_syncyesno_run(&message, NULL, NULL) != YESNO_YES)
             return;
@@ -846,7 +847,7 @@ static void bt_show_devices(void)
         {
             //try to suspend again to avoid leaving it in a weird state
             bt_suspend();
-            splash(HZ * 2, "BT unavailable");
+            splash(HZ * 2, ID2P(LANG_BT_UNAVAILABLE));
             return;
         }
     }
@@ -856,12 +857,12 @@ static void bt_show_devices(void)
 
     while (1)
     {
-        idx = bt_choose_device("Devices", devices, count, idx);
+        idx = bt_choose_device(str(LANG_BT_DEVICES), devices, count, idx);
         if (idx == BT_DEVICE_PICK_SCAN)
         {
             count = bt_scan_devices(devices, count, BT_MAX_DEVICES);
             if (count <= 0)
-                splash(HZ, "No devices found");
+                splash(HZ, ID2P(LANG_BT_NO_DEVICES_FOUND));
             continue;
         }
 
@@ -890,11 +891,11 @@ static void bt_connect_device(const struct bt_device *device)
     if (bt_active_codec[0] && bt_selected_mac[0] && strcmp(bt_selected_mac, mac) != 0)
         bt_disconnect();
 
-    splash(0, "Connecting...");
+    splash(0, ID2P(LANG_BT_CONNECTING));
 
     if (!bt_prepare_stack())
     {
-        splash(HZ * 2, "BT unavailable");
+        splash(HZ * 2, ID2P(LANG_BT_UNAVAILABLE));
         return;
     }
     is_busy = true;
@@ -904,7 +905,7 @@ static void bt_connect_device(const struct bt_device *device)
         bt_ctl_run("trust", mac, NULL);
         if (!bt_ctl_run("pair", mac, "Pairing successful"))
         {
-            splash(HZ * 2, "BT pair failed");
+            splash(HZ * 2, ID2P(LANG_BT_PAIR_FAILED));
             is_busy = false;
             return;
         }
@@ -919,7 +920,7 @@ static void bt_connect_device(const struct bt_device *device)
         bt_get_active_mac(active_mac, sizeof(active_mac));
         if (strcmp(active_mac, mac) != 0)
         {
-            splash(HZ * 2, "BT connect failed");
+            splash(HZ * 2, ID2P(LANG_BT_CONNECT_FAILED));
             is_busy = false;
             return;
         }
@@ -928,9 +929,9 @@ static void bt_connect_device(const struct bt_device *device)
     bt_set_selected(device);
 
     if (bt_route_to_bluetooth(mac, NULL))
-        splash(HZ, "BT connected");
+        splash(HZ, ID2P(LANG_BT_CONNECTED));
     else
-        splash(HZ * 2, "BT connected, no audio route");
+        splash(HZ * 2, ID2P(LANG_BT_CONNECTED_NO_ROUTE));
 
     is_busy = false;
 }
@@ -949,13 +950,13 @@ static void bt_disconnect(void)
 
     if (bt_get_active_mac(mac, sizeof(mac)))
     {
-        splash(0, "Disconnecting...");
+        splash(0, ID2P(LANG_BT_DISCONNECTING));
         snprintf(cmd, sizeof(cmd), "bluetoothctl disconnect %s >/dev/null 2>&1", mac);
         system(cmd);
     }
 
     is_busy = false;
-    splash(HZ/4, "Disconnected");
+    splash(HZ/4, ID2P(LANG_BT_DISCONNECTED));
 }
 
 static bool bt_is_enabled(void)
@@ -969,7 +970,7 @@ static bool bt_is_enabled(void)
     {
         return true;
     }
-    //splash(0,"NOT ENABLED!");
+    //splash(0, ID2P(LANG_BT_NOT_ENABLED));
     return false;
 }
 
@@ -1028,14 +1029,14 @@ static void bt_show_codec_picker(const char *mac)
     count = bt_get_available_codecs(mac, codecs, BT_MAX_CODECS);
     if (count <= 0)
     {
-        splash(HZ, "No codecs available");
+        splash(HZ, ID2P(LANG_BT_NO_CODECS));
         return;
     }
 
     data.items = codecs;
     data.count = count;
 
-    simplelist_info_init(&info, "Select Codec", count, &data);
+    simplelist_info_init(&info, ID2P(LANG_BT_SELECT_CODEC), count, &data);
     info.get_name = bt_strlist_name_cb;
     info.action_callback = bt_simplelist_ok_cancel;
     info.selection = -1;
@@ -1055,10 +1056,10 @@ static void bt_show_codec_picker(const char *mac)
         if (bt_try_set_codec(pcm_path, codecs[info.selection]) && bt_route_to_bluetooth(mac, NULL))
         {
             //bt_set_active_codec(mac);
-            splashf(HZ, "Codec: %s", bt_active_codec );
+            splashf(HZ, "%s: %s", ID2P(LANG_BT_CODEC), bt_active_codec );
         }
         else
-            splash(HZ, "Codec change failed.");
+            splash(HZ, ID2P(LANG_BT_CODEC_CHANGE_FAILED));
     }
 }
 
@@ -1117,39 +1118,42 @@ static void bt_show_status(void)
         int device_line = -1;
         int executed_action = -1;
 
-        simplelist_info_init(&info, "Status", 0, &executed_action);
+        simplelist_info_init(&info, (char *)str(LANG_BT_STATUS), 0, &executed_action);
         info.action_callback = bt_simplelist_ok_cancel_return_action;
         info.selection = -1;
         simplelist_reset_lines();
 
-        simplelist_addline("Bluetooth: %s", bt_on ? "Enabled" : (suspended ? "Suspended" : "Disabled"));
+        simplelist_addline("%s: %s", (const char *)str(LANG_BT_BLUETOOTH),
+                         bt_on ? (const char *)str(LANG_BT_ENABLED) :
+                         (suspended ? (const char *)str(LANG_BT_SUSPENDED) : (const char *)str(LANG_BT_DISABLED)));
         bt_toggle_line = line_idx++;
 
         if (bt_selected_mac[0])
         {
-            simplelist_addline("Device: %s", bt_selected_name[0] ? bt_selected_name :  "Bluetooth");
+            simplelist_addline("%s: %s", (const char *)str(LANG_BT_DEVICE),
+                             bt_selected_name[0] ? bt_selected_name : (const char *)str(LANG_BT_BLUETOOTH));
             device_line = line_idx++;
 
             if (bt_connected)
             {
-                simplelist_addline("Codec: %s",
-                       bt_active_codec[0] ? bt_active_codec : "Unknown");
+                simplelist_addline("%s: %s", (const char *)str(LANG_BT_CODEC),
+                       bt_active_codec[0] ? bt_active_codec : (const char *)str(LANG_UNKNOWN));
                 codec_line = line_idx++;
             }
-            simplelist_addline("MAC: %s", bt_selected_mac);
+            simplelist_addline("%s: %s", str(LANG_BT_MAC), bt_selected_mac);
             line_idx++;
-            simplelist_addline("Connected: %s",
-                               bt_connected ? "Yes" : "No");
+            simplelist_addline("%s: %s", (const char *)str(LANG_BT_CONNECTED),
+                               bt_connected ? (const char *)str(LANG_SET_BOOL_YES) : (const char *)str(LANG_SET_BOOL_NO));
             line_idx++;
 
         }
         else
         {
-            simplelist_addline("Device: Local");
+            simplelist_addline("%s: %s", (const char *)str(LANG_BT_DEVICE), (const char *)str(LANG_BT_LOCAL));
             line_idx++;
         }
 
-        simplelist_addline("Output: %s", bt_playback_dev);
+        simplelist_addline("%s: %s", (const char *)str(LANG_BT_OUTPUT), bt_playback_dev);
         line_idx++;
 
         info.count = simplelist_get_line_count();
@@ -1161,9 +1165,11 @@ static void bt_show_status(void)
 
         if (sel == bt_toggle_line)
         {
-            static const char *const toggle_items[] = { "On", "Off", "Suspend" };
+            const char *toggle_items[] = {(const char *)str(LANG_ON),
+                                        (const char *)str(LANG_OFF),
+                                        (const char *)str(LANG_BT_SUSPEND)};
             struct simplelist_info t_info;
-            simplelist_info_init(&t_info, "Bluetooth", 3, (void *)toggle_items);
+            simplelist_info_init(&t_info, (char *)str(LANG_BT_BLUETOOTH), 3, (void *)toggle_items);
             t_info.get_name = bt_action_name_cb;
             t_info.action_callback = bt_simplelist_ok_cancel;
             t_info.selection = -1;
@@ -1215,11 +1221,11 @@ static void bt_show_status(void)
 
 int hiby_bluetooth_menu(void)
 {
-    static const char *const action_items[] =
+    const char *action_items[] =
     {
-        "Status",
-        "Devices",
-        "Disconnect",
+        (const char *)str(LANG_BT_STATUS),
+        (const char *)str(LANG_BT_DEVICES),
+        (const char *)str(LANG_BT_DISCONNECT),
     };
 
     int action = -1;
@@ -1228,7 +1234,7 @@ int hiby_bluetooth_menu(void)
     {
         struct simplelist_info info;
 
-        simplelist_info_init(&info, "Bluetooth",
+        simplelist_info_init(&info, (char *)str(LANG_BT_BLUETOOTH),
             (int)(sizeof(action_items) / sizeof(action_items[0])),
             (void *)action_items);
         info.get_name = bt_action_name_cb;

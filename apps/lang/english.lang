@@ -17157,3 +17157,465 @@
     *: "U S B"
   </voice>
 </phrase>
+<phrase>
+  id: LANG_BT_STATUS
+  desc: Hiby Bluetooth status screen title
+  user: core
+  <source>
+    *: "Status"
+  </source>
+  <dest>
+    *: "Status"
+  </dest>
+  <voice>
+    *: "Status"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_BLUETOOTH
+  desc: Hiby Bluetooth menu and status label
+  user: core
+  <source>
+    *: "Bluetooth"
+  </source>
+  <dest>
+    *: "Bluetooth"
+  </dest>
+  <voice>
+    *: "Bluetooth"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_DEVICE
+  desc: Hiby Bluetooth device label
+  user: core
+  <source>
+    *: "Device"
+  </source>
+  <dest>
+    *: "Device"
+  </dest>
+  <voice>
+    *: "Device"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_CODEC
+  desc: Hiby Bluetooth codec label
+  user: core
+  <source>
+    *: "Codec"
+  </source>
+  <dest>
+    *: "Codec"
+  </dest>
+  <voice>
+    *: "Codec"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_MAC
+  desc: Hiby Bluetooth MAC label
+  user: core
+  <source>
+    *: "MAC"
+  </source>
+  <dest>
+    *: "MAC"
+  </dest>
+  <voice>
+    *: "M A C"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_CONNECTED
+  desc: Hiby Bluetooth connection state label
+  user: core
+  <source>
+    *: "Connected"
+  </source>
+  <dest>
+    *: "Connected"
+  </dest>
+  <voice>
+    *: "Connected"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_OUTPUT
+  desc: Hiby Bluetooth output label
+  user: core
+  <source>
+    *: "Output"
+  </source>
+  <dest>
+    *: "Output"
+  </dest>
+  <voice>
+    *: "Output"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_LOCAL
+  desc: Hiby Bluetooth local output label
+  user: core
+  <source>
+    *: "Local"
+  </source>
+  <dest>
+    *: "Local"
+  </dest>
+  <voice>
+    *: "Local"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_SELECT_CODEC
+  desc: Hiby Bluetooth codec picker title
+  user: core
+  <source>
+    *: "Select Codec"
+  </source>
+  <dest>
+    *: "Select Codec"
+  </dest>
+  <voice>
+    *: "Select Codec"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_NO_CODECS
+  desc: Hiby Bluetooth no available codecs splash
+  user: core
+  <source>
+    *: "No codecs available"
+  </source>
+  <dest>
+    *: "No codecs available"
+  </dest>
+  <voice>
+    *: "No codecs available"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_CODEC_CHANGE_FAILED
+  desc: Hiby Bluetooth codec switching failure splash
+  user: core
+  <source>
+    *: "Codec change failed."
+  </source>
+  <dest>
+    *: "Codec change failed."
+  </dest>
+  <voice>
+    *: "Codec change failed"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_SCANNING_PROGRESS
+  desc: Hiby Bluetooth scan progress message
+  user: core
+  <source>
+    *: "Scanning for %d/%d secs... Press any key to stop"
+  </source>
+  <dest>
+    *: "Scanning for %d/%d secs... Press any key to stop"
+  </dest>
+  <voice>
+    *: "Scanning. Press any key to stop"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_NO_DEVICES
+  desc: Hiby Bluetooth no devices state
+  user: core
+  <source>
+    *: "No devices"
+  </source>
+  <dest>
+    *: "No devices"
+  </dest>
+  <voice>
+    *: "No devices"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_NO_DEVICES_FOUND
+  desc: Hiby Bluetooth scan result when none are found
+  user: core
+  <source>
+    *: "No devices found"
+  </source>
+  <dest>
+    *: "No devices found"
+  </dest>
+  <voice>
+    *: "No devices found"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_SCAN_FOR_NEW
+  desc: Hiby Bluetooth scan entry label
+  user: core
+  <source>
+    *: "Scan for new devices"
+  </source>
+  <dest>
+    *: "Scan for new devices"
+  </dest>
+  <voice>
+    *: "Scan for new devices"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_DEVICES
+  desc: Hiby Bluetooth device list title
+  user: core
+  <source>
+    *: "Devices"
+  </source>
+  <dest>
+    *: "Devices"
+  </dest>
+  <voice>
+    *: "Devices"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_DISCONNECT
+  desc: Hiby Bluetooth disconnect action
+  user: core
+  <source>
+    *: "Disconnect"
+  </source>
+  <dest>
+    *: "Disconnect"
+  </dest>
+  <voice>
+    *: "Disconnect"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_SUSPEND
+  desc: Hiby Bluetooth suspend action
+  user: core
+  <source>
+    *: "Suspend"
+  </source>
+  <dest>
+    *: "Suspend"
+  </dest>
+  <voice>
+    *: "Suspend"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_ENABLED
+  desc: Hiby Bluetooth enabled state
+  user: core
+  <source>
+    *: "Enabled"
+  </source>
+  <dest>
+    *: "Enabled"
+  </dest>
+  <voice>
+    *: "Enabled"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_DISABLED
+  desc: Hiby Bluetooth disabled state
+  user: core
+  <source>
+    *: "Disabled"
+  </source>
+  <dest>
+    *: "Disabled"
+  </dest>
+  <voice>
+    *: "Disabled"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_SUSPENDED
+  desc: Hiby Bluetooth suspended state
+  user: core
+  <source>
+    *: "Suspended"
+  </source>
+  <dest>
+    *: "Suspended"
+  </dest>
+  <voice>
+    *: "Suspended"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_IS_SUSPENDED
+  desc: Hiby Bluetooth full suspended sentence
+  user: core
+  <source>
+    *: "Bluetooth is suspended."
+  </source>
+  <dest>
+    *: "Bluetooth is suspended."
+  </dest>
+  <voice>
+    *: "Bluetooth is suspended"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_SUSPENDED_RESUMING
+  desc: Hiby Bluetooth resume message
+  user: core
+  <source>
+    *: "Bluetooth is suspended. Resuming may take some time..."
+  </source>
+  <dest>
+    *: "Bluetooth is suspended. Resuming may take some time..."
+  </dest>
+  <voice>
+    *: "Bluetooth is suspended. Resuming may take some time"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_ENABLE_IT
+  desc: Hiby Bluetooth enable prompt
+  user: core
+  <source>
+    *: "Enable it?"
+  </source>
+  <dest>
+    *: "Enable it?"
+  </dest>
+  <voice>
+    *: "Enable it?"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_INITIALIZING
+  desc: Hiby Bluetooth initializing splash
+  user: core
+  <source>
+    *: "BT initializing..."
+  </source>
+  <dest>
+    *: "BT initializing..."
+  </dest>
+  <voice>
+    *: "Bluetooth initializing"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_CONNECTING
+  desc: Hiby Bluetooth connecting splash
+  user: core
+  <source>
+    *: "Connecting..."
+  </source>
+  <dest>
+    *: "Connecting..."
+  </dest>
+  <voice>
+    *: "Connecting"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_UNAVAILABLE
+  desc: Hiby Bluetooth unavailable splash
+  user: core
+  <source>
+    *: "BT unavailable"
+  </source>
+  <dest>
+    *: "BT unavailable"
+  </dest>
+  <voice>
+    *: "Bluetooth unavailable"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_PAIR_FAILED
+  desc: Hiby Bluetooth pairing failure splash
+  user: core
+  <source>
+    *: "BT pair failed"
+  </source>
+  <dest>
+    *: "BT pair failed"
+  </dest>
+  <voice>
+    *: "Bluetooth pair failed"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_CONNECT_FAILED
+  desc: Hiby Bluetooth connection failure splash
+  user: core
+  <source>
+    *: "BT connect failed"
+  </source>
+  <dest>
+    *: "BT connect failed"
+  </dest>
+  <voice>
+    *: "Bluetooth connect failed"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_CONNECTED_NO_ROUTE
+  desc: Hiby Bluetooth connected but no audio route splash
+  user: core
+  <source>
+    *: "BT connected, no audio route"
+  </source>
+  <dest>
+    *: "BT connected, no audio route"
+  </dest>
+  <voice>
+    *: "Bluetooth connected, no audio route"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_DISCONNECTING
+  desc: Hiby Bluetooth disconnecting splash
+  user: core
+  <source>
+    *: "Disconnecting..."
+  </source>
+  <dest>
+    *: "Disconnecting..."
+  </dest>
+  <voice>
+    *: "Disconnecting"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_DISCONNECTED
+  desc: Hiby Bluetooth disconnected splash
+  user: core
+  <source>
+    *: "Disconnected"
+  </source>
+  <dest>
+    *: "Disconnected"
+  </dest>
+  <voice>
+    *: "Disconnected"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_BT_DONE
+  desc: Hiby Bluetooth done splash
+  user: core
+  <source>
+    *: "Done"
+  </source>
+  <dest>
+    *: "Done"
+  </dest>
+  <voice>
+    *: "Done"
+  </voice>
+</phrase>
