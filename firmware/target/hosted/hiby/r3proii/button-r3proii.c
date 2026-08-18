@@ -53,6 +53,18 @@ int button_map(int keycode)
             return BUTTON_NEXT;
         case KEY_POWER:
             return BUTTON_POWER;
+
+    //Map bluetooth buttons:
+    case KEY_PLAY:
+    case KEY_PLAYCD:
+    case KEY_PAUSECD:
+        return button_map(KEY_PLAYPAUSE);
+    case KEY_REWIND:
+    //case KEY_PREVIOUSSONG:
+        return button_map(KEY_PREVIOUSSONG);
+    case KEY_FASTFORWARD:
+        return button_map(KEY_NEXTSONG);
+
         case BTN_TOUCH:
         {
 #ifdef HAVE_BACKLIGHT
