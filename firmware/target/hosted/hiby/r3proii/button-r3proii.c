@@ -46,11 +46,10 @@ int button_map(int keycode)
             return BUTTON_VOL_UP;
         case KEY_PLAYPAUSE:
             return BUTTON_PLAY;
-        //Intentionally inverted to aling with OF
         case KEY_NEXTSONG:
-            return BUTTON_PREV;
-        case KEY_PREVIOUSSONG:
             return BUTTON_NEXT;
+        case KEY_PREVIOUSSONG:
+            return BUTTON_PREV;
         case KEY_POWER:
             return BUTTON_POWER;
 
@@ -74,7 +73,7 @@ int button_map(int keycode)
             // Ignore
             return 0;
 #else
-            return BUTTON_TOUCH;
+            return BUTTON_TOUCH
 #endif
         }
         default:
