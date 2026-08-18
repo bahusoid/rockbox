@@ -829,7 +829,7 @@ do
             # Thus the lowest common denominator is to target 2.6.23 and glibc 2.4
 	    # Use a recent 2.6.32 LTS kernel, but glibc 2.20 targeting 2.6.23 and API 2.4
 	    #
-            glibcopts="--enable-kernel=2.6.23 --enable-oldest-abi=2.4"
+            glibcopts="--enable-kernel=2.6.23 --enable-oldest-abi=2.4 MAKEINFO=:"
             build_linux_toolchain "arm-rockbox-linux-gnueabi" "2.38" "" "" "9.5.0" \
                 "$gccopts" "2.6.32.71" "" "2.20" "$glibcopts" "glibc-220-make44.patch glibc-2.20-gcc10.patch"
             # build alsa-lib
@@ -858,7 +858,7 @@ do
             #
 	    # Use a recent 3.10 LTS kernel, but glibc 2.27 targeting 3.2.x and API 2.16
 	    #
-            glibcopts="--enable-kernel=3.2 --enable-oldest-abi=2.16 --disable-werror"
+            glibcopts="--enable-kernel=3.2 --enable-oldest-abi=2.16 --disable-werror MAKEINFO=:"
             # FIXME: maybe add -mhard-float?
             build_linux_toolchain "mipsel-rockbox-linux-gnu" "2.38" "" "binutils-c23.patch" "9.5.0" \
                 "$gccopts" "3.10.108" "linux-c23.patch" "2.27" "$glibcopts" "glibc-227-make44.patch"
