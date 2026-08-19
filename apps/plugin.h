@@ -783,7 +783,7 @@ struct plugin_api {
     /* metadata */
     bool (*get_metadata)(struct mp3entry* id3, int fd, const char* trackname);
     const char* (*get_codec_string)(int codectype);
-    int (*count_mp3_frames)(int fd,  int startpos,  int filesize,
+    int (*count_mp3_frames)(int fd,  int64_t startpos,  int64_t filesize,
                      void (*progressfunc)(int),
                      unsigned char* buf, size_t buflen);
     int (*create_xing_header)(int fd, long startpos, long filesize,

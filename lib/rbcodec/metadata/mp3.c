@@ -53,11 +53,11 @@
  * Returns: the song length in milliseconds,
  *          0 means that it couldn't be calculated
  */
-static int getsonglength(int fd, struct mp3entry *entry)
+static int64_t getsonglength(int fd, struct mp3entry *entry)
 {
     unsigned long filetime = 0;
     struct mp3info info;
-    long bytecount;
+    int64_t bytecount;
 
     /* Start searching after ID3v2 header */
     if(-1 == lseek(fd, entry->id3v2len, SEEK_SET))
@@ -169,7 +169,7 @@ bool get_mp3_metadata(int fd, struct mp3entry *entry)
 
     if (entry->id3v2len)
         setid3v2title(fd, entry);
-    int len = getsonglength(fd, entry);
+    int64_t len = getsonglength(fd, entry);
     if (len < 0)
         return false;
     entry->length = len;

@@ -26,6 +26,8 @@
 #define MPEG_VERSION2   1
 #define MPEG_VERSION2_5 2
 
+#include <inttypes.h>
+#include <stdint.h>
 #include <string.h> /* size_t */
 
 struct mp3info {
@@ -45,7 +47,7 @@ struct mp3info {
     bool has_toc;     /* True if there is a VBR header in the file */
     unsigned char toc[100];
     unsigned long frame_count; /* Number of frames in the file (if VBR) */
-    unsigned long byte_count;  /* File size in bytes */
+    int64_t byte_count;  /* File size in bytes */
     unsigned long file_time;   /* Length of the whole file in milliseconds */
     int enc_delay;    /* Encoder delay, fetched from LAME header */
     int enc_padding;  /* Padded samples added to last frame. LAME header */
@@ -59,21 +61,21 @@ struct mp3info {
 
 #define MAX_XING_HEADER_SIZE 576
 
-unsigned long find_next_frame(int fd, 
-                              long *offset, 
-                              long max_offset,
+unsigned long find_next_frame(int fd,
+                             int64_t *offset,
+                             int64_t max_offset,
                               unsigned long reference_header);
-unsigned long mem_find_next_frame(int startpos, 
-                                  long *offset, 
-                                  long max_offset,
+unsigned long mem_find_next_frame(int64_t startpos,
+                                  int64_t *offset,
+                                  int64_t max_offset,
                                   unsigned long reference_header,
                                   unsigned char* buf, size_t buflen);
-int get_mp3file_info(int fd, 
-                     struct mp3info *info);
+int64_t get_mp3file_info(int fd,
+                    struct mp3info *info);
 
-int count_mp3_frames(int fd,  int startpos,  int filesize,
-                     void (*progressfunc)(int),
-                     unsigned char* buf, size_t buflen);
+int count_mp3_frames(int fd, int64_t startpos, int64_t filesize,
+                    void (*progressfunc)(int),
+                    unsigned char* buf, size_t buflen);
 
 int create_xing_header(int fd, long startpos, long filesize,
                        unsigned char *buf, unsigned long num_frames,
