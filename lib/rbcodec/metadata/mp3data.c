@@ -224,14 +224,14 @@ static void read_uint32be_mp3data(int fd, unsigned long *data)
 #endif
 }
 
-static unsigned long __find_next_frame(int fd, long *offset, long max_offset,
+static unsigned long __find_next_frame(int fd, int64_t *offset, int64_t max_offset,
                                        unsigned long reference_header,
                                        int(*getfunc)(int fd, unsigned char *c),
                                        bool single_header)
 {
     unsigned long header=0;
     unsigned char tmp;
-    long pos      = 0;
+    int64_t pos      = 0;
 
     /* We will search until we find two consecutive MPEG frame headers with 
      * the same MPEG version, layer and sampling frequency. The first header
@@ -289,7 +289,7 @@ static unsigned long __find_next_frame(int fd, long *offset, long max_offset,
     *offset = pos - 4;
 
     if(*offset)
-        VDEBUGF("Warning: skipping %ld bytes of garbage\n", *offset);
+        VDEBUGF("Warning: skipping %" PRId64 " bytes of garbage\n", *offset);
 
     return header;
 }
@@ -299,12 +299,12 @@ static int fileread(int fd, unsigned char *c)
     return read(fd, c, 1);
 }
 
-unsigned long find_next_frame(int fd, 
-                              long *offset, 
-                              long max_offset,
+unsigned long find_next_frame(int fd,
+                              int64_t *offset,
+                              int64_t max_offset,
                               unsigned long reference_header)
 {
-    return __find_next_frame(fd, offset, max_offset, reference_header, 
+    return __find_next_frame(fd, offset, max_offset, reference_header,
                              fileread, true);
 }
 
@@ -368,16 +368,16 @@ static void buf_init(unsigned char* buf, size_t buflen)
     fnf_read_index = buflen;
 }
 
-static unsigned long buf_find_next_frame(int fd, long *offset, long max_offset)
+static unsigned long buf_find_next_frame(int fd, int64_t *offset, int64_t max_offset)
 {
     return __find_next_frame(fd, offset, max_offset, 0, buf_getbyte, true);
 }
 
 static size_t mem_buflen;
 static unsigned char* mem_buf;
-static size_t mem_pos;
+static int64_t mem_pos;
 static int mem_cnt;
-static int mem_maxlen;
+static int64_t mem_maxlen;
 
 static int mem_getbyte(int dummy, unsigned char *c)
 {
@@ -393,9 +393,9 @@ static int mem_getbyte(int dummy, unsigned char *c)
         return 1;
 }
 
-unsigned long mem_find_next_frame(int startpos, 
-                                  long *offset, 
-                                  long max_offset,
+unsigned long mem_find_next_frame(int64_t startpos,
+                                  int64_t *offset,
+                                  int64_t max_offset,
                                   unsigned long reference_header,
                                   unsigned char* buf, size_t buflen)
 {
@@ -405,7 +405,7 @@ unsigned long mem_find_next_frame(int startpos,
     mem_cnt = 0;
     mem_maxlen = max_offset;
 
-    return __find_next_frame(0, offset, max_offset, reference_header, 
+    return __find_next_frame(0, offset, max_offset, reference_header,
                              mem_getbyte, true);
 }
 #endif
@@ -493,7 +493,7 @@ static void get_vbri_info(struct mp3info *info, unsigned char *buf)
     VDEBUGF("Frame size (%dkpbs): %d bytes (0x%x)\n",
            info->bitrate, info->frame_size, info->frame_size);
     VDEBUGF("Frame count: %lx\n", info->frame_count);
-    VDEBUGF("Byte count: %lx\n", info->byte_count);
+    VDEBUGF("Byte count: %" PRIx64 "\n", info->byte_count);
 
     /* We don't parse the TOC, since we don't yet know how to (FIXME) */
     /*
@@ -510,10 +510,10 @@ static void get_vbri_info(struct mp3info *info, unsigned char *buf)
 }
 
 /* Seek to next mpeg header and extract relevant information. */
-static int get_next_header_info(int fd, long *bytecount, struct mp3info *info,
+static int get_next_header_info(int fd, int64_t *bytecount, struct mp3info *info,
                                 bool single_header)
 {
-    long tmp;
+    int64_t tmp;
     unsigned long header = 0;
 
     header = __find_next_frame(fd, &tmp, 0x100000, 0, fileread, single_header);
@@ -529,10 +529,10 @@ static int get_next_header_info(int fd, long *bytecount, struct mp3info *info,
     return 0;
 }
 
-int get_mp3file_info(int fd, struct mp3info *info)
+int64_t get_mp3file_info(int fd, struct mp3info *info)
 {
     unsigned char frame[VBR_HEADER_MAX_SIZE], *vbrheader;
-    long bytecount = 0;
+    int64_t bytecount = 0;
     int result, buf_size;
 
     /* Initialize info and frame */
@@ -598,7 +598,7 @@ int get_mp3file_info(int fd, struct mp3info *info)
     }
     else
     {
-        long offset;
+        int64_t offset;
 
         VDEBUGF("-- No VBR header --\n");
         
@@ -624,16 +624,16 @@ static void long2bytes(unsigned char *buf, long val)
     buf[3] = val & 0xff;
 }
 
-int count_mp3_frames(int fd,  int startpos,  int filesize,
+int count_mp3_frames(int fd, int64_t startpos, int64_t filesize,
                      void (*progressfunc)(int),
                      unsigned char* buf, size_t buflen)
 {
     unsigned long header = 0;
     struct mp3info info;
     int num_frames;
-    long bytes;
+    int64_t bytes;
     int cnt;
-    long progress_chunk = filesize / 50; /* Max is 50%, in 1% increments */
+    int64_t progress_chunk = filesize / 50; /* Max is 50%, in 1% increments */
     int progress_cnt = 0;
     bool is_vbr = false;
     int last_bitrate = 0;
@@ -702,7 +702,7 @@ int create_xing_header(int fd, long startpos, long filesize,
     unsigned long filepos;
     long pos, last_pos;
     long j;
-    long bytes;
+    int64_t bytes;
     int i;
     int index;
 
