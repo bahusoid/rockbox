@@ -50,12 +50,6 @@
 /* define this if the target has volume keys which can be used in the lists */
 #define HAVE_VOLUME_IN_LIST
 
-/* Battery doesn't update its charging status, but the charger does. */
-#define POWER_DEV_NAME "mp2731-charger"
-
-/* Battery */
-#define BATTERY_TYPES_COUNT  1
-
 /* Audio codec */
 #define HAVE_HIBY_LINUX_CODEC
 #define HAVE_HIBY_BLUETOOTH
@@ -67,6 +61,12 @@
 #define HW_SAMPR_CAPS SAMPR_CAP_ALL_192
 
 /* Battery */
+#define BATTERY_TYPES_COUNT  1
+
+/* Battery doesn't update its charging status, but the charger does. */
+#define POWER_DEV_NAME "mp2731-charger"
+
+
 #define CONFIG_BATTERY_MEASURE (VOLTAGE_MEASURE|PERCENTAGE_MEASURE|TIME_MEASURE)
 
 #define BATTERY_CAPACITY_DEFAULT 100 /* default battery capacity */

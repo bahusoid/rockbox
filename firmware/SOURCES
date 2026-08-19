@@ -179,6 +179,7 @@ target/hosted/hiby/r1/led-r1.c
 #endif
 
 #if (defined(HIBY_R1) || defined(HIBY_R3PROII)) && !defined(SIMULATOR) && !defined(BOOTLOADER)
+target/hosted/hiby/powermgmt-axp2101.c
 target/hosted/hiby/usb-dac-hiby.c
 target/hosted/hiby/hibylinux_codec.c
 target/hosted/netlink-monitor.c
