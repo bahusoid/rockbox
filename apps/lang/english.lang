@@ -17619,3 +17619,45 @@
     *: "Done"
   </voice>
 </phrase>
+<phrase>
+  id: LANG_CHARGE_LIMIT_VOLTAGE
+  desc: 
+  user: core
+  <source>
+    *: "Max Charge Voltage"
+  </source>
+  <dest>
+    *: "Max Charge Voltage"
+  </dest>
+  <voice>
+    *: "Max Charge Voltage"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_CHARGE_LIMIT_CURRENT
+  desc: 
+  user: core
+  <source>
+    *: "Max Charge Current"
+  </source>
+  <dest>
+    *: "Max Charge Current"
+  </dest>
+  <voice>
+    *: "Max Charge Current"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_LOW_BATTERY_POWER_OFF
+  desc: low battery power off threshold
+  user: core
+  <source>
+    *: "Low Battery Power Off"
+  </source>
+  <dest>
+    *: "Low Battery Power Off"
+  </dest>
+  <voice>
+    *: "Low Battery Power Off"
+  </voice>
+</phrase>

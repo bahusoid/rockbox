@@ -385,37 +385,14 @@ static bool clean_shutdown(enum shutdown_type sd_type,
             screens[i].clear_display();
             screens[i].update();
         }
-
-        if (batt_safe)
-        {
-            int level;
 #ifdef HAVE_TAGCACHE
-            if (!tagcache_prepare_shutdown())
-            {
-                cancel_shutdown();
-                splash(HZ, ID2P(LANG_TAGCACHE_BUSY));
-                return false;
-            }
-#endif
-            level = battery_level();
-            if (level > 10 || level < 0)
-            {
-                if (global_settings.show_shutdown_message)
-                    splash(0, str(LANG_SHUTTINGDOWN));
-            }
-            else
-            {
-                msg_id = LANG_WARNING_BATTERY_LOW;
-                splashf(0, "%s %s", str(LANG_WARNING_BATTERY_LOW),
-                                    str(LANG_SHUTTINGDOWN));
-            }
-        }
-        else
+        if (batt_safe && !tagcache_prepare_shutdown())
         {
-            msg_id = LANG_WARNING_BATTERY_EMPTY;
-            splashf(0, "%s %s", str(LANG_WARNING_BATTERY_EMPTY),
-                                str(LANG_SHUTTINGDOWN));
+            cancel_shutdown();
+            splash(HZ, ID2P(LANG_TAGCACHE_BUSY));
+            return false;
         }
+#endif
 
 #ifdef HAVE_DISK_STORAGE
         if (batt_safe) /* do not save on critical battery */
@@ -456,6 +433,33 @@ static bool clean_shutdown(enum shutdown_type sd_type,
         else
             dircache_disable();
 #endif
+        if (batt_safe)
+        {
+            int level = battery_level();
+            int safe_battery_level = 10;
+#if ((CONFIG_BATTERY_MEASURE & VOLTAGE_MEASURE))
+            if (global_settings.low_battery_poweroff_percent > safe_battery_level)
+                safe_battery_level = global_settings.low_battery_poweroff_percent;
+#endif
+
+            if (level > safe_battery_level || level < 0)
+            {
+                if (global_settings.show_shutdown_message)
+                    splash(0, str(LANG_SHUTTINGDOWN));
+            }
+            else
+            {
+                msg_id = LANG_WARNING_BATTERY_LOW;
+                splashf(0, "%s %s", str(LANG_WARNING_BATTERY_LOW),
+                                    str(LANG_SHUTTINGDOWN));
+            }
+        }
+        else
+        {
+            msg_id = LANG_WARNING_BATTERY_EMPTY;
+            splashf(0, "%s %s", str(LANG_WARNING_BATTERY_EMPTY),
+                                str(LANG_SHUTTINGDOWN));
+        }
 
         if(global_settings.talk_menu)
         {
@@ -645,6 +649,15 @@ static void lo_unplug_change(bool inserted)
 }
 #endif /*HAVE_LINEOUT_DETECTION*/
 
+#if defined(HAVE_HIBY_LINUX_POWER_CHARGE_LIMIT) && !defined(SIMULATOR)
+static int hiby_charger_detect_callback(struct timeout *tmo)
+{
+    (void)tmo;
+    set_charge_current(global_settings.hiby_charge_current);
+    return 0;
+}
+#endif
+
 long default_event_handler_ex(long event, void (*callback)(void *), void *parameter)
 {
 #if CONFIG_PLATFORM & (PLATFORM_ANDROID)
@@ -698,9 +711,20 @@ long default_event_handler_ex(long event, void (*callback)(void *), void *parame
             break;
 #if CONFIG_CHARGING
         case SYS_CHARGER_CONNECTED:
-            car_adapter_mode_processing(true);
-            return SYS_CHARGER_CONNECTED;
+        {
+#if defined(HAVE_HIBY_LINUX_POWER_CHARGE_LIMIT) && !defined(SIMULATOR)
+            if (global_settings.hiby_charge_current)
+            {
+                // Needs quite a big timeout to settle OF power management
+                static struct timeout hiby_charger_timeout; 
+                timeout_register(&hiby_charger_timeout, hiby_charger_detect_callback,
+                                 10*HZ, (intptr_t)NULL);
+            }
+#endif
 
+            car_adapter_mode_processing(true);
+
+        }
         case SYS_CHARGER_DISCONNECTED:
             car_adapter_mode_processing(false);
             reset_runtime();

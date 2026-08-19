@@ -51,9 +51,6 @@
 /* define this if the target has volume keys which can be used in the lists */
 //#define HAVE_VOLUME_IN_LIST
 
-/* Battery */
-#define BATTERY_TYPES_COUNT  1
-
 /* Audio codec */
 #define HAVE_HIBY_LINUX_CODEC
 #define HAVE_HIBY_BLUETOOTH
@@ -65,6 +62,9 @@
 #define HW_SAMPR_CAPS SAMPR_CAP_ALL_192
 
 /* Battery */
+#define BATTERY_TYPES_COUNT  1
+#define BATTERY_STATUS_DEV_NAME "axp_battery"
+#define HAVE_HIBY_LINUX_POWER_AXP2101
 #define CONFIG_BATTERY_MEASURE (VOLTAGE_MEASURE|PERCENTAGE_MEASURE|TIME_MEASURE)
 
 #define BATTERY_CAPACITY_DEFAULT 100 /* default battery capacity */

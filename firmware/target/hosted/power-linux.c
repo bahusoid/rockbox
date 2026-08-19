@@ -34,8 +34,14 @@
 #endif
 
 #ifdef BATTERY_DEV_NAME
-# define BATTERY_SYSFS_PATH     "/sys/class/power_supply/" BATTERY_DEV_NAME
-# define BATTERY_STATUS_PATH    BATTERY_SYSFS_PATH "/status"
+# define BATTERY_SYSFS_PATH     "/sys/class/power_supply/" BATTERY_DEV_NAME 
+
+#ifdef BATTERY_STATUS_DEV_NAME
+#define BATTERY_STATUS_PATH  "/sys/class/power_supply/" BATTERY_STATUS_DEV_NAME "/status"
+#else
+#define BATTERY_STATUS_PATH    BATTERY_SYSFS_PATH "/status"
+#endif
+
 # define BATTERY_VOLTAGE_PATH   BATTERY_SYSFS_PATH "/voltage_now"
 # define BATTERY_CURRENT_PATH   BATTERY_SYSFS_PATH "/current_now"
 # define BATTERY_LEVEL_PATH     BATTERY_SYSFS_PATH "/capacity"
