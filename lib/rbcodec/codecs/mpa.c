@@ -170,19 +170,20 @@ static void init_mad(void)
     mad_synth_init(&synth);
 }
 
-static int get_file_pos(int newtime)
+static int64_t get_file_pos(long newtime)
 {
-    int pos = -1;
+    int64_t pos = -1;
     struct mp3entry *id3 = ci->id3;
 
     if (id3->vbr) {
-        int curpos = ci->curpos - id3->first_frame_offset;
+        int64_t curpos = ci->curpos - id3->first_frame_offset;
         long skipms_from_curpos = curpos > 0 ?  (long) (id3->elapsed - newtime) : - newtime;
         if (id3->has_toc) {
             /* Use the TOC to find the new position */
             unsigned int percent = ((uint64_t)newtime * 100) / id3->length;
             if (percent > 99)
                 percent = 99;
+
 
             unsigned int pct_timestep = id3->length / 100;
 
@@ -217,7 +218,7 @@ static int get_file_pos(int newtime)
 
     /* Don't seek right to the end of the file so that we can
        transition properly to the next song */
-    if (pos >= (int)(id3->filesize - id3->id3v1len))
+    if (pos >= (id3->filesize - id3->id3v1len))
         pos = id3->filesize - id3->id3v1len - 1;
 
     /* id3->filesize excludes id3->first_frame_offset, so add it now */
@@ -413,7 +414,7 @@ bool seek_by_time(int64_t* samplesdone, unsigned long current_frequency, unsigne
             reset_stream_buffer();
         }
     } else {
-        int newpos = elapsed_ms ? get_file_pos(elapsed_ms) : (int)(ci->id3->first_frame_offset);
+        unsigned int newpos = elapsed_ms ? get_file_pos(elapsed_ms) : (ci->id3->first_frame_offset);
 
         *samplesdone = ((int64_t)elapsed_ms) * current_frequency / 1000;
 
@@ -458,11 +459,12 @@ enum codec_status codec_run(void)
 
         if (ci->id3->is_asf_stream) {
             asf_waveformatex_t *wfx = (asf_waveformatex_t *)(ci->id3->toc);
-            int packet_offset = ((ci->id3->offset > ci->id3->first_frame_offset) ?
+            unsigned long packet_offset = ((ci->id3->offset > ci->id3->first_frame_offset) ?
                                  (ci->id3->offset - ci->id3->first_frame_offset) : 0)
               % wfx->packet_size;
             ci->seek_buffer(ci->id3->offset - packet_offset);
-            ci->id3->elapsed = asf_get_timestamp(&packet_offset);
+            int duration;
+            ci->id3->elapsed = asf_get_timestamp(&duration);
             ci->set_elapsed(ci->id3->elapsed);
         }
         else {
