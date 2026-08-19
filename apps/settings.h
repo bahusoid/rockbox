@@ -707,6 +707,13 @@ struct user_settings
 #ifdef HAVE_USB_CHARGING_ENABLE
         int usb_charging;
 #endif
+#ifdef HAVE_HIBY_LINUX_POWER_CHARGE_LIMIT
+    int hiby_charge_limit_voltage;
+    int hiby_charge_current;
+#endif
+#if ((CONFIG_BATTERY_MEASURE & VOLTAGE_MEASURE))
+    int low_battery_poweroff_percent;
+#endif
     /* device settings */
 #ifdef HAVE_LCD_CONTRAST
     int contrast;   /* lcd contrast */

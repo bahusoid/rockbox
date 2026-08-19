@@ -182,5 +182,12 @@ void accessory_supply_set(bool);
 #ifdef HAVE_LINEOUT_POWEROFF
 void lineout_set(bool);
 #endif
+#ifdef HAVE_HIBY_LINUX_POWER_CHARGE_LIMIT
+void set_charge_limit_voltage(int value);
+void set_charge_current(int value);
+#endif
+#if ((CONFIG_BATTERY_MEASURE & VOLTAGE_MEASURE))
+void set_shutoff_percent(int percent);
+#endif
 
 #endif /* _POWERMGMT_H_ */

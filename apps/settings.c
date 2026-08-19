@@ -1100,7 +1100,12 @@ void settings_apply(bool read_disk)
 #if defined(DX50) || defined(DX90)
     ibasso_set_governor(global_settings.governor);
 #endif
-
+#if defined(HAVE_HIBY_LINUX_POWER_CHARGE_LIMIT) && !defined(SIMULATOR)
+    set_charge_limit_voltage(global_settings.hiby_charge_limit_voltage);
+#endif
+#if ((CONFIG_BATTERY_MEASURE & VOLTAGE_MEASURE))
+    set_shutoff_percent(global_settings.low_battery_poweroff_percent);
+#endif
     /* This should stay last */
 #if defined(HAVE_RECORDING)
     enc_global_settings_apply();

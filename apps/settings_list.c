@@ -611,6 +611,17 @@ static const char* scanaccel_formatter(char *buffer, size_t buffer_size,
 }
 #endif
 
+static const char* formatter_ma_0_is_off(char *buffer, size_t buffer_size,
+                                    int val, const char *unit)
+{
+    (void)unit;
+    if (val == 0)
+        return str(LANG_OFF);
+    else
+        snprintf(buffer, buffer_size, "%d mA", val);
+    return buffer;
+}
+
 static const char* formatter_unit_0_is_off(char *buffer, size_t buffer_size,
                                     int val, const char *unit)
 {
@@ -620,6 +631,25 @@ static const char* formatter_unit_0_is_off(char *buffer, size_t buffer_size,
         snprintf(buffer, buffer_size, "%d %s", val, unit);
     return buffer;
 }
+
+static const char* formatter_unit_minusone_is_off(char *buffer, size_t buffer_size,
+                                    int val, const char *unit)
+{
+    if (val == -1)
+        return str(LANG_OFF);
+    else
+        snprintf(buffer, buffer_size, "%d %s", val, unit);
+    return buffer;
+}
+
+static int32_t getlang_unit_minusone_is_off(int value, int unit)
+{
+    if (value == -1)
+        return LANG_OFF;
+    else
+        return TALK_ID(value,unit);
+}
+
 
 static int32_t getlang_unit_0_is_off(int value, int unit)
 {
@@ -1325,6 +1355,34 @@ const struct settings_list settings[] = {
                 MAX_FILES_IN_DIR_STEP /* min */, MAX_FILES_IN_DIR_MAX,
                 MAX_FILES_IN_DIR_STEP,
                 NULL, NULL, NULL),
+#if defined(HAVE_HIBY_LINUX_POWER_CHARGE_LIMIT) && !defined(SIMULATOR)
+    STRINGCHOICE_SETTING(F_CB_ON_SELECT_ONLY | F_CB_ONLY_IF_CHANGED , hiby_charge_limit_voltage, LANG_CHARGE_LIMIT_VOLTAGE,0,
+                       "charge limit v",
+                       "off"
+                       ",4.4V (100%+)"
+                       ",4.35V (~95% - 100%)"
+                       ",4.20V (~75% – 85%)"
+                       ",4.10V (~60% – 70%)"
+//Seems, doesn't work for Hiby R1
+//                       ",4.00V (~40% – 50%)"
+                        ,set_charge_limit_voltage, 5, LANG_OFF, TALK_ID(100, UNIT_PERCENT), TALK_ID(95, UNIT_PERCENT), TALK_ID(85, UNIT_PERCENT), TALK_ID(70, UNIT_PERCENT)
+//                        , TALK_ID(50, UNIT_PERCENT)
+                        ),
+    TABLE_SETTING(F_CB_ON_SELECT_ONLY | F_CB_ONLY_IF_CHANGED, hiby_charge_current,
+                  LANG_CHARGE_LIMIT_CURRENT, 0,
+                  "charge current",
+                  off,
+                  UNIT_INT, formatter_ma_0_is_off, getlang_unit_0_is_off,
+                  set_charge_current, 7,
+                  0, 200, 300, 400, 500, 600, 700),
+#endif
+#if ((CONFIG_BATTERY_MEASURE & VOLTAGE_MEASURE))
+    TABLE_SETTING(F_ALLOW_ARBITRARY_VALS | F_CB_ON_SELECT_ONLY | F_CB_ONLY_IF_CHANGED, low_battery_poweroff_percent, LANG_LOW_BATTERY_POWER_OFF, -1,
+                 "low battery power off",
+                 off,
+                 UNIT_PERCENT, formatter_unit_minusone_is_off, getlang_unit_minusone_is_off, set_shutoff_percent, 6,
+                 -1, 0, 5, 10, 15, 20),
+#endif 
 #ifdef HAVE_PERCEPTUAL_VOLUME
     CHOICE_SETTING(0, volume_adjust_mode, LANG_VOLUME_ADJUST_MODE,
                    VOLUME_ADJUST_DIRECT, "volume adjustment mode",

@@ -322,9 +322,22 @@ MAKE_MENU(disk_menu, ID2P(LANG_DISK_MENU), 0, Icon_NOICON,
 /* Limits menu */
 MENUITEM_SETTING(max_files_in_dir, &global_settings.max_files_in_dir, NULL);
 MENUITEM_SETTING(max_files_in_playlist, &global_settings.max_files_in_playlist, NULL);
+#ifdef HAVE_HIBY_LINUX_POWER_CHARGE_LIMIT
+MENUITEM_SETTING(hiby_charge_limit, &global_settings.hiby_charge_limit_voltage, NULL);
+MENUITEM_SETTING(hiby_charge_current, &global_settings.hiby_charge_current, NULL);
+#endif
+#if ((CONFIG_BATTERY_MEASURE & VOLTAGE_MEASURE))
+MENUITEM_SETTING(low_battery_poweroff, &global_settings.low_battery_poweroff_percent, NULL);
+#endif
 MENUITEM_SETTING(default_glyphs, &global_settings.glyphs_to_cache, NULL);
 MAKE_MENU(limits_menu, ID2P(LANG_LIMITS_MENU), 0, Icon_NOICON,
            &max_files_in_dir, &max_files_in_playlist
+#ifdef HAVE_HIBY_LINUX_POWER_CHARGE_LIMIT
+           ,&hiby_charge_limit, &hiby_charge_current
+#endif
+#if ((CONFIG_BATTERY_MEASURE & VOLTAGE_MEASURE))
+           ,&low_battery_poweroff
+#endif
            ,&default_glyphs
            );
 

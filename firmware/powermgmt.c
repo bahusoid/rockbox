@@ -36,6 +36,7 @@
 #include "backlight.h"
 #include "lcd.h"
 #include "rtc.h"
+#include "settings.h"
 #if CONFIG_TUNER
 #include "fmradio.h"
 #endif
@@ -534,9 +535,12 @@ bool query_force_shutdown(void)
 #if defined(NO_LOW_BATTERY_SHUTDOWN)
     return false;
 #elif ((CONFIG_BATTERY_MEASURE & PERCENTAGE_MEASURE) && (CONFIG_BATTERY_MEASURE & VOLTAGE_MEASURE))
+    if (global_settings.low_battery_poweroff_percent >= 0)
+        return percent_now <= global_settings.low_battery_poweroff_percent;
+
     /* If we have both, prefer voltage */
     return voltage_now < battery_level_shutoff;
-#elif CONFIG_BATTERY_MEASURE & PERCENTAGE_MEASURE
+#elif CONFIG_BATTERY_MEASURE & PERCENTAGE_MEASURE   
     return percent_now == 0;
 #elif defined(HAVE_BATTERY_SWITCH)
     /* Cannot rely upon the battery reading to be valid and the
@@ -1268,3 +1272,33 @@ void handle_auto_poweroff(void)
         handle_sleep_timer();
 #endif
 }
+
+#if (CONFIG_BATTERY_MEASURE & PERCENTAGE_MEASURE)
+void set_shutoff_percent(int percent)
+{
+    (void)percent;
+}
+#elif ((CONFIG_BATTERY_MEASURE & VOLTAGE_MEASURE))
+static short percent_to_voltage(int percent, const short* table)
+{
+    if (percent <= 0) {
+        return table[0];
+    }
+    if (percent >= 100) {
+        return table[10];
+    }
+    /* Since the table maps exactly to 10% increments */
+    int i = percent / 10;
+    int remainder = percent % 10;
+
+    /* Interpolate linearly between the smaller and greater value */
+    return table[i] + (remainder * (table[i+1] - table[i])) / 10;
+}
+void set_shutoff_percent(int percent)
+{
+    if (percent < 0)
+        percent = 0;
+
+    battery_level_shutoff = percent_to_voltage(percent, percent_to_volt_discharge);
+}
+#endif
