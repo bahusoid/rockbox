@@ -673,6 +673,10 @@ long touchscreen_last_touch(void)
 {
     return last_touchscreen_touch;
 }
+void reset_last_touch(void)
+{
+   last_touchscreen_touch = -1;
+}
 #endif
 
 #ifdef HAVE_WHEEL_ACCELERATION

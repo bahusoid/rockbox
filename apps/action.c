@@ -420,6 +420,43 @@ static inline void update_screen_has_lock(action_last_t *last, action_cur_t *cur
 #endif
 }
 
+#ifdef HAVE_TOUCHSCREEN
+static bool is_exempted_touch_event(action_cur_t *cur)
+{
+#if !defined(BOOTLOADER)
+    if (global_settings.touchscreen_exemptions 
+       && has_flag(cur->button, BUTTON_TOUCHSCREEN)
+        )
+    {
+        switch (cur->context)
+        {
+        case CONTEXT_WPS:
+            if (global_settings.touchscreen_exemptions == TOUCHSCREEN_EXEMPTIONS_WPS_AND_LISTS
+                || global_settings.touchscreen_exemptions == TOUCHSCREEN_EXEMPTIONS_WPS)
+            {
+                return true;
+            }
+            break;
+
+        case CONTEXT_MAINMENU:
+        case CONTEXT_TREE:
+        case CONTEXT_LIST:
+        case CONTEXT_BOOKMARKSCREEN:
+            if (global_settings.touchscreen_exemptions == TOUCHSCREEN_EXEMPTIONS_WPS_AND_LISTS
+                || global_settings.touchscreen_exemptions == TOUCHSCREEN_EXEMPTIONS_LISTS)
+            {
+                return true;
+            }
+            break;
+        default:
+            break;
+        }
+    }
+#endif /*!BOOTLOADER*/
+    return false;
+}
+#endif
+
 /***********************************************
 * handles touch event processing
 */
@@ -430,6 +467,15 @@ static inline bool get_action_touchscreen(action_last_t *last, action_cur_t *cur
     (void) cur;
     return false;
 #else
+    if (is_exempted_touch_event(cur))
+    {
+        last->button = 0;
+        cur->button = 0;
+        cur->action = ACTION_NONE;
+        last->touchevent.type = TOUCHEVENT_NONE;
+        reset_last_touch();
+        return true;
+    }
     if (has_flag(cur->button, BUTTON_TOUCHSCREEN))
     {
         backlight_on();
