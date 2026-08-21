@@ -822,6 +822,7 @@ long gui_wps_show(void)
         if (button && !IS_SYSEVENT(button) )
             storage_spin();
 
+        long button_tick = current_tick;
         button = skin_wait_for_action(WPS, CONTEXT_WPS|ALLOW_SOFTLOCK, HZ/5);
 
         /* Exit if audio has stopped playing. This happens e.g. at end of
@@ -1104,6 +1105,9 @@ long gui_wps_show(void)
                 skin_request_full_update(CUSTOM_STATUSBAR); /* if SBS is used */
                 break;
             case ACTION_NONE: /* Timeout, do a partial update */
+                if (button_tick + HZ/5 < current_tick)
+                    break;
+
                 update = true;
                 ffwd_rew(button, false); /* hopefully fix the ffw/rwd bug */
                 break;
