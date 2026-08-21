@@ -98,6 +98,15 @@ enum {
 };
 #endif
 
+#ifdef HAVE_TOUCHSCREEN
+enum {
+    TOUCHSCREEN_EXEMPTIONS_OFF = 0,
+    TOUCHSCREEN_EXEMPTIONS_WPS,
+    TOUCHSCREEN_EXEMPTIONS_LISTS,
+    TOUCHSCREEN_EXEMPTIONS_WPS_AND_LISTS,
+};
+#endif
+
 enum {
     FOLDER_ADVANCE_OFF = 0,
     FOLDER_ADVANCE_NEXT,
@@ -822,6 +831,7 @@ struct user_settings
 
 #ifdef HAVE_TOUCHSCREEN
     int touch_mode;
+    int touchscreen_exemptions;
     struct touchscreen_parameter ts_calibration_data;
     struct list_kinetic_scroll_settings kinetic_scroll_accel;
     struct list_kinetic_scroll_settings kinetic_scroll_brake;
