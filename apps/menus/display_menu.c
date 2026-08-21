@@ -574,6 +574,7 @@ static int line_padding_callback(int action,
 }
 
 MENUITEM_SETTING(touch_mode, &global_settings.touch_mode, touch_mode_callback);
+MENUITEM_SETTING(touchscreen_exemptions, &global_settings.touchscreen_exemptions, NULL);
 
 MENUITEM_FUNCTION(touchscreen_menu_calibrate, 0,
 	              ID2P(LANG_TOUCHSCREEN_CALIBRATE), calibrate, NULL, Icon_NOICON);
@@ -583,6 +584,7 @@ MENUITEM_FUNCTION(touchscreen_menu_reset_calibration, 0,
 MENUITEM_SETTING(list_line_padding, &global_settings.list_line_padding, line_padding_callback);
 
 MAKE_MENU(touchscreen_menu, ID2P(LANG_TOUCHSCREEN_SETTINGS), NULL, Icon_NOICON, &list_line_padding, &touch_mode,
+            &touchscreen_exemptions,
             &touchscreen_menu_calibrate, &touchscreen_menu_reset_calibration);
 #endif
 

@@ -10064,6 +10064,74 @@
   </voice>
 </phrase>
 <phrase>
+  id: LANG_TOUCHSCREEN_EXEMPTIONS
+  desc: in Settings -> General -> Display -> Touchscreen Settings
+  user: core
+  <source>
+    *: none
+    touchscreen: "Touchscreen Exemptions"
+  </source>
+  <dest>
+    *: none
+    touchscreen: "Touchscreen Exemptions"
+  </dest>
+  <voice>
+    *: none
+    touchscreen: "Touchscreen Exemptions"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_WPS_ACRONYM
+  desc: in Settings -> General -> Display -> Touchscreen Settings
+  user: core
+  <source>
+    *: none
+    touchscreen: "WPS"
+  </source>
+  <dest>
+    *: none
+    touchscreen: "WPS"
+  </dest>
+  <voice>
+    *: none
+    touchscreen: "WPS"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_LISTS
+  desc: in Settings -> General -> Display -> Touchscreen Settings
+  user: core
+  <source>
+    *: none
+    touchscreen: "Lists"
+  </source>
+  <dest>
+    *: none
+    touchscreen: "Lists"
+  </dest>
+  <voice>
+    *: none
+    touchscreen: "Lists"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_WPS_AND_LISTS
+  desc: in Settings -> General -> Display -> Touchscreen Settings
+  user: core
+  <source>
+    *: none
+    touchscreen: "WPS & Lists"
+  </source>
+  <dest>
+    *: none
+    touchscreen: "WPS & Lists"
+  </dest>
+  <voice>
+    *: none
+    touchscreen: "WPS and Lists"
+  </voice>
+</phrase>
+<phrase>
   id: LANG_TOUCHSCREEN_GRID
   desc: in Settings -> General -> Display -> Touchscreen Settings
   user: core
