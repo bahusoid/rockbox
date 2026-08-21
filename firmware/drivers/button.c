@@ -395,6 +395,15 @@ static void button_tick(void)
             }
             if ( post )
             {
+#ifdef HAVE_BACKLIGHT
+                bool trigger_backlight = 
+#ifndef HAVE_TOUCHSCREEN
+                    true;
+#else
+                    //skip backlight for touchscreen, it will be turned on in touchscreen action code
+                    !(btn & BUTTON_TOUCHSCREEN);
+#endif
+#endif
                 if (repeat)
                 {
                     /* Only post repeat events if the queue is empty,
@@ -416,6 +425,7 @@ static void button_tick(void)
                         }
                         else
 #endif
+                        if (trigger_backlight)
                         {
                             backlight_on();
                             buttonlight_on();
@@ -435,8 +445,11 @@ static void button_tick(void)
 #endif
                     {
                         skip_release = keypress_filter_fn(btn, data);
-                        backlight_on();
-                        buttonlight_on();
+                        if (trigger_backlight)
+                        {
+                            backlight_on();
+                            buttonlight_on();
+                        }
                     }
 #else /* no backlight, nothing to skip */
                     button_queue_try_post(btn, data);
