@@ -432,6 +432,9 @@ static inline bool get_action_touchscreen(action_last_t *last, action_cur_t *cur
 #else
     if (has_flag(cur->button, BUTTON_TOUCHSCREEN))
     {
+        backlight_on();
+        buttonlight_on();
+
         intptr_t data = button_get_data();
         long now = current_tick;
         last->repeated = false;
