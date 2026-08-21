@@ -259,6 +259,11 @@ int button_read_device(BDATA)
                                 handle_touchscreen_event(ABS_FAKE_PRESSED, EVENT_VALUE_TOUCHSCREEN_PRESS);
                                 bmap &= ~BUTTON_TOUCH;
                             }
+                            else
+                            {
+                                reset_last_touch();
+                                _last_touch_state = TOUCHSCREEN_STATE_UNKNOWN;
+                            }
 #endif
                             button_bitmap |= bmap;
                         } else {
@@ -267,6 +272,11 @@ int button_read_device(BDATA)
                             if (bmap & BUTTON_TOUCH) {
                                 handle_touchscreen_event(ABS_FAKE_PRESSED, EVENT_VALUE_TOUCHSCREEN_RELEASE);
                                 bmap &= ~BUTTON_TOUCH;
+                            }
+                            else
+                            {
+                                reset_last_touch();
+                                _last_touch_state = TOUCHSCREEN_STATE_UNKNOWN;
                             }
 #endif
 #ifdef BUTTON_DELAY_RELEASE
