@@ -163,9 +163,23 @@ static int load_image(char *filename, struct image_info *info,
     bool resize = false;
 
     rb->lseek(fd, offset, SEEK_SET);
+    if (bmp.width < LCD_WIDTH && bmp.height < LCD_HEIGHT && size > 0)
+    {
+        //Upscale up to 4x to fit the screen
+        bmp.width <<= 2;
+        bmp.height <<= 2;
+        resize = true;
+        format |= FORMAT_RESIZE|FORMAT_KEEP_ASPECT|FORMAT_DITHER;
+        if (bmp.width > LCD_WIDTH || bmp.height > LCD_HEIGHT)
+        {
+            bmp.width = LCD_WIDTH;
+            bmp.height = LCD_HEIGHT;
+        }
+        size = read_jpeg_fd(fd, flags, &bmp, *buf_size, format  | FORMAT_RETURN_SIZE, cformat, NULL);
+    }
 
     // Try to show it in fullscreen
-    if (bmp.width > LCD_WIDTH || bmp.height > LCD_HEIGHT)
+    if ((bmp.width > LCD_WIDTH || bmp.height > LCD_HEIGHT) && size > 0)
     {
         resize = true;
 
