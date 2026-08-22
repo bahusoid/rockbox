@@ -62,6 +62,7 @@ struct bookmark_list
     bool show_dont_resume;
     bool reload;
     bool show_playlist_name;
+    char* filter_name;
     char* items[];
 };
 
@@ -646,18 +647,28 @@ static int buffer_bookmarks(struct bookmark_list* bookmarks, int first_line)
     bookmarks->count = 0;
     bookmarks->reload = false;
 
-    while(read_line(file, global_read_buffer, sizeof(global_read_buffer)) > 0)
+    int line_len = 0;
+    while((line_len = read_line(file, global_read_buffer, sizeof(global_read_buffer))) > 0)
     {
         read_count++;
 
         if (read_count >= first_line)
         {
-            dest -= strlen(global_read_buffer) + 1;
+            //size_t size = strlen(global_read_buffer);
+            dest -= line_len;
 
             if (dest < ((char*) bookmarks) + sizeof(*bookmarks)
                 + (sizeof(char*) * (bookmarks->count + 1)))
             {
                 break;
+            }
+
+            //TODO: Filter properly, so only filepath is checked. 
+            if (bookmarks->filter_name && !strstr(global_read_buffer, bookmarks->filter_name))
+            {
+                dest += line_len;
+                bookmarks->total_count--;
+                continue;
             }
 
             strcpy(dest, global_read_buffer);
@@ -839,6 +850,7 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
     bookmarks->total_count = 0;
     bookmarks->show_playlist_name
         = strcmp(bookmark_file_name, get_mrb_path(max_path, MAX_PATH)) == 0;
+    bookmarks->filter_name = NULL;
     gui_synclist_init(&list, &get_bookmark_info, (void*) bookmarks, false, 2, NULL);
     if(global_settings.talk_menu)
         gui_synclist_set_voice_callback(&list, bookmark_list_voice_cb);
@@ -852,6 +864,8 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
         {
             count = bookmarks->total_count == 0 ? count : get_bookmark_count(bookmark_file_name);
             bookmarks->total_count = count;
+            buffer_bookmarks(bookmarks, bookmarks->start);
+            count = bookmarks->total_count;
 
             if (bookmarks->total_count < 1)
             {
@@ -877,7 +891,6 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
                 gui_synclist_select_item(&list, item * 2);
             }
 
-            buffer_bookmarks(bookmarks, bookmarks->start);
             gui_synclist_draw(&list);
             cond_talk_ids_fq(VOICE_EXT_BMARK);
             gui_synclist_speak_item(&list);
@@ -896,10 +909,11 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
         {
             MENUITEM_STRINGLIST(menu_items, ID2P(LANG_BOOKMARK_CONTEXT_MENU),
                 NULL, ID2P(LANG_BOOKMARK_CONTEXT_RESUME),
+                ID2P(LANG_BOOKMARK_CONTEXT_FILTER_CURRENT_TRACK),
                 ID2P(LANG_DELETE));
             static const int menu_actions[] =
             {
-                ACTION_STD_OK, ACTION_BMS_DELETE
+                ACTION_STD_OK, ACTION_BMS_FILTER_CURRENT_TRACK, ACTION_BMS_DELETE
             };
             int selection = do_menu(&menu_items, NULL, NULL, false);
 
@@ -951,6 +965,19 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
                 }
                 refresh = true;
             }
+            break;
+
+        case ACTION_BMS_FILTER_CURRENT_TRACK:
+            {
+                struct mp3entry* current_track = audio_current_track();
+                if (current_track && current_track->path[0])
+                {
+                    const char *path = strrchr(current_track->path, '/');
+                    bookmarks->filter_name = path ? path + 1 : current_track->path;
+                    bookmarks->reload = true;
+                }
+            }
+            refresh = true;
             break;
 
         default:
