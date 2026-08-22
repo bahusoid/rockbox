@@ -253,6 +253,7 @@ enum {
 
     /* bookmark screen */
     ACTION_BMS_DELETE,
+    ACTION_BMS_FILTER_CURRENT_TRACK,
 
     /* quickscreen */
     ACTION_QS_LEFT,
