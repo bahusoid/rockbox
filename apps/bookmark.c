@@ -206,7 +206,7 @@ static char* get_mrb_path(char* dirbuf, int dirbuf_sz)
     return dirbuf;
 }
 
-bool bookmark_mrb_autoload()
+bool bookmark_mrb_autoload(void)
 {
     char max_path[MAX_PATH];
     return bookmark_load(get_mrb_path(max_path, MAX_PATH), true);
@@ -234,7 +234,7 @@ bool bookmark_mrb_load()
     return ret;
 }
 
-int get_autocreatebookmark()
+int get_autocreatebookmark(void)
 {
     if(!global_settings.alt_settings_enable)
         return global_settings.autocreatebookmark;
