@@ -2851,6 +2851,26 @@ static bool view_ram_info(void)
 
     return simplelist_show_list(&info);
 }
+//#define COLLECT_SYSFS_ACCESS_LOG
+#ifdef COLLECT_SYSFS_ACCESS_LOG
+extern void sysfs_debug_save_access_log(const char *path);
+extern void sysfs_debug_reset_access_log(void);
+
+static bool dbg_save_sysfs_access_log(void)
+{
+    const char *path = ROCKBOX_DIR "/sysfs_access_log.txt";
+    sysfs_debug_save_access_log(path);
+    splashf(HZ * 2, "Saved sysfs stats to %s", path);
+    return false;
+}
+
+static bool dbg_reset_sysfs_access_log(void)
+{
+    sysfs_debug_reset_access_log();
+    splashf(HZ * 2, "Reset sysfs stats");
+    return false;
+}
+#endif
 #endif
 
 /****** The menu *********/
@@ -2893,7 +2913,11 @@ static const struct {
         { "View CPU stats", dbg_cpuinfo },
 #endif
 #ifdef HIBY_LINUX
-{ "View RAM info", view_ram_info },
+        { "View RAM info", view_ram_info },
+#ifdef COLLECT_SYSFS_ACCESS_LOG
+        { "Save sysfs access log", dbg_save_sysfs_access_log },
+        { "Reset sysfs access log", dbg_reset_sysfs_access_log },
+#endif
 #endif
 #if (CONFIG_BATTERY_MEASURE != 0) && !defined(SIMULATOR)
         { "View battery", view_battery },

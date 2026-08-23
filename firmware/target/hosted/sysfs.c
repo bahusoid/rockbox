@@ -28,10 +28,106 @@
 #include "config.h"
 #include "debug.h"
 #include "sysfs.h"
+//#define COLLECT_SYSFS_ACCESS_LOG
+#ifdef COLLECT_SYSFS_ACCESS_LOG
+#include "file.h"
 
+#define SYSFS_ACCESS_LOG_LIMIT 100
+
+struct sysfs_access_record {
+    char name[128];
+    unsigned int writes;
+    unsigned int reads;
+};
+
+static struct sysfs_access_record sysfs_access_log[SYSFS_ACCESS_LOG_LIMIT];
+static size_t sysfs_access_log_count = 0;
+static size_t sysfs_access_log_next_slot = 0;
+
+static void sysfs_record_access(const char *file_name, bool is_write)
+{
+    if (file_name == NULL || file_name[0] == '\0')
+    {
+        return;
+    }
+
+    for (size_t i = 0; i < sysfs_access_log_count; ++i)
+    {
+        if (strcmp(sysfs_access_log[i].name, file_name) == 0)
+        {
+            if (is_write)
+                sysfs_access_log[i].writes++;
+            else
+                sysfs_access_log[i].reads++;
+            return;
+        }
+    }
+
+    if (sysfs_access_log_count < SYSFS_ACCESS_LOG_LIMIT)
+    {
+        struct sysfs_access_record *record = &sysfs_access_log[sysfs_access_log_count++];
+        memset(record, 0, sizeof(*record));
+        snprintf(record->name, sizeof(record->name), "%s", file_name);
+        if (is_write)
+            record->writes = 1;
+        else
+            record->reads = 1;
+        return;
+    }
+
+    struct sysfs_access_record *record = &sysfs_access_log[sysfs_access_log_next_slot];
+    memset(record, 0, sizeof(*record));
+    snprintf(record->name, sizeof(record->name), "%s", file_name);
+    if (is_write)
+        record->writes = 1;
+    else
+        record->reads = 1;
+    sysfs_access_log_next_slot = (sysfs_access_log_next_slot + 1) % SYSFS_ACCESS_LOG_LIMIT;
+}
+
+void sysfs_debug_save_access_log(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+    {
+        return;
+    }
+
+    int f = open(ROCKBOX_DIR "/logf.txt", O_CREAT|O_WRONLY|O_TRUNC, 0666);
+    if (f < 0)
+    {
+        DEBUGF("ERROR %s: Can not open %s for writing.", __func__, path);
+        return;
+    }
+
+    fdprintf(f, "name\treads\twrites\n");
+    for (size_t i = 0; i < SYSFS_ACCESS_LOG_LIMIT; ++i)
+    {
+        if (sysfs_access_log[i].name[0] == '\0')
+            continue;
+
+        fdprintf(f, "%s\t%u\t%u\n",
+                sysfs_access_log[i].name,
+                sysfs_access_log[i].reads,
+                sysfs_access_log[i].writes);
+    }
+
+    close(f);
+}
+
+void sysfs_debug_reset_access_log(void)
+{
+    memset(sysfs_access_log, 0, sizeof(sysfs_access_log));
+    sysfs_access_log_count = 0;
+    sysfs_access_log_next_slot = 0;
+}
+#else
+#define sysfs_record_access(file_name, is_write) do {} while(0)
+#endif
 
 static FILE* open_read(const char *file_name)
 {
+    sysfs_record_access(file_name, false);
+
     FILE *f = fopen(file_name, "re");
     if(f == NULL)
     {
@@ -44,6 +140,8 @@ static FILE* open_read(const char *file_name)
 
 static FILE* open_write(const char* file_name)
 {
+    sysfs_record_access(file_name, true);
+
     FILE *f = fopen(file_name, "we");
     if(f == NULL)
     {
