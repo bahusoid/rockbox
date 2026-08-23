@@ -115,7 +115,7 @@ static bool extract_mount_path(const char *path)
 static bool  add_bookmark(const char* bookmark_file_name, const char* bookmark,
                           bool most_recent);
 static char* create_bookmark(void);
-static bool  delete_bookmark(const char* bookmark_file_name, int bookmark_id);
+static bool  delete_bookmark(const char* bookmark_file_name, int bookmark_id, const char* filter_name);
 static void  say_bookmark(const char* bookmark,
                           int bookmark_id, bool show_playlist_name);
 static bool  play_bookmark(const char* bookmark);
@@ -871,7 +871,10 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
             {
                 /* No more bookmarks, delete file and exit */
                 splash(HZ, ID2P(LANG_BOOKMARK_LOAD_EMPTY));
-                remove(bookmark_file_name);
+                if (!bookmarks->filter_name)
+                {
+                    remove(bookmark_file_name);
+                }
                 *selected_bookmark = NULL;
                 return BOOKMARK_FAIL;
             }
@@ -909,11 +912,13 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
         {
             MENUITEM_STRINGLIST(menu_items, ID2P(LANG_BOOKMARK_CONTEXT_MENU),
                 NULL, ID2P(LANG_BOOKMARK_CONTEXT_RESUME),
+                ID2P(LANG_DELETE),
                 ID2P(LANG_BOOKMARK_CONTEXT_FILTER_CURRENT_TRACK),
-                ID2P(LANG_DELETE));
+                );
             static const int menu_actions[] =
             {
-                ACTION_STD_OK, ACTION_BMS_FILTER_CURRENT_TRACK, ACTION_BMS_DELETE
+                ACTION_STD_OK,  ACTION_BMS_DELETE, 
+                ACTION_BMS_FILTER_CURRENT_TRACK,
             };
             int selection = do_menu(&menu_items, NULL, NULL, false);
 
@@ -960,7 +965,7 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
 
                 if(gui_syncyesno_run(&message, &yes_message, NULL)==YESNO_YES)
                 {
-                    delete_bookmark(bookmark_file_name, item);
+                    delete_bookmark(bookmark_file_name, item, bookmarks->filter_name);
                     bookmarks->reload = true;
                 }
                 refresh = true;
@@ -972,7 +977,7 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
                 struct mp3entry* current_track = audio_current_track();
                 if (current_track && current_track->path[0])
                 {
-                    const char *path = strrchr(current_track->path, '/');
+                    char *path = strrchr(current_track->path, '/');
                     bookmarks->filter_name = path ? path + 1 : current_track->path;
                     bookmarks->reload = true;
                 }
@@ -1001,11 +1006,10 @@ static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume
 /* bookmark.                                                               */
 /* Returns true on successful bookmark deletion.                           */
 /* ------------------------------------------------------------------------*/
-static bool delete_bookmark(const char* bookmark_file_name, int bookmark_id)
+static bool delete_bookmark(const char* bookmark_file_name, int bookmark_id, const char* filter_name)
 {
     int temp_bookmark_file = 0;
     int bookmark_file = 0;
-    int bookmark_count = 0;
 
     /* Opening up a temp bookmark file */
     snprintf(global_temp_buffer, sizeof(global_temp_buffer),
@@ -1020,16 +1024,19 @@ static bool delete_bookmark(const char* bookmark_file_name, int bookmark_id)
     bookmark_file = open(bookmark_file_name, O_RDONLY);
     if (bookmark_file >= 0)
     {
+        int bookmark_count = 0;
         while (read_line(bookmark_file, global_read_buffer,
                          sizeof(global_read_buffer)) > 0)
         {
-            if (bookmark_id != bookmark_count)
+            const bool skip = (!filter_name || strstr(global_read_buffer, filter_name)) 
+            && bookmark_count++ == bookmark_id;
+
+            if (!skip)
             {
                 write(temp_bookmark_file, global_read_buffer,
                       strlen(global_read_buffer));
                 write(temp_bookmark_file, "\n", 1);
             }
-            bookmark_count++;
         }
         close(bookmark_file);
     }
