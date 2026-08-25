@@ -263,10 +263,10 @@ bool parse_cuesheet(struct cuesheet_file *cue_file, struct cuesheet *cue)
     if (is_embedded)
         strcpy(cue->file, cue->path);
 
-    struct cue_track_info* cue_track;
+    struct cue_track_info* cue_track = get_track(0);
     char* buffer = cue->buffer;
     *buffer++ = 0; //make zero index to point to empty string.
-    char* buffer_end  = (char*)get_track(0);
+    char* buffer_end  = (char*)cue_track;
     while ((line_len = read_line(fd, line, read_bytes)) > 0)
     {
         if (char_enc == CHAR_ENC_UTF_16_LE)
