@@ -575,7 +575,7 @@ int filetype_get_icon(int attr)
     return filetypes[index].icon;
 }
 
-static int filetype_get_plugin_index_by_extension(char* filename)
+static int filetype_get_plugin_index_by_extension(const char* filename)
 {
     int index = file_find_extension(filename);
     struct file_type *ft_indexed = &filetypes[index];
