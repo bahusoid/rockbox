@@ -19,7 +19,7 @@
 %xl(vol,volumebar-480x800x16.bmp,0,0)
 %xl(volbd,volumebar-backdrop-480x800x16.bmp,0,0)
 
-%Cl(0,0,275,275,c,c)
+%Cl(0,0,480,340,c,c)
 %?C<%Vd(c)|%Vd(a)>
 %?vg(show_vol)<%?C<%Vd(d)|%Vd(b)>|%Vd(t)|%Vd(vol)>
 
@@ -41,10 +41,12 @@
 #
 # album art viewport
 #
-%Vl(c,102,75,275,275,-)
+%Vl(c,0,30,480,340,-)
+%dr(0,0,-,40,585858,585858)
+%Cd
 # tap on the cover art for playlist
 %T(0,0,275,275,playlist)
-%Cd
+
 
 # current track info - AA
 %Vl(d,0,370,-,-200,-)
