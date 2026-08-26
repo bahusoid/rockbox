@@ -9,21 +9,11 @@
 %Vi(-,0,8,-,-,1)
 
 ###################################################################
-# Options: 
-# You can use icons or text for the volume and battery display
-# Just comment out the line for the one you dont want!
+# Conditional for showing volume as number or graphic
+%?if(%St(volume display), =, numeric)<%Vd(d)|%Vd(c)>
 
-# Comment out the next line if you dont want battery icons
-%Vd(a)%Vd(e)
-
-# Comment out the next line if you dont want battery number as text
-# %Vd(b)
-
-# Comment out the next line if you dont want volume icons
-%Vd(c)
-# Comment out the next line if you dont want volume number as text
-# %Vd(d)
- 
+# Conditional for showing battery as number or graphic
+%?if(%St(battery display), =, numeric)<%Vd(b)|%Vd(a)%Vd(e)>
 ##################################################################
 
 # Load some bitmaps
