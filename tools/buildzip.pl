@@ -283,12 +283,15 @@ sub gettargetinfo {
     # Get the LCD screen depth and graphical status
     print GCC <<STOP
 \#include "config.h"
+\#include "sysfont.h"
 Bitmap: yes
 Depth: LCD_DEPTH
 LCD Width: LCD_WIDTH
 LCD Height: LCD_HEIGHT
 Icon Width: CONFIG_DEFAULT_ICON_WIDTH
 Icon Height: CONFIG_DEFAULT_ICON_HEIGHT
+Sysfont Height: SYSFONT_HEIGHT
+Sysfont Width: SYSFONT_WIDTH
 #ifdef HAVE_REMOTE_LCD
 Remote Depth: LCD_REMOTE_DEPTH
 Remote Icon Width: CONFIG_REMOTE_DEFAULT_ICON_WIDTH
@@ -312,6 +315,7 @@ STOP
     my ($bitmap, $width, $height, $depth, $icon_h, $icon_w);
     my ($remote_depth, $remote_icon_h, $remote_icon_w);
     my ($recording);
+    my ($sysfont_w, $sysfont_h);
     my $icon_count = 1;
     while(<TARGET>) {
         # print STDERR "DATA: $_";
@@ -345,12 +349,18 @@ STOP
         if($_ =~ /^Recording: (.*)/) {
             $recording = $1;
         }
+        if($_ =~ /^Sysfont Width: (\d*)/) {
+            $sysfont_w = $1;
+        }
+        if($_ =~ /^Sysfont Height: (\d*)/) {
+            $sysfont_h  = $1;
+        }
     }
     close(TARGET);
     unlink("gcctemp");
 
     return ($bitmap, $depth, $width, $height, $icon_w, $icon_h, $recording,
-            $remote_depth, $remote_icon_w, $remote_icon_h);
+            $remote_depth, $remote_icon_w, $remote_icon_h, $sysfont_w, $sysfont_h);
 }
 
 sub filesize {
@@ -370,7 +380,7 @@ sub buildzip {
     print "buildzip: image=$image fonts=$fonts\n" if $verbose;
 
     my ($bitmap, $depth, $width, $height, $icon_w, $icon_h, $recording,
-        $remote_depth, $remote_icon_w, $remote_icon_h) =
+        $remote_depth, $remote_icon_w, $remote_icon_h, $sysfont_w, $sysfont_h) =
       &gettargetinfo();
 
     # print "Bitmap: $bitmap\nDepth: $depth\n";
@@ -660,10 +670,14 @@ sub buildzip {
     # until buildwps.pl is fixed, manually copy the classic_statusbar theme across
     mkdir "$temp_dir/wps/classic_statusbar", 0777;
     glob_copy("$ROOT/wps/classic_statusbar/*.bmp", "$temp_dir/wps/classic_statusbar");
-    if ($depth >= 16 && $height >= 480) {
-        copy("$ROOT/wps/classic_statusbar.24.sbs", "$temp_dir/wps/classic_statusbar.sbs");
-    } elsif ($depth == 16) {
-        copy("$ROOT/wps/classic_statusbar.sbs", "$temp_dir/wps");
+    if ($depth >= 16) {
+        if($sysfont_h > 24) {
+            copy("$ROOT/wps/classic_statusbar.32.sbs", "$temp_dir/wps/classic_statusbar.sbs");
+        } elsif($sysfont_h > 8) {
+            copy("$ROOT/wps/classic_statusbar.24.sbs", "$temp_dir/wps/classic_statusbar.sbs");
+        } else {
+            copy("$ROOT/wps/classic_statusbar.sbs", "$temp_dir/wps/");
+        }
     } elsif ($depth > 1) {
         copy("$ROOT/wps/classic_statusbar.grey.sbs", "$temp_dir/wps/classic_statusbar.sbs");
     } else {
