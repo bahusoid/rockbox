@@ -1308,8 +1308,8 @@ const struct settings_list settings[] = {
 #ifdef HAVE_TOUCHSCREEN
     TABLE_SETTING(F_ALLOW_ARBITRARY_VALS, list_line_padding, LANG_LIST_LINE_PADDING,
                   -1, "list padding", "auto,off", UNIT_PIXEL, list_pad_formatter,
-                  list_pad_getlang, NULL, 16,
-                  -1,0,2,4,6,8,10,12,16,20,24,28,32,38,44,50),
+                  list_pad_getlang, NULL, 21,
+                  -1,0,2,4,6,8,10,12,16,20,24,28,32,38,44,50,60,70,80,90,100),
 #endif
 #if LCD_DEPTH > 1
     TABLE_SETTING(F_ALLOW_ARBITRARY_VALS, list_separator_height, LANG_LIST_SEPARATOR,
