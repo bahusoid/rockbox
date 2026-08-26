@@ -49,17 +49,20 @@
    but still needed for compatibility with old system */
 #define ICONS_SPACING                           2
 #define STATUSBAR_BATTERY_X_POS                 0*ICONS_SPACING
-#define STATUSBAR_BATTERY_WIDTH                 (2+(2*SYSFONT_WIDTH))
-#define STATUSBAR_PLUG_X_POS                    STATUSBAR_X_POS + \
-                                                STATUSBAR_BATTERY_WIDTH + \
-                                                ICONS_SPACING
-#define STATUSBAR_BATTERY_HEIGHT                SB_ICON_HEIGHT - 1
+/* Leave room for a 3-digit readout like "100" without clipping the left edge
+ * or overlapping the charger icon. */
+#define STATUSBAR_BATTERY_WIDTH                 (2+(3*SYSFONT_WIDTH))
+#define STATUSBAR_PLUG_X_POS                    (STATUSBAR_X_POS + \
+                                                 STATUSBAR_BATTERY_WIDTH + \
+                                                 ICONS_SPACING)
+//#define STATUSBAR_BATTERY_HEIGHT                (SB_ICON_HEIGHT - 1)
+#define STATUSBAR_BATTERY_HEIGHT                MAX(STATUSBAR_HEIGHT/2, (SB_ICON_HEIGHT - 1))
 #define STATUSBAR_PLUG_WIDTH                    7
 #define STATUSBAR_VOLUME_X_POS                  STATUSBAR_X_POS + \
                                                 STATUSBAR_BATTERY_WIDTH + \
                                                 STATUSBAR_PLUG_WIDTH + \
                                                 2*ICONS_SPACING
-#define STATUSBAR_VOLUME_WIDTH                  (2+(2*SYSFONT_WIDTH))
+#define STATUSBAR_VOLUME_WIDTH                  (2+(3*SYSFONT_WIDTH))
 #define STATUSBAR_ENCODER_X_POS                 STATUSBAR_X_POS + \
                                                 STATUSBAR_BATTERY_WIDTH + \
                                                 STATUSBAR_PLUG_WIDTH + \
@@ -83,6 +86,7 @@
                                                 STATUSBAR_PLUG_WIDTH + \
                                                 STATUSBAR_VOLUME_WIDTH + \
                                                 STATUSBAR_PLAY_STATE_WIDTH + \
+                                                STATUSBAR_PLAY_MODE_WIDTH + \
                                                 3*ICONS_SPACING
 #define STATUSBAR_RECFREQ_WIDTH                 12
 #define STATUSBAR_RECCHANNELS_X_POS             STATUSBAR_X_POS + \
@@ -389,9 +393,15 @@ static void gui_statusbar_icon_battery(struct screen * display, int percent,
         /* draw battery */
         display->drawrect(STATUSBAR_BATTERY_X_POS, STATUSBAR_Y_POS,
                           STATUSBAR_BATTERY_WIDTH - 1, STATUSBAR_BATTERY_HEIGHT);
+#if SYSFONT_HEIGHT < 16
         display->vline(STATUSBAR_BATTERY_X_POS + STATUSBAR_BATTERY_WIDTH - 1,
                        STATUSBAR_Y_POS + 2, STATUSBAR_Y_POS + 4);
-
+#else
+        /* Make the terminal cap visible instead of merging with the battery body. */
+        display->fillrect(STATUSBAR_BATTERY_X_POS + STATUSBAR_BATTERY_WIDTH - 1,
+                          STATUSBAR_Y_POS + STATUSBAR_BATTERY_HEIGHT/4,
+                          2, STATUSBAR_BATTERY_HEIGHT - STATUSBAR_BATTERY_HEIGHT/2);
+#endif
         display->fillrect(STATUSBAR_BATTERY_X_POS + 1, STATUSBAR_Y_POS + 1,
                           fill, STATUSBAR_BATTERY_HEIGHT - 2);
 #if LCD_DEPTH > 1
