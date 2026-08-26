@@ -4431,8 +4431,8 @@ fi
     t_cpu="hosted"
     t_manufacturer="hiby"
     t_model="r1"
-    sysfontbl="24-Terminus"
-    sysfont="20-Terminus"
+    sysfontbl="32-Terminus-Bold"
+    sysfont="32-Terminus"
     ;;
 
 
