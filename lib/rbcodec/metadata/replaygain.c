@@ -196,17 +196,18 @@ static long get_replaygain(const char* str)
  *
  * str  Gain as a Q7.8 decimal string. E.g., "-883"; approximatly -3.45 dB.
  */
-static long get_replaygain_opus(const char* str)
+static bool get_replaygain_opus(const char* str, long* result)
 {
     int16_t file_gain;
     long fp_gain;
     int success = atoi16_chk(str, &file_gain);
 
     if (!success)
-        return 0;
+        return false;
     
     fp_gain = ((long)file_gain) << FP_OPUS_SCALE;
-    return fp_gain + FP_OPUS_BOOST;
+    *result = fp_gain + FP_OPUS_BOOST;
+    return true;
 }
 
 /* Get the peak volume in Q7.24 format.
@@ -241,7 +242,9 @@ void parse_replaygain(const char* key, const char* value,
     static const char *rg_options[] = {"replaygain_track_gain", "rg_radio",
                                        "replaygain_album_gain", "rg_audiophile",
                                        "replaygain_track_peak", "rg_peak",
-                                       "replaygain_album_peak", NULL};
+                                       "replaygain_album_peak",
+                                       "R128_TRACK_GAIN", "R128_ALBUM_GAIN",
+                                        NULL};
 
     int rg_op = string_option(key, rg_options, true);
 
@@ -263,6 +266,24 @@ void parse_replaygain(const char* key, const char* value,
     { /*replaygain_album_peak*/
         entry->album_peak = get_replaypeak(value);
     }
+    else if (rg_op == 7)
+    {
+        long level;
+        if (get_replaygain_opus(value, &level))
+        {
+            entry->track_level = level;
+            entry->track_gain  = convert_gain(entry->track_level);
+        }
+    }
+    else if (rg_op == 8)
+    {
+        long level;
+        if (get_replaygain_opus(value, &level))
+        {
+            entry->album_level = level;
+            entry->album_gain  = convert_gain(entry->album_level);
+        }
+    }
 }
 
 /* Parse Ogg Opus's R128_TRACK_GAIN and R128_ALBUM_GAIN tags. If a valid
@@ -276,21 +297,7 @@ void parse_replaygain(const char* key, const char* value,
 void parse_replaygain_opus(const char* key, const char* value, 
                       struct mp3entry* entry)
 {
-    static const char *rg_options[] = {"R128_TRACK_GAIN", "R128_ALBUM_GAIN", 
-                                       NULL};
-
-    int rg_op = string_option(key, rg_options, true);
-
-    if (rg_op == 0 && !entry->track_gain)
-    {
-        entry->track_level = get_replaygain_opus(value);
-        entry->track_gain  = convert_gain(entry->track_level);
-    }
-    else if (rg_op == 1 && !entry->album_gain)
-    {
-        entry->album_level = get_replaygain_opus(value);
-        entry->album_gain  = convert_gain(entry->album_level);
-    }
+   
 }
 
 /* Set ReplayGain values from integers. Existing values are not overwritten. 
