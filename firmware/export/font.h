@@ -111,6 +111,7 @@ struct font {
     uint32_t file_width_offset;    /* offset to file width data    */
     uint32_t file_offset_offset;   /* offset to file offset data   */
     int long_offset;
+    int font_id;
 #endif
 
 };

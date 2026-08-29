@@ -557,6 +557,7 @@ int font_load_ex( const char *path, size_t buf_size, int glyphs )
     memcpy(pf, &f, sizeof( struct font) );
 
     pf->fd = fd;
+    pf->font_id = font_id;
     pf->fd_width = pf->fd_offset = -1;
     pf->handle = handle;
     pf->disabled = false;
@@ -696,6 +697,24 @@ static void font_enable(int font_id)
     core_put_data_pinned(pdata);
 }
 
+static void font_recover_filehandle(int font_id)
+{
+    if ( font_id < 0 || font_id >= MAXFONTS )
+        return;
+    int handle = buflib_allocations[font_id];
+    if ( handle < 0 )
+        return;
+    struct buflib_alloc_data *pdata = core_get_data_pinned(handle);
+    struct font *pf = &pdata->font;
+
+    if (pf->fd >= 0)
+        close(pf->fd);
+
+    pf->fd = open(pdata->path, O_RDONLY);
+
+    core_put_data_pinned(pdata);
+}
+
 void font_enable_all(void)
 {
     for(int i = 0; i < MAXFONTS; i++)
@@ -741,6 +760,14 @@ load_cache_entry(struct font_cache_entry* p, void* callback_data)
     int fd;
 
     lock_font_handle(pf->handle, true);
+
+    if (lseek(pf->fd, 0, SEEK_CUR) < 0)
+    {
+        //Can happen on hot plug eject, or USB mass storage mode. Try to recover the font file handle.
+        font_recover_filehandle(pf->font_id);
+        if (pf->fd < 0)
+            return;
+    }
     if (pf->file_width_offset)
     {
         int width_offset = pf->file_width_offset + char_code;
