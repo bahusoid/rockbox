@@ -1,0 +1,8 @@
+# Key Remap
+# Device: Sandisk Sansa Clip (Zip)
+# Swaps WPS Down actions to mimic old rockbox behavior
+
+CONTEXT_WPS = {
+    {ACTION_WPS_VIEW_PLAYLIST, BUTTON_DOWN|BUTTON_REPEAT, BUTTON_DOWN},
+    {ACTION_WPS_HOTKEY, BUTTON_DOWN|BUTTON_REL, BUTTON_DOWN},
+}
