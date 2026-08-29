@@ -482,10 +482,10 @@ static int cuesheet_list_voice_cb(int list_index, void* data)
     size_t tmp;
     tmp = snprintf(global_temp_buffer, dirlen + 1, "%s", cue->file);
     global_temp_buffer[tmp] = 0;
+    talk_file_or_spell(global_temp_buffer, get_cue_track_title(cue, &cue->tracks[index]),
+                   TALK_IDARRAY(LANG_ID3_TITLE), true);
     talk_file_or_spell(global_temp_buffer, get_cue_track_performer(cue, &cue->tracks[index]),
                        TALK_IDARRAY(LANG_ID3_ARTIST), true);
-    talk_file_or_spell(global_temp_buffer, get_cue_track_title(cue, &cue->tracks[index]),
-                       TALK_IDARRAY(LANG_ID3_TITLE), true);
 
     return 0;
 }
@@ -513,7 +513,7 @@ bool browse_cuesheet(struct cuesheet *cue)
     gui_synclist_set_nb_items(&lists, 2*cue->track_count);
     gui_synclist_set_title(&lists, title, 0);
 
-    if(global_settings.talk_menu)
+    if(global_settings.talk_menu || global_settings.talk_file)
         gui_synclist_set_voice_callback(&lists, cuesheet_list_voice_cb);
 
     if (id3)
