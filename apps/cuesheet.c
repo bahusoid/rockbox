@@ -482,9 +482,9 @@ static int cuesheet_list_voice_cb(int list_index, void* data)
     size_t tmp;
     tmp = snprintf(global_temp_buffer, dirlen + 1, "%s", cue->file);
     global_temp_buffer[tmp] = 0;
-    talk_file_or_spell(global_temp_buffer, cue->tracks[index].performer,
+    talk_file_or_spell(global_temp_buffer, get_cue_track_performer(cue, &cue->tracks[index]),
                        TALK_IDARRAY(LANG_ID3_ARTIST), true);
-    talk_file_or_spell(global_temp_buffer, cue->tracks[index].title,
+    talk_file_or_spell(global_temp_buffer, get_cue_track_title(cue, &cue->tracks[index]),
                        TALK_IDARRAY(LANG_ID3_TITLE), true);
 
     return 0;
