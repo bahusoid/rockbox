@@ -96,6 +96,7 @@ static void battery_status_update(void)
         }
     }
 
+    //TODO: Add way to control it from UI
     batt_percent = ((float) (batt_millivolts - BATT_MINMVOLT) / (BATT_MAXMVOLT - BATT_MINMVOLT)) * 100;
     batt_runtime = batt_percent * BATT_MAXRUNTIME;
     /* current is completely bogus... */
