@@ -50,8 +50,9 @@
 //unlock_combo ignores pre-button. so it's triggered for both short press or long press release actions
 #define DISABLE_ACTION_REMAP_UNLOCK_COMBO
 
-/* define this if the target has volume keys which can be used in the lists */
-//#define HAVE_VOLUME_IN_LIST
+
+/* Default mapping doesn't support it, but we allow it via remapping */
+#define HAVE_VOLUME_IN_LIST
 
 /* Battery */
 #define BATTERY_TYPES_COUNT  1
