@@ -720,32 +720,12 @@ static inline void action_code_lookup(action_last_t *last, action_cur_t *cur)
 #endif
 
 #ifndef DISABLE_ACTION_REMAP
-        /* attempt to look up the button in user supplied remap */
-        if(last->key_remap && (context & CONTEXT_PLUGIN) == 0)
-        {
-            if ((cur->button & BUTTON_REMOTE) != 0)
-            {
-                context |= CONTEXT_REMOTE;
-            }
-            cur->items = core_get_data(last->key_remap);
-            i = 0;
-            action = ACTION_UNKNOWN;
-            /* check the lut at the beginning for the desired context */
-            while (cur->items[i].button_code != BUTTON_NONE)
-            {
-                if (cur->items[i].action_code == CORE_CONTEXT_REMAP(context))
-                {
-                    i = cur->items[i].button_code;
-                    action = action_code_worker(last, cur, &i);
-                    if (action != ACTION_UNKNOWN)
-                    {
-                        cur->action = action;
-                        return;
-                    }
-                }
-                i++;
-            }
-        }
+    const struct button_mapping *items = NULL;
+    /* attempt to look up the button in user supplied remap */
+    if(last->key_remap && (context & CONTEXT_PLUGIN) == 0)
+    {
+        items = core_get_data(last->key_remap);
+    }
 #endif
 
     i = 0;
@@ -767,6 +747,30 @@ static inline void action_code_lookup(action_last_t *last, action_cur_t *cur)
         }
         else
         {
+#ifndef DISABLE_ACTION_REMAP
+            /* attempt to look up the button in user supplied remap */
+            if (items)
+            {
+                int ri = 0;
+                action = ACTION_UNKNOWN;
+                /* check the lut at the beginning for the desired context */
+                while (items[ri].button_code != BUTTON_NONE)
+                {
+                    if (items[ri].action_code == CORE_CONTEXT_REMAP(context))
+                    {
+                        ri = items[ri].button_code;
+                        cur->items = items;
+                        action = action_code_worker(last, cur, &ri);
+                        if (action != ACTION_UNKNOWN)
+                        {
+                            cur->action = action;
+                            return;
+                        }
+                    }
+                    ri++;
+                }
+            }
+#endif 
             cur->items = get_context_mapping(context);
         }
 
