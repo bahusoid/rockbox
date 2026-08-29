@@ -191,6 +191,7 @@ static bool is_action_filtered(int action, unsigned int mask, int context)
             match = has_flag(mask, SEL_ACTION_SEEK);
             break;
         case ACTION_WPS_STOP:
+        case ACTION_TREE_STOP:
         case ACTION_TREE_WPS:
             //match = has_flag(mask, SEL_ACTION_START_STOP);
             match = true;
