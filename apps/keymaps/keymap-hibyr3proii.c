@@ -37,6 +37,8 @@ static const struct button_mapping button_context_standard[] =
     { ACTION_STD_CONTEXT,        BUTTON_PLAY|BUTTON_REPEAT,          BUTTON_PLAY },
     { ACTION_STD_CANCEL,         BUTTON_POWER|BUTTON_REL,            BUTTON_POWER },
 
+    { ACTION_STD_KEYLOCK,        BUTTON_POWER|BUTTON_VOL_UP,         BUTTON_POWER },
+
     LAST_ITEM_IN_LIST
 };
 
@@ -56,7 +58,8 @@ static const struct button_mapping button_context_wps[] =
     { ACTION_WPS_STOPSEEK,       BUTTON_NEXT|BUTTON_REL,             BUTTON_NEXT|BUTTON_REPEAT },
     { ACTION_WPS_SEEKBACK,       BUTTON_PREV|BUTTON_REPEAT,          BUTTON_NONE },
     { ACTION_WPS_STOPSEEK,       BUTTON_PREV|BUTTON_REL,             BUTTON_PREV|BUTTON_REPEAT },
-    { ACTION_STD_KEYLOCK,        BUTTON_POWER|BUTTON_VOL_UP,         BUTTON_NONE },
+
+    { ACTION_STD_KEYLOCK,        BUTTON_POWER|BUTTON_VOL_UP,         BUTTON_POWER },
 
     LAST_ITEM_IN_LIST
 };
@@ -166,6 +169,15 @@ static const struct button_mapping button_context_time[] =
 
 static const struct button_mapping button_context_quickscreen[] =
 {
+    { ACTION_QS_TOP,     BUTTON_VOL_UP|BUTTON_REL,           BUTTON_NONE },
+    { ACTION_QS_TOP,     BUTTON_VOL_UP|BUTTON_REPEAT,        BUTTON_NONE },
+    { ACTION_QS_DOWN,    BUTTON_VOL_DOWN|BUTTON_REL,         BUTTON_NONE },
+    { ACTION_QS_DOWN,    BUTTON_VOL_DOWN|BUTTON_REPEAT,      BUTTON_NONE },
+    { ACTION_QS_LEFT,    BUTTON_PLAY|BUTTON_REL,             BUTTON_NONE },
+    { ACTION_QS_LEFT,    BUTTON_PLAY|BUTTON_REPEAT,          BUTTON_NONE },
+    { ACTION_QS_RIGHT,   BUTTON_NEXT|BUTTON_REL,             BUTTON_NONE },
+    { ACTION_QS_RIGHT,   BUTTON_NEXT|BUTTON_REPEAT,          BUTTON_NONE },
+
     LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_STD)
 };
 
