@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include "action.h"
+#include "dir.h"
 #include "font.h"
 #ifdef HAVE_REMOTE_LCD
 #include "lcd-remote.h"
@@ -257,6 +258,9 @@ void gui_usb_screen_run(bool early_usb)
     in_usb_screen = true;
 #endif
 
+    //Disable early_usb flag for now. Seems not needed with font fix
+    early_usb = false;
+
     struct usb_screen_vps_t usb_screen_vps_ar[NB_SCREENS];
 #if defined HAVE_TOUCHSCREEN
     enum touchscreen_mode old_mode = touchscreen_get_mode();
@@ -334,7 +338,7 @@ void gui_usb_screen_run(bool early_usb)
     touchscreen_set_mode(old_mode);
 #endif
 
-    if(!early_usb)
+    if(!early_usb && dir_exists(ROCKBOX_DIR))
     {
         font_enable_all();
         /* Not pretty, reload all settings so fonts are loaded again correctly */
