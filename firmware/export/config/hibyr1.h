@@ -47,6 +47,8 @@
 
 /* KeyPad configuration for plugins */
 #define CONFIG_KEYPAD HIBY_R1_PAD
+//unlock_combo ignores pre-button. so it's triggered for both short press or long press release actions
+#define DISABLE_ACTION_REMAP_UNLOCK_COMBO
 
 /* define this if the target has volume keys which can be used in the lists */
 //#define HAVE_VOLUME_IN_LIST
