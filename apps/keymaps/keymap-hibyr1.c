@@ -24,7 +24,7 @@
 #include "button.h"
 #include "settings.h"
 
-#define BUTTON_QS_COMBO (BUTTON_DOWN | BUTTON_LEFT)
+//#define BUTTON_QS_COMBO (BUTTON_DOWN | BUTTON_LEFT)
 
 /* {Action Code,    Button code,    Prereq button code } */
 
@@ -47,7 +47,7 @@ static const struct button_mapping button_context_standard[]  = {
     { ACTION_STD_CONTEXT,     BUTTON_RIGHT|BUTTON_REPEAT,       BUTTON_RIGHT },
     { ACTION_STD_KEYLOCK,       BUTTON_POWER|BUTTON_UP,      BUTTON_NONE },
 
-    { ACTION_WPS_QUICKSCREEN,       BUTTON_QS_COMBO,      BUTTON_NONE },
+   // { ACTION_WPS_QUICKSCREEN,       BUTTON_QS_COMBO,      BUTTON_NONE },
     { ACTION_STD_QUICKSCREEN,       BUTTON_POWER|BUTTON_DOWN,      BUTTON_POWER },
     //{ ACTION_WPS_MENU,       BUTTON_POWER|BUTTON_LEFT,      BUTTON_POWER },
     //{ ACTION_WPS_PITCHSCREEN,       BUTTON_POWER|BUTTON_RIGHT,      BUTTON_POWER },
@@ -77,7 +77,7 @@ static const struct button_mapping button_context_wps[]  = {
     { ACTION_WPS_PLAY,        BUTTON_POWER|BUTTON_REL,     BUTTON_POWER },
     { ACTION_STD_KEYLOCK,       BUTTON_POWER|BUTTON_UP,      BUTTON_POWER },
 
-    { ACTION_WPS_QUICKSCREEN,       BUTTON_QS_COMBO,      BUTTON_NONE },
+//    { ACTION_WPS_QUICKSCREEN,       BUTTON_QS_COMBO,      BUTTON_NONE },
     { ACTION_WPS_QUICKSCREEN,       BUTTON_POWER|BUTTON_DOWN,      BUTTON_POWER },
     { ACTION_WPS_MENU,       BUTTON_POWER|BUTTON_LEFT,      BUTTON_POWER },
     { ACTION_WPS_PITCHSCREEN,       BUTTON_POWER|BUTTON_RIGHT,      BUTTON_POWER },
@@ -112,6 +112,10 @@ static const struct button_mapping button_context_settings[] = {
 
         LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_STD),
 }; /* button_context_settings */
+
+static const struct button_mapping button_default_context[]  = {
+    LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_STD)
+}; /* button_context_list */
 
 static const struct button_mapping button_context_list[]  = {
 //    {ACTION_LISTTREE_PGUP,       BUTTON_UP|BUTTON_REL,                  BUTTON_REC|BUTTON_UP},
@@ -268,7 +272,7 @@ const struct button_mapping* target_get_context_mapping(int context)
         case CONTEXT_MORSE_INPUT:
             return button_context_keyboard;
         default:
-            return button_context_standard;
+            return button_default_context;
     } 
-    return button_context_standard;
+    return button_default_context;
 }
