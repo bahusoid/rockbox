@@ -56,6 +56,7 @@ static struct context_flags context_flags[] = {
 #ifndef HAS_BUTTON_HOLD
     {"LOCKED", CONTEXT_LOCKED},
 #endif
+    {"CUSTOM", CONTEXT_CUSTOM},
     /*{"PLUGIN", CONTEXT_PLUGIN}, need a custom action list and a way to supply */
 #if BUTTON_REMOTE != 0
     {"REMOTE", CONTEXT_REMOTE},
