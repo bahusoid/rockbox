@@ -1302,8 +1302,11 @@ const char *get_token_value(struct gui_wps *gwps,
                                    (char*)P2STR(ID2P(token->value.i)) : "<ERR>";
 
         case SKIN_TOKEN_PLAYLIST_ENTRIES:
-            numeric_ret = playlist_amount();
-            itoa_buf(buf, buf_size, numeric_ret);
+            if (!get_cuesheetid3_token(token, state->id3, offset, buf, buf_size))
+            {
+                numeric_ret = playlist_amount();
+                itoa_buf(buf, buf_size, numeric_ret);
+            }
             numeric_buf = buf;
             goto gtv_ret_numeric_tag_info;
         case SKIN_TOKEN_LIST_TITLE_TEXT:
@@ -1352,8 +1355,11 @@ const char *get_token_value(struct gui_wps *gwps,
             return playlist_name(NULL, buf, buf_size);
 
         case SKIN_TOKEN_PLAYLIST_POSITION:
-            numeric_ret = playlist_get_display_index()+offset;
-            itoa_buf(buf, buf_size, numeric_ret);
+            if (!get_cuesheetid3_token(token, state->id3, offset, buf, buf_size))
+            {
+                numeric_ret = playlist_get_display_index()+offset;
+                itoa_buf(buf, buf_size, numeric_ret);
+            }
             numeric_buf = buf;
             goto gtv_ret_numeric_tag_info;
 
