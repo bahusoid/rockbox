@@ -45,7 +45,7 @@
 
 /* KeyPad configuration for plugins */
 #define CONFIG_KEYPAD HIBY_R3PROII_PAD
-#define HAVE_INVERTED_NEXT_BUTTON
+#define BUTTON_NEED_DEV_INPUT_ID
 
 /* define this if the target has volume keys which can be used in the lists */
 #define HAVE_VOLUME_IN_LIST

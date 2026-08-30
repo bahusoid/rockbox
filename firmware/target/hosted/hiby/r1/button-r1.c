@@ -35,21 +35,21 @@
  *   /dev/input/event4: dynamic input devices start at 4 and increment (Bluetooth AVRCP remote control)
  */
 
-int button_map(int keycode)
+int hw_button_map(int keycode)
 {
     switch(keycode)
     {
-        case KEY_VOLUMEDOWN:
-            return BUTTON_DOWN;
-        case KEY_VOLUMEUP:
-            return BUTTON_UP;
-        case KEY_PLAYPAUSE:
-            return BUTTON_LEFT;
-        case KEY_NEXTSONG:
-            return BUTTON_RIGHT;
-        case KEY_POWER:
-            return BUTTON_POWER;
-        case BTN_TOUCH:
+    case KEY_VOLUMEDOWN:
+        return BUTTON_DOWN;
+    case KEY_VOLUMEUP:
+        return BUTTON_UP;
+    case KEY_PLAYPAUSE:
+        return BUTTON_LEFT;
+    case KEY_NEXTSONG:
+        return BUTTON_RIGHT;
+    case KEY_POWER:
+        return BUTTON_POWER;
+    case BTN_TOUCH:
         {
 #ifdef HAVE_BACKLIGHT
             if (is_backlight_on(true)) {
@@ -61,17 +61,30 @@ int button_map(int keycode)
             return BUTTON_TOUCH;
 #endif
         }
+    default:
+        return 0;
+    }
+}
 
+int button_map_with_id(int keycode, int id)
+{
+    //TODO: Decide how to handle earpod_adc
+    if (id < 4)
+        return hw_button_map(keycode);
+    
+    switch(keycode)
+    {
         //Map bluetooth buttons:
         case KEY_PLAY:
         case KEY_PLAYCD:
         case KEY_PAUSECD:
-            return BUTTON_POWER;
+            return BUTTON_PLAY;
         case KEY_REWIND:
         case KEY_PREVIOUSSONG:
-            return BUTTON_LEFT;
+            return BUTTON_PREV;
         case KEY_FASTFORWARD:
-            return BUTTON_RIGHT;
+        case KEY_NEXTSONG:
+            return BUTTON_NEXT;
 
         default:
             return 0;
