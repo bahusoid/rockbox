@@ -35,9 +35,9 @@
 %Vl(b,0,390,-,220,-)
 %ac%?ig<%ig|>
 %ac%fb kbps%?fv< %(vbr%)|> %fc %fk kHz
-%s%ac%?Ia<%Ia|%?IA<%IA|%?D(2)<%D(2)|%(root%)>>>
 %ac%Sx(Next Track:)
 %ac%s%?It<%It|%Fn>
+%s%ac%?Ia<%Ia|%?IA<%IA|%?D(2)<%D(2)|%(root%)>>>
 #
 # album art viewport
 #
@@ -45,7 +45,7 @@
 %dr(0,0,-,40,585858,585858)
 %Cd
 # tap on the cover art for playlist
-%T(0,0,275,275,playlist)
+%T(0,0,-,-,playlist)
 
 
 # current track info - AA
