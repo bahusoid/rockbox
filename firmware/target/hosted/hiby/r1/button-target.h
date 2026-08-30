@@ -26,14 +26,19 @@
 
 /* Main unit's buttons */
 #define BUTTON_POWER                0x00000001
-//#define BUTTON_PREV                 0x00000002	/* there is no PREV */
 #define BUTTON_RIGHT                 0x00000004 //Next
 #define BUTTON_LEFT                 0x00000008 //Play/Pause
 #define BUTTON_UP               0x00000010 //Volume Up
 #define BUTTON_DOWN             0x00000020 //Volume Down
-#define BUTTON_MAIN                (BUTTON_POWER|BUTTON_RIGHT|BUTTON_LEFT|BUTTON_UP|BUTTON_DOWN)
 
 #define BUTTON_TOUCH                0x00000040
+
+//TODO: It's from bluetooth, should we define it as BUTTON_REMOTE?
+#define BUTTON_PREV                 0x00000100
+#define BUTTON_NEXT                 0x00000200
+#define BUTTON_PLAY                 0x00000400
+#define BUTTON_MAIN                ((BUTTON_POWER|BUTTON_RIGHT|BUTTON_LEFT|BUTTON_UP|BUTTON_DOWN)|(BUTTON_PREV|BUTTON_NEXT|BUTTON_PLAY))
+
 
 /* Touchscreen virtual buttons */
 #define BUTTON_TOPLEFT      0x00001000
@@ -50,6 +55,6 @@
 #define POWEROFF_BUTTON BUTTON_POWER
 #define POWEROFF_COUNT 25
 
-int button_map(int keycode);
+int button_map_with_id(int keycode, int id);
 
 #endif /* _BUTTON_TARGET_H_ */
