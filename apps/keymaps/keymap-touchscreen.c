@@ -133,14 +133,6 @@ static const struct button_mapping button_context_tree[]  = {
     LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_CUSTOM2|CONTEXT_CUSTOM|CONTEXT_TREE)
 }; /* button_context_tree */
 
-static const struct button_mapping button_context_listtree_scroll_with_combo[]  = {
-    LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_CUSTOM|CONTEXT_TREE),
-};
-
-static const struct button_mapping button_context_listtree_scroll_without_combo[]  = {
-    LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_CUSTOM|CONTEXT_TREE),
-};
-
 static const struct button_mapping button_context_settings[]  = {
     { ACTION_SETTINGS_INC,          BUTTON_TOPMIDDLE,                   BUTTON_NONE },
     { ACTION_SETTINGS_INCREPEAT,    BUTTON_TOPMIDDLE|BUTTON_REPEAT,     BUTTON_NONE },
@@ -394,15 +386,9 @@ const struct button_mapping* get_context_mapping(int context)
             return button_context_list;
 
         case CONTEXT_MAINMENU:
-        {
             return button_context_mainmenu;
-        }
 
         case CONTEXT_TREE:
-            if (global_settings.hold_lr_for_scroll_in_list)
-                return button_context_listtree_scroll_without_combo;
-            else
-                return button_context_listtree_scroll_with_combo;
         case CONTEXT_CUSTOM|CONTEXT_TREE:
             return button_context_tree;
 
