@@ -36,7 +36,9 @@
 #include "backlight.h"
 #include "lcd.h"
 #include "rtc.h"
+#ifndef BOOTLOADER
 #include "settings.h"
+#endif
 #if CONFIG_TUNER
 #include "fmradio.h"
 #endif
@@ -535,9 +537,10 @@ bool query_force_shutdown(void)
 #if defined(NO_LOW_BATTERY_SHUTDOWN)
     return false;
 #elif ((CONFIG_BATTERY_MEASURE & PERCENTAGE_MEASURE) && (CONFIG_BATTERY_MEASURE & VOLTAGE_MEASURE))
+#ifndef BOOTLOADER
     if (global_settings.low_battery_poweroff_percent >= 0)
         return percent_now <= global_settings.low_battery_poweroff_percent;
-
+#endif
     /* If we have both, prefer voltage */
     return voltage_now < battery_level_shutoff;
 #elif CONFIG_BATTERY_MEASURE & PERCENTAGE_MEASURE   
