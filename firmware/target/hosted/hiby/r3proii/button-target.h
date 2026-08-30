@@ -55,6 +55,6 @@
 #define BUTTON_RIGHT       BUTTON_PREV
 #endif
 
-int button_map(int keycode);
+int button_map_with_id(int keycode, int id);
 
 #endif /* _BUTTON_TARGET_H_ */

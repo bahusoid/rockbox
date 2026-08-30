@@ -225,19 +225,13 @@ int button_read_device(BDATA)
                 if(size == (int)sizeof(event)) {
                     switch(event.type) {
                     case EV_KEY: {
-                            //Hack alert: should be moved to target button button_map?
-#ifdef HAVE_INVERTED_NEXT_BUTTON
-                            if (i < 3) //assume that's first 3 devices are built-in buttons
-                            {
-                                if (event.code == KEY_PREVIOUSSONG)
-                                    event.code = KEY_NEXTSONG;
-                                else if (event.code == KEY_NEXTSONG)
-                                    event.code = KEY_PREVIOUSSONG;
-                            }
-#endif
+#ifdef BUTTON_NEED_DEV_INPUT_ID
+                        int bmap = button_map_with_id(event.code, i);
+#else
                         /* map linux event code to rockbox button bitmap */
                         int bmap = button_map(event.code);
-
+#endif
+                        
                         /* event.value == 0x10000 means press
                          * event.value == 0 means release
                          */
