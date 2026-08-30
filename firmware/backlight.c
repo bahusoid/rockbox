@@ -851,9 +851,12 @@ void backlight_off(void)
  * and optionally when it's set to always off. */
 bool is_backlight_on(bool ignore_always_off)
 {
+    if (backlight_timer > 0)   /* countdown */
+        return true;
+
     int timeout = backlight_get_current_timeout();
-    return (backlight_timer > 0)   /* countdown */
-        || (timeout == 0) /* always on */
+    return 
+        (timeout == 0) /* always on */
         || ((timeout < 0) && !ignore_always_off);
 }
 
