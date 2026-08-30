@@ -35,9 +35,18 @@
  */
 
 
-
-int button_map(int keycode)
+int button_map_with_id(int keycode, int id)
 {
+    /*
+    if (id < 3) //assume that's first 3 devices are built-in buttons
+    {
+        if (keycode == KEY_PREVIOUSSONG)
+            keycode = KEY_NEXTSONG;
+        else if (keycode == KEY_NEXTSONG)
+            keycode = KEY_PREVIOUSSONG;
+    }
+    */
+
     switch(keycode)
     {
         case KEY_VOLUMEDOWN:
@@ -57,12 +66,12 @@ int button_map(int keycode)
     case KEY_PLAY:
     case KEY_PLAYCD:
     case KEY_PAUSECD:
-        return button_map(KEY_PLAYPAUSE);
+        return BUTTON_PLAY;
     case KEY_REWIND:
     //case KEY_PREVIOUSSONG:
-        return button_map(KEY_PREVIOUSSONG);
+        return BUTTON_PREV;
     case KEY_FASTFORWARD:
-        return button_map(KEY_NEXTSONG);
+        return BUTTON_NEXT;
 
         case BTN_TOUCH:
         {
@@ -73,7 +82,7 @@ int button_map(int keycode)
             // Ignore
             return 0;
 #else
-            return BUTTON_TOUCH
+            return BUTTON_TOUCH;
 #endif
         }
         default:
