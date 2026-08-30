@@ -621,7 +621,16 @@ bool curr_cuesheet_skip(struct cuesheet *cue, int direction, unsigned long curr_
                 track += direction;
             }
         }
-
+        // On rapid cuesheet skipping, we can stuck on the same track due to inaccurate seek by time
+        // (when codec seeks to the end of the current track instead of actual next track)
+        if (direction > 0)
+        {
+          if(get_track(track)->offset - curr_pos < DEFAULT_SKIP_THRESH)
+          {
+              seek(curr_pos + DEFAULT_SKIP_THRESH);
+              return true;
+          } 
+        }
         seek(get_track(track)->offset);
         return true;
     }
