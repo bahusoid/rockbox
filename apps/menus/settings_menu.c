@@ -95,6 +95,7 @@ int mask = global_settings.bt_selective_softlock_actions_mask;
                                        {ID2P(LANG_ACTION_PLAY),   SEL_ACTION_PLAY},
                                        {ID2P(LANG_ACTION_SEEK),   SEL_ACTION_SEEK},
                                        {ID2P(LANG_ACTION_SKIP),   SEL_ACTION_SKIP},
+                                       {ID2P(LANG_ACTION_START_STOP),   SEL_ACTION_START_STOP},
  #ifdef HAVE_BACKLIGHT
                                        {ID2P(LANG_ACTION_AUTOLOCK_ON),    SEL_ACTION_AUTOLOCK},
                                        {ID2P(LANG_ACTION_ALWAYSAUTOLOCK), SEL_ACTION_ALWAYSAUTOLOCK},
