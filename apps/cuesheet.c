@@ -644,6 +644,24 @@ static inline void draw_veritcal_line_mark(struct screen * screen,
     screen->vline(x, y, y+h-1);
 }
 
+#define MAX_CUE_TRACK_MARKS 50
+
+static FORCE_INLINE int get_cuesheet_tracks_step(struct cuesheet* cue)
+{
+    if (cue->track_count <= MAX_CUE_TRACK_MARKS)
+        return 1;
+
+    int step = (cue->track_count + MAX_CUE_TRACK_MARKS - 1) /
+        MAX_CUE_TRACK_MARKS;
+    if (step < 3)
+        return step;
+    if (step < 6)
+        return 5;
+    if (step < 11)
+        return 10;
+    return step;
+}
+
 /* draw the cuesheet markers for a track of length "tracklen",
    between (x,y) and (x+w,y) */
 void cue_draw_markers(struct screen *screen, struct cuesheet *cue,
@@ -653,7 +671,9 @@ void cue_draw_markers(struct screen *screen, struct cuesheet *cue,
     int i,xi;
     unsigned long tracklen_seconds = tracklen/1000; /* duration in seconds */
 
-    for (i=1; i < cue->track_count; i++)
+    int step = get_cuesheet_tracks_step(cue);
+
+    for (i=1; i < cue->track_count; i += step)
     {
         /* Convert seconds prior to multiplication to avoid overflow. */
         xi = x + (w * (get_track(i)->offset/1000)) / tracklen_seconds;
