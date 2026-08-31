@@ -17743,3 +17743,17 @@
     *: "Low Battery Power Off"
   </voice>
 </phrase>
+<phrase>
+  id: LANG_ACTION_START_STOP
+  desc: start/stop playback selective lock option
+  user: core
+  <source>
+    *: "Start/Stop Playback"
+  </source>
+  <dest>
+    *: "Start/Stop Playback"
+  </dest>
+  <voice>
+    *: "Start/Stop Playback"
+  </voice>
+</phrase>

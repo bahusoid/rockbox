@@ -193,8 +193,7 @@ static bool is_action_filtered(int action, unsigned int mask, int context)
         case ACTION_WPS_STOP:
         case ACTION_TREE_STOP:
         case ACTION_TREE_WPS:
-            //match = has_flag(mask, SEL_ACTION_START_STOP);
-            match = true;
+            match = has_flag(mask, SEL_ACTION_START_STOP);
             break;
         /* case ACTION_STD_PREV: */ /* skip/scrollwheel not */
         /* case ACTION_STD_NEXT: */ /* exempted outside of WPS */
