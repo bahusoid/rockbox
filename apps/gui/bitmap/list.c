@@ -156,7 +156,7 @@ static bool draw_title(struct screen *display,
     if (!list_display_title(list, screen))
         return false;
     *title_text_vp = *(list->parent[screen]);
-    linedes.height = list->line_height[screen];
+    linedes.height = list->title_height[screen];
     title_text_vp->height = linedes.height;
 
 #if LCD_DEPTH > 1

@@ -109,19 +109,52 @@ int list_get_nb_lines(struct gui_synclist *list, enum screen_type screen)
     return lines;
 }
 
+int list_get_line_height(int line_height, int selected_size)
+{
+#ifdef HAVE_TOUCHSCREEN
+    int padding = global_settings.list_line_padding;
+
+    if (padding == -1)
+    {
+        int desired_height = lcd_get_dpi() *
+#ifdef MODERN_TOUCH_UI
+        /* 5/12 yields ~10.5mm physical height, matching modern UI touch guidelines */
+        5/12;
+#else
+        /* the 4/12 factor is designed for reasonable item size on a 160dpi screen */
+        4/12;
+#endif
+        
+        padding = desired_height - line_height;
+        if (padding < 0)
+            padding = 0;
+    }
+    if (padding && selected_size > 1)
+    {
+        /* Combined items touch padding is adjusted to single desired line height */
+        int desired_height = line_height + padding;
+        int total_line_height = line_height * selected_size;
+        int left_to_desired = desired_height - total_line_height;
+        if (left_to_desired > 0)
+        {
+            padding = left_to_desired / selected_size;
+        }
+    }
+
+    return line_height + padding;
+#else
+    return line_height;
+#endif
+}
+
 void list_init_item_height(struct gui_synclist *list, enum screen_type screen)
 {
     struct viewport *vp = list->parent[screen];
-    int line_height = font_get(vp->font)->height;
+    int line_height = (int)font_get(vp->font)->height;
 #ifdef HAVE_TOUCHSCREEN
-    /* the 4/12 factor is designed for reasonable item size on a 160dpi screen */
-    if (global_settings.list_line_padding == -1)
-        list->line_height[screen] = MAX(lcd_get_dpi()*4/12, line_height);
-    else
-        list->line_height[screen] = line_height + global_settings.list_line_padding;
-#else
-    list->line_height[screen] = line_height;
+    list->title_height[screen] = list_get_line_height(line_height, 1);
 #endif
+    list->line_height[screen] = list_get_line_height(line_height, list->selected_size);
 }
 
 static void gui_synclist_init_display_settings(struct gui_synclist * list)
@@ -175,12 +208,12 @@ void gui_synclist_init(struct gui_synclist * gui_list,
         else
             gui_list->parent[i] = &parent[i];
     }
+    gui_list->selected_size = selected_size;
     list_init_viewports(gui_list);
     FOR_NB_SCREENS(i)
         list_init_item_height(gui_list, i);
     gui_list->data = data;
     gui_list->scroll_all = scroll_all;
-    gui_list->selected_size = selected_size;
     gui_list->title = NULL;
     gui_list->title_icon = Icon_NOICON;
 
