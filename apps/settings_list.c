@@ -29,6 +29,7 @@
 #include "lcd.h"
 #include "scroll_engine.h"
 #include "button.h"
+#include "action.h"
 #include "backlight.h"
 #include "sound.h"
 #include "settings.h"
@@ -1326,7 +1327,7 @@ const struct settings_list settings[] = {
                    "volume display", graphic_numeric, NULL, 2,
                    ID2P(LANG_DISPLAY_GRAPHIC),
                    ID2P(LANG_DISPLAY_NUMERIC)),
-    CHOICE_SETTING(F_THEMESETTING, battery_display, LANG_BATTERY_DISPLAY, 0,
+    CHOICE_SETTING(F_THEMESETTING, battery_display, LANG_BATTERY_DISPLAY, 1,
                    "battery display", graphic_numeric, NULL, 2,
                    ID2P(LANG_DISPLAY_GRAPHIC), ID2P(LANG_DISPLAY_NUMERIC)),
     CHOICE_SETTING(0, timeformat, LANG_TIMEFORMAT, 0,
@@ -1494,11 +1495,18 @@ const struct settings_list settings[] = {
 
 #ifndef HAS_BUTTON_HOLD
     OFFON_SETTING(F_BANFROMQS, bt_selective_softlock_actions,
-                  LANG_ACTION_ENABLED, false,
+                  LANG_ACTION_ENABLED, true,
                   "No Screen Lock For Selected Actions", NULL),
     INT_SETTING(F_BANFROMQS, bt_selective_softlock_actions_mask,
                 LANG_SOFTLOCK_SELECTIVE,
-                0, "Selective Screen Lock Actions", UNIT_INT,
+                SEL_ACTION_VOL | SEL_ACTION_PLAY | SEL_ACTION_SEEK |
+                    SEL_ACTION_SKIP | SEL_ACTION_START_STOP 
+                    
+#ifdef HAVE_TOUCHSCREEN
+                    | SEL_ACTION_NOTOUCH
+#endif
+                    ,
+                "Selective Screen Lock Actions", UNIT_INT,
                 0, 2048,2, NULL, NULL, NULL),
 #endif /* !HAS_BUTTON_HOLD */
 
@@ -1663,7 +1671,7 @@ const struct settings_list settings[] = {
                    "show filename exts", "off,on,unknown,view_all", NULL , 4 ,
                    ID2P(LANG_OFF), ID2P(LANG_ON), ID2P(LANG_UNKNOWN_TYPES),
                    ID2P(LANG_EXT_ONLY_VIEW_ALL)),
-    OFFON_SETTING(0,browse_current,LANG_FOLLOW,false,"follow playlist",NULL),
+    OFFON_SETTING(0,browse_current,LANG_FOLLOW,true,"follow playlist",NULL),
     OFFON_SETTING(0,playlist_viewer_icons,LANG_SHOW_ICONS,true,
                   "playlist viewer icons",NULL),
     OFFON_SETTING(0,playlist_viewer_indices,LANG_SHOW_INDICES,true,
@@ -1685,7 +1693,7 @@ const struct settings_list settings[] = {
                    ID2P(LANG_ASK), ID2P(LANG_BOOKMARK_SETTINGS_RECENT_ONLY_YES),
                    ID2P(LANG_BOOKMARK_SETTINGS_RECENT_ONLY_ASK)),
     OFFON_SETTING(0, alt_autocreatebookmark, LANG_ALT_BOOKMARK_SETTINGS_AUTOCREATE,
-                false, "alt autocreate bookmarks", NULL),
+                true, "alt autocreate bookmarks", NULL),
     OFFON_SETTING(0, autoupdatebookmark, LANG_BOOKMARK_SETTINGS_AUTOUPDATE,
                    false, "autoupdate bookmarks", NULL),
     CHOICE_SETTING(0, autoloadbookmark, LANG_BOOKMARK_SETTINGS_AUTOLOAD,
@@ -1902,7 +1910,7 @@ const struct settings_list settings[] = {
 
         OFFON_SETTING(0, alt_settings_enable, LANG_ALT_SETTINGS, false,
                 "alt settings enable", NULL),
-           OFFON_SETTING(0, alt_reset_pitch, LANG_ALT_RESET_PITCH, false,
+           OFFON_SETTING(0, alt_reset_pitch, LANG_ALT_RESET_PITCH, true,
                 "alt reset pitch", NULL),
 //        CHOICE_SETTING(0, altmenu_enable, LANG_ALT_SETTINGS,
 //                AUTORESUME_NEXTTRACK_NEVER,
@@ -2042,7 +2050,7 @@ const struct settings_list settings[] = {
                        1, db_format, NULL, dsp_pbe_precut),
 #ifdef HAVE_PITCHCONTROL
     /* timestretch */
-    OFFON_SETTING(F_SOUNDSETTING, timestretch_enabled, LANG_TIMESTRETCH, false,
+    OFFON_SETTING(F_SOUNDSETTING, timestretch_enabled, LANG_TIMESTRETCH, true,
                   "timestretch enabled", dsp_timestretch_enable),
 #endif
 
@@ -2157,7 +2165,7 @@ const struct settings_list settings[] = {
 #ifdef HAS_BUTTON_HOLD
                    1,
 #else
-                   0,
+                   1,
 #endif
                    "backlight on button hold", "normal,off,on",
                    backlight_set_on_button_hold, 3,
@@ -2203,12 +2211,12 @@ const struct settings_list settings[] = {
 #endif
 #endif
 #ifdef HAVE_HEADPHONE_DETECTION
-    CHOICE_SETTING(0, unplug_mode, LANG_HEADPHONE_UNPLUG, 0,
+    CHOICE_SETTING(0, unplug_mode, LANG_HEADPHONE_UNPLUG, 1,
                    "pause on headphone unplug", "off,pause,pause and resume",
                    NULL, 3, ID2P(LANG_OFF), ID2P(LANG_PAUSE),
                    ID2P(LANG_HEADPHONE_UNPLUG_RESUME)),
     OFFON_SETTING(0, unplug_autoresume,
-                  LANG_HEADPHONE_UNPLUG_DISABLE_AUTORESUME, false,
+                  LANG_HEADPHONE_UNPLUG_DISABLE_AUTORESUME, true,
                   "disable autoresume if phones not present",NULL),
 #endif
     INT_SETTING(F_TIME_SETTING, pause_rewind, LANG_PAUSE_REWIND, 0,
@@ -2262,7 +2270,7 @@ const struct settings_list settings[] = {
                    "off,on,force", NULL, 3, ID2P(LANG_SET_BOOL_NO),
                    ID2P(LANG_SET_BOOL_YES), ID2P(LANG_FORCE)),
 #endif
-    OFFON_SETTING(F_BANFROMQS,cuesheet,LANG_CUESHEET_ENABLE,false,"cuesheet support",
+    OFFON_SETTING(F_BANFROMQS,cuesheet,LANG_CUESHEET_ENABLE,true,"cuesheet support",
                   NULL),
     TABLE_SETTING_LIST(F_TIME_SETTING | F_ALLOW_ARBITRARY_VALS, skip_length,
                   LANG_SKIP_LENGTH, 0, "skip length",
@@ -2271,7 +2279,7 @@ const struct settings_list settings[] = {
                   getlang_time_unit_0_is_skip_track, NULL,
                   25, timeout_sec_common),
     TABLE_SETTING_LIST(F_TIME_SETTING | F_ALLOW_ARBITRARY_VALS, alt_skip_length,
-                  LANG_ALT_SKIP_LENGTH, 0, "alt skip length",
+                  LANG_ALT_SKIP_LENGTH, 30, "alt skip length",
                   "outro,track",
                   UNIT_SEC, formatter_time_unit_0_is_skip_track,
                   getlang_time_unit_0_is_skip_track, NULL,
@@ -2475,11 +2483,11 @@ const struct settings_list settings[] = {
                    list_kinetic_is_default, list_kinetic_set_default),
 #endif
     OFFON_SETTING(0, prevent_skip, LANG_PREVENT_SKIPPING, false, "prevent track skip", NULL),
-    OFFON_SETTING(0, rewind_across_tracks, LANG_REWIND_ACROSS_TRACKS, false, "rewind across tracks", NULL),
+    OFFON_SETTING(0, rewind_across_tracks, LANG_REWIND_ACROSS_TRACKS, true, "rewind across tracks", NULL),
 #ifdef HAVE_PITCHCONTROL
     OFFON_SETTING(0, pitch_mode_semitone, LANG_SEMITONE, false,
                   "Semitone pitch change", NULL),
-    OFFON_SETTING(0, pitch_mode_timestretch, LANG_TIMESTRETCH, false,
+    OFFON_SETTING(0, pitch_mode_timestretch, LANG_TIMESTRETCH, true,
                   "Timestretch mode", NULL),
 #endif
 
