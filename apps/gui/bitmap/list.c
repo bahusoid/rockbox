@@ -156,7 +156,7 @@ static bool draw_title(struct screen *display,
     if (!list_display_title(list, screen))
         return false;
     *title_text_vp = *(list->parent[screen]);
-    linedes.height = list->line_height[screen];
+    linedes.height = list->title_height[screen];
     title_text_vp->height = linedes.height;
 
 #if LCD_DEPTH > 1
@@ -840,7 +840,8 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
     int adj_y = gevent.y - list_vp->y;
     int line_height = list->line_height[screen];
     int start_item = list->start_item[screen];
-    int start_y = start_item * line_height;
+    int start_y = start_item * line_height - list->y_pos;
+    int list_y = list_text[screen].y - list_vp->y;
     int action = ACTION_NONE;
     int click_loc;
 
@@ -873,9 +874,7 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
             int line;
             if(!skinlist_get_item(&screens[screen], list, adj_x, adj_y, &line))
             {
-                line = (adj_y - (start_y - list->y_pos)) / line_height;
-                if (list_display_title(list, screen))
-                    line -= 1;
+                line = (adj_y - list_y - start_y) / line_height;
             }
 
             int new_item = start_item + line;
