@@ -161,6 +161,12 @@ struct gui_synclist
     int selected_size;
     /* the number of pixels each line occupies (including optional padding on touchscreen */
     int line_height[NB_SCREENS];
+#ifdef HAVE_TOUCHSCREEN
+    int title_height[NB_SCREENS];
+#else
+#define title_height line_height
+#endif
+
     int offset_position[NB_SCREENS]; /* the list's screen scroll placement in pixels */
     long scheduled_talk_tick, last_talked_tick, dirty_tick;
 
