@@ -95,9 +95,10 @@
  || defined(ONDA_VX747)  \
  || defined(ONDA_VX767)  \
  || defined(ONDA_VX747P) \
- || defined(ONDA_VX777)
+ || defined(ONDA_VX777) \
+ || defined(MODERN_TOUCH_UI)
 #define DEFAULT_TOUCHSCREEN_MODE TOUCHSCREEN_POINT
-#else
+#elif !defined(DEFAULT_TOUCHSCREEN_MODE)
 #define DEFAULT_TOUCHSCREEN_MODE TOUCHSCREEN_BUTTON
 #endif
 #endif /* HAVE_TOUCHSCREEN */
