@@ -35,9 +35,9 @@
 %Vl(b,0,390,-,220,-)
 %ac%?ig<%ig|>
 %ac%fb kbps%?fv< %(vbr%)|> %fc %fk kHz
-%ac%Sx(Next Track:)
+%?Fn<%ac%Sx(Next Track:)>
 %ac%s%?It<%It|%Fn>
-%s%ac%?Ia<%Ia|%?IA<%IA|%?D(2)<%D(2)|%(root%)>>>
+%?Fn<%s%ac%?Ia<%Ia|%?IA<%IA|%?D(2)<%D(2)|%(root%)>>>>
 #
 # album art viewport
 #
@@ -57,7 +57,7 @@
 
 # next track info - AA
 %Vl(d,0,550,-,-200,-)
-%?C<%s%ac%Sx(Next:) %?Ia<%Ia|%?IA<%IA|%?D(2)<%D(2)|%(root%)>>> - %?It<%It|%Fn>|%s%ac%?Id<%Id|%?D(1)<%D(1)|%(root%)>>>
+%?Fn<%?C<%s%ac%Sx(Next:)%?It<%It|%Fn>|%s%ac%?Id<%Id|%?D(1)<%D(1)|%(root%)>>> - %?Ia<%Ia|%?IA<%IA|%?D(2)<%D(2)|%(root%)>>>> 
 
 # playtime
 %V(20,660,440,36,-)
