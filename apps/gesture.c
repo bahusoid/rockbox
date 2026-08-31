@@ -192,16 +192,20 @@ int gesture_flick_get_in_vp(const struct gesture_event *gevt,
     const int vp_height = vp ? vp->height : LCD_HEIGHT;
     const int vp_width = vp ? vp->width : LCD_WIDTH;
 
-    /* margin at edge where flicks must originate */
-    const int margin = touchscreen_get_scroll_threshold() * 2;
+    /* Accept touch start points in a small edge band instead of only the exact
+     * pixel on the border. Use viewport-relative bounds so the detector also
+     * works correctly when it is attached to a sub-viewport instead of the
+     * whole screen.
+     */
+    const int edge_margin = MAX(1 + touchscreen_get_scroll_threshold() * 2,
+                                1 + MIN(vp_width, vp_height) / 8);
 
-    /* minimum distance from edge before a flick is reported */
-    const int x_dist = 1 + vp_width/4;
-    const int y_dist = 1 + vp_height/4;
+    /* require a reasonably long move along the primary axis; the secondary axis
+     * must stay reasonably close to zero movement to avoid diagonals */
+    const int x_dist = 1 + vp_width / 5;
+    const int y_dist = 1 + vp_height / 5;
 
-    /* a flick only triggers if the velocity along the main axis
-     * exceeds the minimum and the velocity on the other axis is
-     * below the maximum */
+    /* the minimum/maximum velocities are expressed in pixels/sec */
     const int xv_min = 2*vp_width;
     const int xv_max = vp_width;
     const int yv_min = 2*vp_height;
@@ -217,22 +221,20 @@ int gesture_flick_get_in_vp(const struct gesture_event *gevt,
     int xvel = (gevt->x - gevt->ox) * HZ / dt;
     int yvel = (gevt->y - gevt->oy) * HZ / dt;
 
-    if (gevt->ox < margin && gevt->x >= x_dist &&
+    if (gevt->ox <= edge_margin && gevt->x >= x_dist &&
         xvel >= xv_min && abs(yvel) <= yv_max)
         return GESTURE_FLICK_LEFT;
 
-    if (gevt->ox >= LCD_WIDTH - margin &&
-        gevt->x < LCD_WIDTH - x_dist &&
+    if (gevt->ox >= vp_width - edge_margin && gevt->x <= vp_width - x_dist &&
         xvel <= -xv_min && abs(yvel) <= yv_max)
         return GESTURE_FLICK_RIGHT;
 
-    if (gevt->oy < margin && gevt->y >= y_dist &&
+    if (gevt->oy <= edge_margin && gevt->y >= y_dist &&
         yvel >= yv_min && abs(xvel) <= xv_max)
         return GESTURE_FLICK_TOP;
 
-    if (gevt->oy >= LCD_HEIGHT - margin &&
-        gevt->y < LCD_HEIGHT - y_dist &&
-        yvel <= -yv_min && abs(xvel) < xv_max)
+    if (gevt->oy >= vp_height - edge_margin && gevt->y <= vp_height - y_dist &&
+        yvel <= -yv_min && abs(xvel) <= xv_max)
         return GESTURE_FLICK_BOTTOM;
 
     return GESTURE_FLICK_NONE;
