@@ -624,7 +624,20 @@ void _gui_synclist_stop_kinetic_scrolling(struct gui_synclist *list)
     }
 }
 
-#define LIST_TOUCH_ACTION_COOLDOWN (HZ/4)
+static bool list_kinetic_scroll_resumed_same_direction(const struct gui_synclist *list,
+                                                       const struct gesture_event *gevent)
+{
+    if (list == NULL || list->scroll_mode != SCROLL_KINETIC)
+        return false;
+
+    if (kinetic.cb_data.velocity == 0)
+        return false;
+
+    const int dy = gevent->y - gevent->oy;
+    return dy != 0 && SIGN(dy) == SIGN(kinetic.cb_data.velocity);
+}
+
+#define LIST_TOUCH_ACTION_COOLDOWN (HZ/2)
 
 static bool list_touch_action_blocked(struct gui_synclist *list)
 {
@@ -900,17 +913,22 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
             const int threshold = touchscreen_get_scroll_threshold();
             if (dx * dx + dy * dy > threshold * threshold)
                 break;
+            if (list_kinetic_scroll_resumed_same_direction(list, &gevent))
+                break;
         }
         /* fallthrough */
 
     case GESTURE_TAP:
     case GESTURE_LONG_PRESS:
-        /* In kinetic mode taps and presses only decelerate scrolling.
-         * User needs to wait until scrolling stops to select an item. */
+        /* In kinetic mode taps and presses stop the inertia immediately so the
+         * user can reverse direction without waiting for the coast to end. */
         if (list->scroll_mode == SCROLL_KINETIC)
         {
+            if (list_kinetic_scroll_resumed_same_direction(list, &gevent))
+                break;
             if (gevent.id != GESTURE_NONE)
                 gesture_vel_reset(&list_gvel);
+            _gui_synclist_stop_kinetic_scrolling(list);
             break;
         }
 
@@ -985,6 +1003,13 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
 
     case GESTURE_DRAGSTART:
         gesture_vel_reset(&list_gvel);
+        if (list->scroll_mode == SCROLL_KINETIC)
+        {
+            const int dy = gevent.y - gevent.oy;
+            if (kinetic.cb_data.velocity != 0 && dy != 0 &&
+                SIGN(dy) != SIGN(kinetic.cb_data.velocity))
+                _gui_synclist_stop_kinetic_scrolling(list);
+        }
         /* fallthrough */
 
     case GESTURE_DRAG:
@@ -993,7 +1018,7 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
         action = list_do_flick(&gevent);
         if (action != ACTION_NONE)
         {
-            _gui_synclist_stop_kinetic_scrolling(list);
+            //_gui_synclist_stop_kinetic_scrolling(list);
             action_gesture_reset();
             break;
         }
