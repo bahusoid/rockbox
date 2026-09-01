@@ -457,6 +457,15 @@ void list_draw(struct screen *display, struct gui_synclist *list)
 #if defined(HAVE_TOUCHSCREEN)
 /* This needs to be fixed if we ever get more than 1 touchscreen on a target. */
 
+static int get_max_y_pos(struct gui_synclist *gui_list)
+{
+    const int nb_lines = list_get_nb_lines(gui_list, SCREEN_MAIN);
+    if (nb_lines >= gui_list->nb_items)
+        return 0;
+
+    return (gui_list->nb_items - nb_lines) * gui_list->line_height[SCREEN_MAIN];
+}
+
 static void do_touch_scroll(struct gui_synclist *gui_list, int new_y_pos)
 {
     if (new_y_pos < 0)
@@ -668,6 +677,13 @@ static int kinetic_callback(struct timeout *tmo)
         button_queue_post(BUTTON_REDRAW, 0);
     }
 
+    const int max_y_pos = get_max_y_pos(list);
+    if ((list->y_pos <= 0 && data->velocity < 0) ||
+        (list->y_pos >= max_y_pos && data->velocity > 0))
+    {
+        data->velocity = 0;
+    }
+
     /* calculate and apply deceleration */
     long abs_decel = 0;
     abs_decel += kinetic_calc_accel(abs_vel, data->scroll_duration,
@@ -709,6 +725,13 @@ static bool kinetic_start_scrolling(struct kinetic *k, struct gui_synclist *list
     int xvel, yvel;
     gesture_vel_get(&list_gvel, &xvel, &yvel);
     if (yvel == 0)
+        return false;
+
+    const int max_y_pos = get_max_y_pos(list);
+    if (max_y_pos == 0)
+        return false;
+    if ((yvel > 0 && list->y_pos >= max_y_pos) ||
+        (yvel < 0 && list->y_pos <= 0))
         return false;
 
     long yvel_fp = yvel << LIST_KINETIC_FRACBITS;
