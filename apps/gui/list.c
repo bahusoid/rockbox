@@ -84,17 +84,30 @@ static void list_init_viewports(struct gui_synclist *list)
     list->dirty_tick = current_tick;
 }
 
+static bool list_has_title(struct gui_synclist *list, enum screen_type screen)
+{
+    return list->title != NULL &&
+           !sb_set_title_text(list->title, list->title_icon, screen);
+}
+
 static int list_nb_lines(struct gui_synclist *list, enum screen_type screen)
 {
     struct viewport *vp = list->parent[screen];
-    return vp->height / list->line_height[screen];
+    int height = vp->height;
+
+    if (list_has_title(list, screen))
+        height -= list->title_height[screen];
+
+    return MAX(0, height / list->line_height[screen]);
 }
 
 bool list_display_title(struct gui_synclist *list, enum screen_type screen)
 {
-    return list->title != NULL &&
-        !sb_set_title_text(list->title, list->title_icon, screen) &&
-        list_nb_lines(list, screen) > 2;
+    if (!list_has_title(list, screen))
+        return false;
+
+    return (list->parent[screen]->height - list->title_height[screen]) /
+           list->line_height[screen] > 2;
 }
 
 int list_get_nb_lines(struct gui_synclist *list, enum screen_type screen)
@@ -103,8 +116,6 @@ int list_get_nb_lines(struct gui_synclist *list, enum screen_type screen)
     if (lines < 0)
     {
         lines = list_nb_lines(list, screen);
-        if (list_display_title(list, screen))
-            lines -= 1;
     }
     return lines;
 }
