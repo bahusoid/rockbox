@@ -57,11 +57,12 @@
 
 # next track info - AA
 %Vl(d,0,550,-,-200,-)
-%?Fn<%?C<%s%ac%Sx(Next:)%?It<%It|%Fn>|%s%ac%?Id<%Id|%?D(1)<%D(1)|%(root%)>>> - %?Ia<%Ia|%?IA<%IA|%?D(2)<%D(2)|%(root%)>>>> 
+%?Fn<%?C<%s%ac%Sx(Next:) %?It<%It|%Fn>|%s%ac%?Id<%Id|%?D(1)<%D(1)|%(root%)>>> - %?Ia<%Ia|%?IA<%IA|%?D(2)<%D(2)|%(root%)>>>> 
 
 # playtime
-%V(20,660,440,36,-)
-%pc%ac%?Sr<%pe %Sx(of) %pp|%pp %Sx(of) %pe>%ar%pr
+%V(0,660,-,36,-)
+%al %pc%ac%?Sr<%pe/%pp|%pp/%pe>%ar%pr #
+#%al %pc%ac%?Sr<%pe %Sx(of) %pp|%pp %Sx(of) %pe>%ar%pr #
 
 # progressbar and bottom icons
 %V(0,600,-,-,-)
