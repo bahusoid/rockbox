@@ -26,6 +26,7 @@
 #include "lcd.h"
 #include "font.h"
 #include "button.h"
+#include "touchscreen.h"
 #include "string.h"
 #include "settings.h"
 #include "kernel.h"
@@ -848,6 +849,19 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
     case GESTURE_NONE:
         if (!action_gesture_is_pressed())
             break;
+
+        /* Ignore presses that have already turned into actual motion. A swipe
+         * that has started to drift away from the initial touch point should not
+         * be treated as a tap/selection, even if the drag threshold hasn't been
+         * reached yet for the current event.
+         */
+        {
+            const int dx = gevent.x - gevent.ox;
+            const int dy = gevent.y - gevent.oy;
+            const int threshold = touchscreen_get_scroll_threshold();
+            if (dx * dx + dy * dy > threshold * threshold)
+                break;
+        }
         /* fallthrough */
 
     case GESTURE_TAP:
