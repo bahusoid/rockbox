@@ -193,6 +193,7 @@ struct gui_synclist
     int y_pos; /* absolute Y coordinate, used for smooth scrolling */
     int scroll_base_y; /* used for swipe scrolling */
     int scroll_mode; /* see apps/gui/bitmap/list.c */
+    long scroll_stop_tick; /* suppress tap/long-press immediately after scroll */
 #endif
 };
 

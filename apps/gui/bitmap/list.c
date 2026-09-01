@@ -611,7 +611,22 @@ void _gui_synclist_stop_kinetic_scrolling(struct gui_synclist *list)
     {
         kinetic_stop_scrolling(&kinetic, list);
         list->scroll_mode = SCROLL_NONE;
+        list->scroll_stop_tick = current_tick;
     }
+}
+
+#define LIST_TOUCH_ACTION_COOLDOWN (HZ/4)
+
+static bool list_touch_action_blocked(struct gui_synclist *list)
+{
+    return list->scroll_stop_tick != 0 &&
+           TIME_BEFORE(current_tick, list->scroll_stop_tick + LIST_TOUCH_ACTION_COOLDOWN);
+}
+
+static void list_mark_scroll_stopped(struct gui_synclist *list)
+{
+    list->scroll_mode = SCROLL_NONE;
+    list->scroll_stop_tick = current_tick;
 }
 
 static long kinetic_calc_accel(long input, long duration,
@@ -681,7 +696,7 @@ static int kinetic_callback(struct timeout *tmo)
 
     if (data->velocity == 0)
     {
-        list->scroll_mode = SCROLL_NONE;
+        list_mark_scroll_stopped(list);
         return 0;
     }
 
@@ -875,6 +890,12 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
             break;
         }
 
+        if (list_touch_action_blocked(list))
+        {
+            //action_gesture_reset();
+            break;
+        }
+
         click_loc = get_click_location(list, gevent.x, gevent.y);
         if (click_loc & LIST)
         {
@@ -972,10 +993,10 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
 
     case GESTURE_RELEASE:
         if (list->scroll_mode == SCROLL_BAR)
-            list->scroll_mode = SCROLL_NONE;
+            list_mark_scroll_stopped(list);
         else if(!kinetic_start_scrolling(&kinetic, list) &&
                 list->scroll_mode != SCROLL_KINETIC)
-            list->scroll_mode = SCROLL_NONE;
+            list_mark_scroll_stopped(list);
 
         action_gesture_reset();
         action = ACTION_REDRAW;
