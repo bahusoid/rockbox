@@ -3230,6 +3230,9 @@ static void audio_stop_playback(void)
     filling = STATE_IDLE;
     cancel_cpu_boost();
     add_playbacklog(NULL); /* flush playback log */
+#if  defined(HAVE_STORAGE_FLUSH) && defined(HAVE_HOTSWAP)
+    storage_flush();
+#endif
 }
 
 /* Pause the playback of the current track
