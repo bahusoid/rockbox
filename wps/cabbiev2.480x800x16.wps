@@ -26,7 +26,7 @@
 # track & next track info - no AA
 %Vl(a,0,102,-,220,-)
 # tap on current title info for playlist (ie. where albumart would normally be)
-%T(0,0,275,275,playlist)
+%T(5,0,470,300,playlist)
 
 %s%ac%?it<%it|%fn>
 %s%ac%?id<%id|%?d(1)<%d(1)|%(root%)>>
@@ -45,7 +45,7 @@
 %dr(0,0,-,40,585858,585858)
 %Cd
 # tap on the cover art for playlist
-%T(0,0,-,-,playlist)
+%T(5,0,-,-,playlist)
 
 
 # current track info - AA
