@@ -44,7 +44,8 @@
 #include "debug.h"
 #include "line.h"
 #include "fixedpoint.h"
-
+//#define LOGF_ENABLE
+#include "logf.h"
 #define ICON_PADDING 1
 #define ICON_PADDING_S "1"
 
@@ -654,6 +655,9 @@ static bool list_touch_action_blocked(struct gui_synclist *list)
 
 static void list_mark_scroll_stopped(struct gui_synclist *list)
 {
+    logf("list_touch: scroll stopped mode=%d y_pos=%d base=%d selected=%d start=%d\n",
+          list->scroll_mode, list->y_pos, list->scroll_base_y,
+          list->selected_item, list->start_item[SCREEN_MAIN]);
     list->scroll_mode = SCROLL_NONE;
     list->scroll_stop_tick = current_tick;
 }
@@ -676,6 +680,11 @@ static int kinetic_callback(struct timeout *tmo)
     struct kinetic_cb_data *data = (struct kinetic_cb_data*)tmo->data;
     struct gui_synclist *list = data->list;
     int pixel_diff, action;
+
+    logf("list_touch: kinetic_cb list=%p mode=%d vel=%ld y_pos=%d base=%d dist=%ld\n",
+          (void *)list, list ? list->scroll_mode : -1,
+          data->velocity, list ? list->y_pos : 0,
+          list ? list->scroll_base_y : 0, data->distance);
 
     /* deal with cancellation */
     if (!list || list->scroll_mode != SCROLL_KINETIC)
@@ -744,6 +753,9 @@ static bool kinetic_start_scrolling(struct kinetic *k, struct gui_synclist *list
 {
     int xvel, yvel;
     gesture_vel_get(&list_gvel, &xvel, &yvel);
+    logf("list_touch: kinetic_start yvel=%d y_pos=%d base=%d mode=%d velocity=%ld\n",
+          yvel, list->y_pos, list->scroll_base_y, list->scroll_mode,
+          k->cb_data.velocity);
     if (yvel == 0)
         return false;
 
@@ -887,6 +899,12 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
     if (!action_gesture_get_event(&gevent))
         return ACTION_NONE;
 
+    logf("list_touch: event id=%d x=%d y=%d ox=%d oy=%d last=%ld start=%ld pressed=%d mode=%d y_pos=%d base=%d vel=%ld\n",
+          gevent.id, gevent.x, gevent.y, gevent.ox, gevent.oy,
+          gevent.last_tick, gevent.start_tick, action_gesture_is_pressed(),
+          list->scroll_mode, list->y_pos, list->scroll_base_y,
+          kinetic.cb_data.velocity);
+
     const enum screen_type screen = SCREEN_MAIN;
     struct viewport *list_vp = list->parent[screen];
     int adj_x = gevent.x - list_vp->x;
@@ -908,6 +926,12 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
     case GESTURE_NONE:
         if (!action_gesture_is_pressed())
             break;
+
+        /* A new press without actual drag must not reuse the previous
+         * drag velocity samples. Otherwise RELEASE can restart kinetic
+         * scrolling from stale values even though the finger never moved.
+         */
+        gesture_vel_reset(&list_gvel);
 
         /* Ignore presses that have already turned into actual motion. A swipe
          * that has started to drift away from the initial touch point should not
@@ -931,7 +955,10 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
          * user can reverse direction without waiting for the coast to end. */
         if (list->scroll_mode == SCROLL_KINETIC)
         {
-            if (list_kinetic_scroll_resumed_same_direction(list, &gevent))
+            logf("list_touch: kinetic tap/press id=%d vel=%ld y_pos=%d base=%d\n",
+                  gevent.id, kinetic.cb_data.velocity, list->y_pos,
+                  list->scroll_base_y);
+            if (gevent.x <= 1 || list_kinetic_scroll_resumed_same_direction(list, &gevent))
                 break;
             if (gevent.id != GESTURE_NONE)
             {
@@ -1049,6 +1076,9 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
         break;
 
     case GESTURE_RELEASE:
+        logf("list_touch: release mode=%d y_pos=%d base=%d vel=%ld\n",
+              list->scroll_mode, list->y_pos, list->scroll_base_y,
+              kinetic.cb_data.velocity);
         if (list->scroll_mode == SCROLL_BAR)
             list_mark_scroll_stopped(list);
         else if(!kinetic_start_scrolling(&kinetic, list) &&
@@ -1057,6 +1087,11 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
 
         action_gesture_reset();
         action = ACTION_REDRAW;
+        break;
+
+    case GESTURE_HOLD:
+        if (action_gesture_is_pressed())
+            gesture_vel_reset(&list_gvel);
         break;
 
     default:
