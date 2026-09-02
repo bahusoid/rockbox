@@ -1499,9 +1499,9 @@ const struct settings_list settings[] = {
                   "No Screen Lock For Selected Actions", NULL),
     INT_SETTING(F_BANFROMQS, bt_selective_softlock_actions_mask,
                 LANG_SOFTLOCK_SELECTIVE,
-                SEL_ACTION_VOL | SEL_ACTION_PLAY | SEL_ACTION_SEEK |
-                    SEL_ACTION_SKIP | SEL_ACTION_START_STOP
-                    | SEL_ACTION_ALLNONOTIFY | SEL_ACTION_NONOTIFY
+                SEL_ACTION_VOL | SEL_ACTION_PLAY | SEL_ACTION_SEEK
+                | SEL_ACTION_SKIP | SEL_ACTION_START_STOP
+                | SEL_ACTION_ALLNONOTIFY | SEL_ACTION_NONOTIFY
                     ,
                 "Selective Screen Lock Actions", UNIT_INT,
                 0, 2048,2, NULL, NULL, NULL),
