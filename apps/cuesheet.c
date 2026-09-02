@@ -566,6 +566,10 @@ bool browse_cuesheet(struct cuesheet *cue)
             case ACTION_STD_MENU:
                 done = true;
             default:
+                if (default_event_handler(action) == SYS_USB_CONNECTED)
+                {
+                    done = true;
+                }
                 break;
         }
     }
