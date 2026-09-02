@@ -619,6 +619,44 @@ void set_remote_backlight_filter_keypress(bool value)
 #endif
 #endif
 
+#ifdef HAVE_TOUCHSCREEN
+static bool is_exempted_touch_activity(void)
+{
+#if !defined(BOOTLOADER)
+    if (global_settings.touchscreen_exemptions)
+    {
+        switch (get_current_activity())
+        {
+        case ACTIVITY_WPS:
+            if (global_settings.touchscreen_exemptions == TOUCHSCREEN_EXEMPTIONS_WPS_AND_LISTS
+                || global_settings.touchscreen_exemptions == TOUCHSCREEN_EXEMPTIONS_WPS)
+            {
+                return true;
+            }
+            break;
+
+        case ACTIVITY_FILEBROWSER:
+        case ACTIVITY_CUESHEET:
+        case ACTIVITY_DATABASEBROWSER:
+        case ACTIVITY_MAINMENU:
+        case ACTIVITY_PLAYLISTBROWSER:
+        case ACTIVITY_BOOKMARKSLIST:
+        case ACTIVITY_SHORTCUTSMENU:
+        case ACTIVITY_CONTEXTMENU:
+            if (global_settings.touchscreen_exemptions == TOUCHSCREEN_EXEMPTIONS_WPS_AND_LISTS
+                || global_settings.touchscreen_exemptions == TOUCHSCREEN_EXEMPTIONS_LISTS)
+            {
+                return true;
+            }
+            break;
+        default:
+            break;
+        }
+    }
+#endif /*!BOOTLOADER*/
+    return false;
+}
+#endif
 /*
  * Get button pressed from hardware
  */
@@ -640,7 +678,11 @@ static int button_read(int *data)
 
 #ifdef HAVE_TOUCHSCREEN
     if (btn & BUTTON_TOUCHSCREEN)
+    {
+        if (is_exempted_touch_activity())
+            return 0;
         last_touchscreen_touch = current_tick;
+    }
 #endif
     /* Filter the button status. It is only accepted if we get the same
        status twice in a row. */
