@@ -51,13 +51,13 @@
 # current track info - AA
 %Vl(d,0,370,-,-200,-)
 %s%ac%?it<%it|%fn>
-%s%ac%?id<%id|%?d(1)<%d(1)|%(root%)>>%?iy<%, %iy|>
+%s%ac%?id<%id|%?d(1)<%d(1)|%(root%)>>%?iy<%, %ss(0,10,%iy)>
 %s%ac%?ia<%ia|%?iA<%iA|%?d(2)<%d(2)|%(root%)>>>
 %ac%fb kbps%?fv< %(vbr%)|> %fc %fk kHz
 
 # next track info - AA
 %Vl(d,0,550,-,-200,-)
-%?Fn<%?C<%s%ac%Sx(Next:) %?It<%It|%Fn>|%s%ac%?Id<%Id|%?D(1)<%D(1)|%(root%)>>> - %?Ia<%Ia|%?IA<%IA|%?D(2)<%D(2)|%(root%)>>>> 
+%?Fn<%?C<%s%ac%Sx(Next:) %?if(%Ia, =, %ia)<|%?if(%IA, =, %ia)<|%?Ia<%Ia|%?IA<%IA|%?D(2)<%D(2)|%(root%)>>> - >>%?It<%It|%Fn>|%s%ac%?Id<%Id|%?D(1)<%D(1)|%(root%)>>>>
 
 # playtime
 %V(0,660,-,36,-)

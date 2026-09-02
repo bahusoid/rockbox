@@ -634,7 +634,14 @@ static bool list_kinetic_scroll_resumed_same_direction(const struct gui_synclist
         return false;
 
     const int dy = gevent->y - gevent->oy;
-    return dy != 0 && SIGN(dy) == SIGN(kinetic.cb_data.velocity);
+    if (dy == 0 || SIGN(dy) != SIGN(kinetic.cb_data.velocity))
+        return false;
+
+    /* Ignore tiny finger jitter while the list is already coasting in the same
+     * direction; only treat it as a resumed drag when the motion is actually
+     * large enough to behave like a real swipe.
+     */
+    return abs(dy) > touchscreen_get_scroll_threshold();
 }
 
 #define LIST_TOUCH_ACTION_COOLDOWN (HZ/2)
@@ -927,7 +934,10 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
             if (list_kinetic_scroll_resumed_same_direction(list, &gevent))
                 break;
             if (gevent.id != GESTURE_NONE)
+            {
                 gesture_vel_reset(&list_gvel);
+                action_gesture_reset();
+            }
             _gui_synclist_stop_kinetic_scrolling(list);
             break;
         }
