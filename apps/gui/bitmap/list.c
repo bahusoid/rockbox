@@ -968,9 +968,7 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
 
                 if (gevent.id == GESTURE_TAP)
                     action = ACTION_STD_OK;
-                else if (gevent.id == GESTURE_LONG_PRESS
-                    //to avoid accidental quit from cuesheet
-                    && get_current_activity() != ACTIVITY_CUESHEET)
+                else if (gevent.id == GESTURE_LONG_PRESS)
                     action = ACTION_STD_CONTEXT;
                 else
                     action = ACTION_REDRAW;
