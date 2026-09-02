@@ -57,6 +57,7 @@
 #define SEL_ACTION_SKIP       0x008U
 #define SEL_ACTION_NOUNMAPPED 0x010U/* disable backlight on unmapped buttons */
 #define SEL_ACTION_ALLNONOTIFY  0x020U/* disable switch for all softlock notifications */
+//MOD: always auto lock is default behavior in this mod, so we don't need a switch for it.
 #define SEL_ACTION_ALWAYSAUTOLOCK 0x040U/* always prime autolock, requires autolock enabled */
 #define SEL_ACTION_NOTOUCH    0x080U/* disable touch screen/pad on screen lock */
 #define SEL_ACTION_AUTOLOCK   0x100U/* autolock on backlight off */
