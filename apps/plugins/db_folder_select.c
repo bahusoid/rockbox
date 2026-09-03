@@ -591,7 +591,9 @@ bool folder_select(char * header_text, char* setting, int setting_len, int accep
     struct folder *root;
     struct simplelist_info info;
     size_t buf_size;
-
+#ifdef HAVE_TOUCHSCREEN
+    rb->touchscreen_set_mode(rb->global_settings->touch_mode);
+#endif
     buffer_front = rb->plugin_get_buffer(&buf_size);
     buffer_end = buffer_front + buf_size;
     logf("folder_select %d bytes free", (int)(buffer_end - buffer_front));
