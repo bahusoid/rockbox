@@ -2128,6 +2128,9 @@ enum plugin_status plugin_start(const void* parameter)
     keymap_add_button_entry(CONTEXT_STD, ACTION_STD_OK, BUTTON_VOL_UP, BUTTON_NONE);
     keymap_add_button_entry(CONTEXT_STD, ACTION_STD_OK, BUTTON_VOL_DOWN, BUTTON_NONE);
 #endif
+#ifdef HAVE_TOUCHSCREEN
+    rb->touchscreen_set_mode(rb->global_settings->touch_mode);
+#endif
 
     keyset.crc32 = 0;
     keyset.view_lastcol = -1;
@@ -2152,10 +2155,10 @@ enum plugin_status plugin_start(const void* parameter)
             else
                 redraw = true;
 
-            ret = menu_action_cb(&action, selected_item, &exit, &lists);
             if (rb->gui_synclist_do_button(&lists, &action))
                 continue;
             selected_item = rb->gui_synclist_get_sel_pos(&lists);
+            ret = menu_action_cb(&action, selected_item, &exit, &lists);
 
             mainmenu[M_SETKEYS].items = ctx_data.ctx_count + ctx_data.act_count + 2;
         }
