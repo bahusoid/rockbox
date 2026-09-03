@@ -496,6 +496,12 @@ bool list_stop_handler(void)
             ret = true;  /* bookmarking can make a refresh necessary */
         }
     }
+    else
+    {
+#if defined(HAVE_STORAGE_FLUSH) && defined(HAVE_HOTSWAP)
+        storage_flush();
+#endif
+    }
 #if CONFIG_CHARGING
 #ifndef HAVE_POWEROFF_WHILE_CHARGING
     {
@@ -2129,7 +2135,7 @@ static bool is_from_path(const struct mp3entry *id3, unsigned char *path_to_chec
 
 void init_alt_settings(struct mp3entry *id3)
 {
-    if (id3->altsettings)
+    if (id3->altsettings || global_settings.altmenu_paths[0] == 0)
         return;
 
     /* cache result */
