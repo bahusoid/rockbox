@@ -460,17 +460,20 @@ void list_draw(struct screen *display, struct gui_synclist *list)
 
 static int get_max_y_pos(struct gui_synclist *gui_list)
 {
-    const int nb_lines = list_get_nb_lines(gui_list, SCREEN_MAIN);
-    if (nb_lines >= gui_list->nb_items)
-        return 0;
+    const int line_height = gui_list->line_height[SCREEN_MAIN];
+    const int view_height = list_text[SCREEN_MAIN].height;
+    const int max_y_pos = gui_list->nb_items * line_height - view_height;
 
-    return (gui_list->nb_items - nb_lines) * gui_list->line_height[SCREEN_MAIN];
+    return MAX(0, max_y_pos);
 }
 
 static void do_touch_scroll(struct gui_synclist *gui_list, int new_y_pos)
 {
+    const int max_y_pos = get_max_y_pos(gui_list);
     if (new_y_pos < 0)
         new_y_pos = 0;
+    else if (new_y_pos > max_y_pos)
+        new_y_pos = max_y_pos;
 
     int line_height = gui_list->line_height[SCREEN_MAIN];
     int new_start = new_y_pos / line_height;
@@ -645,7 +648,9 @@ static bool list_kinetic_scroll_resumed_same_direction(const struct gui_synclist
     return abs(dy) > touchscreen_get_scroll_threshold();
 }
 
-#define LIST_TOUCH_ACTION_COOLDOWN (HZ/2)
+//Must be more than TOUCH_LONG_PRESS_TIME, to avoid spurious GESTURE_LONG_TAP
+//TODO: Use shorter timeout for GESTURE_TAP, and current for GESTURE_LONG_TAP
+#define LIST_TOUCH_ACTION_COOLDOWN (40 * HZ / 100)
 
 static bool list_touch_action_blocked(struct gui_synclist *list)
 {
@@ -681,10 +686,10 @@ static int kinetic_callback(struct timeout *tmo)
     struct gui_synclist *list = data->list;
     int pixel_diff, action;
 
-    logf("list_touch: kinetic_cb list=%p mode=%d vel=%ld y_pos=%d base=%d dist=%ld\n",
+    logf("list_touch: kinetic_cb list=%p mode=%d vel=%ld y_pos=%d max_y_pos=%d base=%d dist=%ld\n",
           (void *)list, list ? list->scroll_mode : -1,
           data->velocity, list ? list->y_pos : 0,
-          list ? list->scroll_base_y : 0, data->distance);
+          get_max_y_pos(list), list ? list->scroll_base_y : 0, data->distance);
 
     /* deal with cancellation */
     if (!list || list->scroll_mode != SCROLL_KINETIC)
@@ -704,13 +709,6 @@ static int kinetic_callback(struct timeout *tmo)
     {
         /* force the list to redraw */
         button_queue_post(BUTTON_REDRAW, 0);
-    }
-
-    const int max_y_pos = get_max_y_pos(list);
-    if ((list->y_pos <= 0 && data->velocity < 0) ||
-        (list->y_pos >= max_y_pos && data->velocity > 0))
-    {
-        data->velocity = 0;
     }
 
     /* calculate and apply deceleration */
@@ -760,10 +758,8 @@ static bool kinetic_start_scrolling(struct kinetic *k, struct gui_synclist *list
         return false;
 
     const int max_y_pos = get_max_y_pos(list);
-    if (max_y_pos == 0)
-        return false;
-    if ((yvel > 0 && list->y_pos >= max_y_pos) ||
-        (yvel < 0 && list->y_pos <= 0))
+    if ((yvel < 0 && list->y_pos >= max_y_pos) ||
+        (yvel > 0 && list->y_pos <= 0))
         return false;
 
     long yvel_fp = yvel << LIST_KINETIC_FRACBITS;
@@ -960,11 +956,11 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
                   list->scroll_base_y);
             if (gevent.x <= 1 || list_kinetic_scroll_resumed_same_direction(list, &gevent))
                 break;
-            if (gevent.id != GESTURE_NONE)
-            {
-                gesture_vel_reset(&list_gvel);
-                action_gesture_reset();
-            }
+
+            /* Stopping inertia is not itself a tap/long-press selection. Keep
+             * the active gesture valid so a real drag can continue, but block
+             * action processing for at least the long-press timeout.
+             */
             _gui_synclist_stop_kinetic_scrolling(list);
             break;
         }
