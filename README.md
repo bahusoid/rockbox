@@ -1,3 +1,10 @@
+<table>
+  <tr>
+    <td><img src="docs/mods/screenshots/wps.png" width="240" alt="WPS"></td>
+    <td><img src="docs/mods/screenshots/chapters.png" width="240" alt="Chapters"></td>
+  </tr>
+</table>
+
 # Rockbox Audiobook Mod
 
 This is a personalized version of Rockbox, integrating my own modifications with community patches. The main focus is to improve the audiobook experience, and it also includes dedicated HiBy enhancements.
