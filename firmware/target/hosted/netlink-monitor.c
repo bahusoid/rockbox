@@ -77,6 +77,7 @@ void init_netlink_monitor(void)
         }
     }
 
+    last_battery_event = last_device_event = current_tick;
     update_switch_states();
     initialized = true;
 }
