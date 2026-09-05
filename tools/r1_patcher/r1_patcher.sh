@@ -210,6 +210,7 @@ EOF
 
     # 2. Check mdev.conf and append rules only if missing
     MDEV_CONF="$workingdir_in/rootfs/extracted/etc/mdev.conf"
+    chmod 0644 "$MDEV_CONF"
 
     if ! grep -q "mmcblk" "$MDEV_CONF"; then
         echo "mmcblk[0-9]p[0-9] 0:0 660 */usr/bin/rb_hotplug.sh" >> "$MDEV_CONF"
