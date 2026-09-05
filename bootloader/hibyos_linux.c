@@ -725,6 +725,9 @@ int main(int argc, char **argv)
 #if defined(FIIO_M3K_LINUX)
             execvp("/usr/project/bin/player_daemon", argv);
 #else
+#if defined(HIBY_R3PROII) || defined(HIBY_R1)
+            execvp("/usr/bin/open_hiby_bootloader", argv);
+#endif
             execvp("/usr/bin/hiby_player", argv);
 #endif
             error_screen("Cannot boot OF");
