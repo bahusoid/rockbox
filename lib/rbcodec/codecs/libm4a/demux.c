@@ -513,18 +513,13 @@ static bool read_chunk_stco(qtmovie_t *qtmovie, size_t chunk_len)
      * table. This reduces the memory consumption by a factor of 2 or even 
      * more. */
     uint32_t idx = 0;
-    for (i = 0; i < numentries; ++i)
+    for (i = 0; i < numentries; i+= accuracy_divider)
     {
-        if (i % accuracy_divider == 0)
-        {
-            qtmovie->res->lookup_table[idx++].offset = stream_read_uint32(qtmovie->stream);
-        }
-        else
-        {
-            stream_skip(qtmovie->stream, 4);
-        }
-        size_remaining -= 4;
+        qtmovie->res->lookup_table[idx++].offset = stream_read_uint32(qtmovie->stream);
+        int skip = i + accuracy_divider < numentries ? accuracy_divider : numentries-i;
+        stream_skip(qtmovie->stream, 4*(skip - 1));
     }
+    size_remaining -= 4*numentries;
 
     idx = 0;
     i = 1;
