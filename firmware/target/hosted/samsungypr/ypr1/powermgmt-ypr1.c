@@ -40,6 +40,27 @@
 #define MAX17040_RCOMP          0x0C
 #define MAX17040_COMMAND        0xFE
 
+#ifdef HAVE_HOSTED_NETLINK_MONITOR
+long get_last_battery_event(void);
+
+#define GET_CACHED(result_var) \
+static int result_var = -1; \
+static long last_event_tick = -1; \
+long last_battery_event = get_last_battery_event(); \
+if (last_event_tick == last_battery_event) \
+    return result_var; \
+if (last_battery_event ) \
+    last_event_tick = last_battery_event
+#else
+#define GET_CACHED(result_var) \
+static int result_var = 0; \
+static long last_tick = 0; \
+if (last_tick && (current_tick - last_tick) < HZ/2) \
+    return result_var; \
+last_tick = current_tick
+#endif
+
+
 static int max17040_dev = -1;
 
 void max17040_init(void)
@@ -86,7 +107,7 @@ unsigned short percent_to_volt_charge[11] =
 
 unsigned int power_input_status(void)
 {
-    unsigned status = POWER_INPUT_NONE;
+    GET_CACHED(status);
     if (pmu_ioctl(MAX8819_IOCTL_IS_EXT_PWR, NULL) > 0)
         status = POWER_INPUT_MAIN_CHARGER;
     return status;
@@ -103,6 +124,7 @@ unsigned int power_input_status(void)
 #if (CONFIG_BATTERY_MEASURE & VOLTAGE_MEASURE) == VOLTAGE_MEASURE
 int _battery_voltage(void)
 {
+    GET_CACHED(result);
     int level = 4000;
     max17040_request ret = { .addr = 2, .reg1 = 0, .reg2 = 0 };
     if (ioctl(max17040_dev, MAX17040_READ_REG, &ret) >= 0)
@@ -110,25 +132,28 @@ int _battery_voltage(void)
         int step = (ret.reg1 << 4) | (ret.reg2 >> 4);
         level = step + (step >> 2);
     }
-    return level;
+    result = level;
+    return result;
 }
 #elif (CONFIG_BATTERY_MEASURE & PERCENTAGE_MEASURE) == PERCENTAGE_MEASURE
 int _battery_level(void)
 {
+    GET_CACHED(result);
     int level = 100;
     max17040_request ret = { .addr = 4, .reg1 = 0, .reg2 = 0 };
     if (ioctl(max17040_dev, MAX17040_READ_REG, &ret) >= 0)
         level = MIN(ret.reg1, 100);
-    return level;
+    result = level;
+    return result;
 }
 #endif
 
 bool charging_state(void)
 {
+    GET_CACHED(result);
     int ret = pmu_ioctl(MAX8819_IOCTL_GET_CHG_STATUS, NULL);
-    if (ret == PMU_FULLY_CHARGED)
-        return true;
-    return false;
+    result = (ret == PMU_FULLY_CHARGED);
+    return result;
 }
 
 #if CONFIG_TUNER
