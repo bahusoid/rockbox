@@ -211,7 +211,7 @@ static int bt_devicelist_callback(int action, struct gui_synclist *lists)
     {
         struct bt_device_menu_data* ctx = lists->data;
         struct bt_device* bt_device = &ctx->devices[lists->selected_item - 1];
-        if (bt_device->paired && confirm_delete_yesno(bt_device->name) == YESNO_YES)
+        if (bt_device->paired && confirm_delete_yesno(bt_device->name, NULL) == YESNO_YES)
         {
             bt_enable();
             if (*bt_active_codec && strcmp(bt_selected_mac, bt_device->mac) == 0)
