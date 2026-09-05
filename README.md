@@ -21,6 +21,8 @@ This is a personalized version of Rockbox, integrating my own modifications with
     *   **ImageViewer:** Uses the system JPEG decoder to efficiently load large JPEG images without preloading them into memory. Implements smart resize for frameless viewing and displays embedded album art from Ogg/Opus files.
 *   **Other Updates:** A wide array of other under-the-hood fixes and improvements. See the [full list of changes](https://github.com/Rockbox/rockbox/compare/master...bahusoid:rockbox:Mod25.12.07).
 
+Available in the [Development Build](#development-builds):
+* **Bookmark Filtering:** Filter existing bookmarks by the currently playing track (open the context menu in the Bookmarks list and select "Filter by Playing Track"). Useful when you have many bookmarks for different files in the same directory.
 ---
 
 ## HiBy-Specific Enhancements
@@ -36,6 +38,20 @@ This is a personalized version of Rockbox, integrating my own modifications with
     *   [USB DAC](https://gerrit.rockbox.org/r/c/rockbox/+/7674)
     *   [Touchscreen Keyboard](https://gerrit.rockbox.org/r/c/rockbox/+/7695)
     *   [Gestures, swipes, and kinetic scrolling](docs/mods/touch-controls.md)
+
+Available in the [Development Build](#development-builds):
+
+* **Optimized Background Checks:** Extends battery life.
+* **Battery Protection Options:** Added configurable limits for charging voltage, current, and low-battery power-off (*Settings -> General Settings -> System -> Limits*).
+  *Shortcut:* Long-press 'System' in the Main Menu to open System Settings directly.
+* **Touchscreen Exemptions:** Added the ability to disable touch controls in WPS and/or Lists/Menus (*Settings -> General Settings -> Display -> Touchscreen Settings -> Touchscreen Exemptions*).
+* **Screen-Off Shutdown Beep:** Added an audible beep when powering off via hardware button with the screen off, preventing over-pressing in your pocket. *(Note: Voice Menu must be disabled to hear this).*
+* **Snappier Scrolling & Navigation:** Removed scrolling inertia when stopping. Disabled the right-half screen tap for the **Quickscreen** to prevent accidental activations when attempting to navigate **Back**.
+* **Touch-Friendly Lists:** Increased the default size of list elements. Fine tune it for your fingers via *Settings -> General Settings -> Display -> Touchscreen Settings -> Line Padding in Lists*.
+* **UI Enhancements:** Larger system font and various default theme tweaks.
+* **Key Remapping:** Made keymap remap friendly. Added documentation and ready-to-use examples. See [Key Remapping](docs/mods/keyremap.md).
+* **Bootloader Expansion:** Added support for loading the Open HiBy player.
+* Tweaked Default Settings
 
 ---
 
