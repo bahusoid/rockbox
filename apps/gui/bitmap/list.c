@@ -1005,7 +1005,7 @@ unsigned gui_synclist_do_touchscreen(struct gui_synclist *list)
                 ( VP_IS_RTL(title_vp) && rel_x < title_vp->width/2))
             {
                 if (gevent.id == GESTURE_TAP)
-                    action = ACTION_STD_QUICKSCREEN;
+                    action = ACTION_STD_CANCEL;
                 else if (gevent.id == GESTURE_LONG_PRESS)
                     action = ACTION_TREE_WPS;
             }
