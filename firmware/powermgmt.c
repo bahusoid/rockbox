@@ -806,6 +806,11 @@ static void power_thread(void)
     battery_status_update();
     /* get some initial data for the power curve */
     collect_power_history();
+    
+#if defined(HAVE_HOSTED_NETLINK_MONITOR)
+    //Power input status needs some time
+    sleep((HZ/2));
+#endif
 
     next_power_hist = current_tick + HZ*60;
     while (1)
