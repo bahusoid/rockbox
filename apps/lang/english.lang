@@ -613,13 +613,13 @@
   desc: bookmark context menu, filter bookmarks to this track
   user: core
   <source>
-    *: "Filter by Current Track"
+    *: "Filter by Playing Track"
   </source>
   <dest>
-    *: "Filter by Current Track"
+    *: "Filter by Playing Track"
   </dest>
   <voice>
-    *: "Filter by current track"
+    *: "Filter by Playing Track"
   </voice>
 </phrase>
 <phrase>
