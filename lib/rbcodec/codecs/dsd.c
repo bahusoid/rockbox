@@ -9,8 +9,6 @@
 
 CODEC_HEADER
 
-#define DSD_RATE 2822400
-#define PCM_RATE 44100
 #define DSF_BLOCK 4096
 #define PCM_FRAMES 512
 #define ISO_SECTOR 2048
@@ -114,13 +112,21 @@ static bool read_exact(void *dst, size_t size)
     return ci->read_filebuf(dst, size) == size;
 }
 
+static bool valid_dsd_rate(uint32_t rate)
+{
+    //No validation for now...
+    //dsd64 (2822400), dsd128(5644800), dsd256(11289600)...
+    (void)rate;
+    return true;
+}
+
 static bool parse_dsf(uint64_t *data_size, uint64_t *sample_count,
                       bool *lsb_first)
 {
     unsigned char h[92];
     if (!ci->seek_buffer(0) || !read_exact(h, sizeof(h)) ||
         ci->memcmp(h, "DSD ", 4) || ci->memcmp(h + 28, "fmt ", 4) ||
-        le32(h + 52) != 2 || le32(h + 56) != DSD_RATE ||
+        le32(h + 52) != 2 || !valid_dsd_rate(le32(h + 56)) ||
         (le32(h + 60) != 1 && le32(h + 60) != 8) ||
         le32(h + 72) != DSF_BLOCK ||
         ci->memcmp(h + 80, "data", 4))
@@ -146,6 +152,7 @@ static enum codec_status decode_dsf(void)
     uint64_t total = remaining;
     uint64_t total_frames = sample_count / 64;
     uint64_t frames_done = 0;
+    
     while (remaining >= DSF_BLOCK * 2 && frames_done < total_frames)
     {
         intptr_t param;
@@ -154,7 +161,7 @@ static enum codec_status decode_dsf(void)
             break;
         if (action == CODEC_ACTION_SEEK_TIME)
         {
-            uint64_t target_frame = MIN((uint64_t)param * PCM_RATE / 1000,
+            uint64_t target_frame = MIN((uint64_t)param * ci->id3->frequency / 1000,
                                         total_frames);
             uint64_t block = target_frame / PCM_FRAMES;
             if (!ci->seek_buffer(92 + block * DSF_BLOCK * 2))
@@ -177,7 +184,7 @@ static enum codec_status decode_dsf(void)
         ci->pcmbuf_insert(pcm, NULL, frames);
         frames_done += frames;
         remaining -= DSF_BLOCK * 2;
-        ci->set_elapsed(frames_done * 1000 / PCM_RATE);
+        ci->set_elapsed(frames_done * 1000 / ci->id3->frequency);
     }
     return CODEC_OK;
 }
@@ -194,6 +201,7 @@ static enum codec_status decode_dff(void)
         ci->memcmp(head, "FRM8", 4) || ci->memcmp(head + 12, "DSD ", 4))
         return CODEC_ERROR;
 
+    const uint32_t pcm_rate = ci->id3->frequency;
     while (read_exact(chunk, sizeof(chunk)))
     {
         uint64_t size = be64(chunk + 4);
@@ -214,6 +222,16 @@ static enum codec_status decode_dff(void)
             data_start = ci->curpos;
             break;
         }
+        //can be used to validate dsd rate
+/*        else if (!ci->memcmp(chunk, "FS  ", 4) && size >= 4)
+        {
+            unsigned char value[4];
+            if (!read_exact(value, sizeof(value)))
+                return CODEC_ERROR;
+            rate = be32(value);
+            continue;
+        }
+*/
         if (!ci->memcmp(chunk, "DST ", 4) ||
             !ci->seek_buffer(data_start_pos + size + (size & 1)))
             return CODEC_ERROR;
@@ -232,7 +250,7 @@ static enum codec_status decode_dff(void)
             break;
         if (action == CODEC_ACTION_SEEK_TIME)
         {
-            uint64_t frame = (uint64_t)param * PCM_RATE / 1000;
+            uint64_t frame = (uint64_t)param * pcm_rate / 1000;
             uint64_t offset = MIN(total_size, frame * 16);
             offset -= offset % 16;
             if (!ci->seek_buffer(data_start + offset))
@@ -258,7 +276,7 @@ static enum codec_status decode_dff(void)
         }
         ci->pcmbuf_insert(pcm, NULL, frames);
         frames_done += frames;
-        ci->set_elapsed(frames_done * 1000 / PCM_RATE);
+        ci->set_elapsed(frames_done * 1000 / pcm_rate);
     }
     return CODEC_OK;
 }
@@ -473,7 +491,7 @@ enum codec_status codec_run(void)
         return CODEC_ERROR;
     codec_set_replaygain(ci->id3);
     init_cic_table();
-    ci->configure(DSP_SET_FREQUENCY, PCM_RATE);
+    ci->configure(DSP_SET_FREQUENCY, ci->id3->frequency);
     ci->configure(DSP_SET_STEREO_MODE, STEREO_INTERLEAVED);
     if (!ci->seek_buffer(0) || !read_exact(magic, sizeof(magic)))
         return CODEC_ERROR;
