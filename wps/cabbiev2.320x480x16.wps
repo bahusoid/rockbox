@@ -55,9 +55,6 @@
 %Vl(d,0,338,-,-120,-)
 %?C<%s%ac%Sx(Next:) %?Ia<%Ia|%?IA<%IA|%?D(2)<%D(2)|%(root%)>>> - %?It<%It|%Fn>|%s%ac%?Id<%Id|%?D(1)<%D(1)|%(root%)>>>
 
-# playtime
-%V(15,398,290,30,-)
-%pc%ac%?Sr<%pe %Sx(of) %pp|%pp %Sx(of) %pe>%ar%pr
 
 # progressbar and bottom icons
 %V(0,360,-,-,-)
@@ -108,6 +105,10 @@
 %T(0,0,40,58,prev)
 %T(50,0,40,58,ffwd, repeat_press)
 %T(50,0,40,58,next)
+
+# playtime
+%V(15,398,290,30,-)
+%pc%ac%?Sr<%pe %Sx(of) %pp|%pp %Sx(of) %pe>%ar%pr
 
 # needs to be at the end since touch regions need to be declared
 # before %Tl can be used
