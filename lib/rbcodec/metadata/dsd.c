@@ -28,6 +28,14 @@ static uint64_t be64(const unsigned char *p)
     return ((uint64_t)be32(p) << 32) | be32(p + 4);
 }
 
+static bool valid_dsd_rate(uint32_t rate)
+{
+    //No validation for now...
+    //dsd64 (2822400), dsd128(5644800), dsd256(11289600)...
+    (void)rate;
+    return true;
+}
+
 static void set_common(struct mp3entry *id3, uint32_t rate,
                        uint64_t samples, uint64_t data_size)
 {
@@ -46,7 +54,7 @@ static bool parse_dsf(int fd, struct mp3entry *id3, const unsigned char *head)
 
     if (lseek(fd, 28, SEEK_SET) < 0 || read(fd, fmt, sizeof(fmt)) != sizeof(fmt) ||
         memcmp(fmt, "fmt ", 4) || le64(fmt + 4) < sizeof(fmt) ||
-        le32(fmt + 24) != 2 || le32(fmt + 28) != 2822400 ||
+        le32(fmt + 24) != 2 || !valid_dsd_rate(le32(fmt + 28)) ||
         (le32(fmt + 32) != 1 && le32(fmt + 32) != 8) ||
         le32(fmt + 44) != 4096)
         return false;
@@ -121,7 +129,7 @@ static bool parse_dff(int fd, struct mp3entry *id3)
             return false;
     }
 
-    if (rate != 2822400 || channels != 2 || !dsd_size)
+    if (!valid_dsd_rate(rate) || channels != 2 || !dsd_size)
         return false;
     set_common(id3, rate, dsd_size * 4, dsd_size);
     return true;
