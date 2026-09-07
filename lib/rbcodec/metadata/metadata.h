@@ -270,9 +270,6 @@ struct mp3entry {
     /* Added for Vorbis, used by mp4 parser as well. */
     uint64_t samples;  /* number of samples in track */
 
-    /* MP3 stream specific info */
-    unsigned long frame_count; /* number of frames in the file (if VBR) */
-
     /* Used for A52/AC3 */
     unsigned long bytesperframe; /* number of bytes per frame (if CBR) */
 

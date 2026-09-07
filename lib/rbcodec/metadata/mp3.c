@@ -136,8 +136,6 @@ static int64_t getsonglength(int fd, struct mp3entry *entry)
          * always multiples of 8, and it avoids overflows. */
     }
 
-    entry->frame_count = info.frame_count;
-
     entry->vbr = info.is_vbr;
     entry->has_toc = info.has_toc;
 
