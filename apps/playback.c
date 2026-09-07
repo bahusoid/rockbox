@@ -1434,9 +1434,17 @@ static void audio_playlist_track_change(void)
 /* Change the data for the next track and send the event */
 static void audio_update_and_announce_next_track(const struct mp3entry *id3_next)
 {
+    struct mp3entry* id3 = id3_get(NEXTTRACK_ID3);
+    bool same_track = 
+        // check if metadata was retrieved
+        id3->length == id3_next->length &&
+        strcmp(id3->path, id3_next->path) == 0;
+    if (same_track)
+        return;
+
     id3_write_locked(NEXTTRACK_ID3, id3_next);
     send_track_event(PLAYBACK_EVENT_NEXTTRACKID3_AVAILABLE,
-                     0,  id3_get(NEXTTRACK_ID3));
+                     0,  id3);
 }
 
 /* Bring the user current mp3entry up to date and set a new offset for the
