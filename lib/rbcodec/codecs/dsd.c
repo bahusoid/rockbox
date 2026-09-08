@@ -13,12 +13,23 @@ CODEC_HEADER
 #define PCM_FRAMES 512
 #define ISO_SECTOR 2048
 
+#define STR2(x) #x
+#define STR(x) STR2(x)
+
+//_Static_assert(0, "IRAMSIZE= '" STR(IRAMSIZE) "' IBSS_ATTR = '" STR(IBSS_ATTR)"' CODEC_SIZE= '" STR(CODEC_SIZE) "' PLUGIN_BUFFER_SIZE= '" STR(PLUGIN_BUFFER_SIZE) "'");
+
+#if (!defined(CPU_PP) && !defined(CPU_COLDFIRE))
+#define IBSS_ATTR_LARGE IBSS_ATTR
+#else
+#define IBSS_ATTR_LARGE
+#endif
+
 static int32_t pcm[PCM_FRAMES * 2] IBSS_ATTR;
 static unsigned char left_block[DSF_BLOCK];
 static unsigned char right_block[DSF_BLOCK];
 static unsigned char iso_sector[ISO_SECTOR];
-static unsigned char dst_frame[65536 + 8] IBSS_ATTR;
-static unsigned char dst_output[DST_FRAME_BYTES * 2] IBSS_ATTR;
+static unsigned char dst_frame[65536 + 8] IBSS_ATTR_LARGE;
+static unsigned char dst_output[DST_FRAME_BYTES * 2] IBSS_ATTR_LARGE;
 static struct dst_decoder dst_state IBSS_ATTR;
 static int16_t cic_table[2][256][3] IBSS_ATTR;
 
