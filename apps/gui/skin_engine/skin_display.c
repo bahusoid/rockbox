@@ -617,6 +617,9 @@ void write_line(struct screen *display, struct align_pos *format_align,
         display->fillrect(0, line*string_height, viewport_width, string_height);
         display->set_drawmode(DRMODE_SOLID);
 
+        if (left_width == 0 && center_width == 0 && right_width == 0)
+            return;
+
         /* Nasty hack: we output an empty scrolling string,
         which will reset the scroller for that line */
         display->puts_scroll(0, line, (unsigned char *)"");
