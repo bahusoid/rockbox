@@ -95,6 +95,14 @@ static const struct button_mapping button_context_wps[]  = {
     { ACTION_WPS_VOLUP,     BUTTON_UP|BUTTON_REPEAT,     BUTTON_NONE },
     { ACTION_WPS_VOLDOWN,   BUTTON_DOWN|BUTTON_REPEAT,    BUTTON_NONE },
 
+    // wired earbud inline remote (earpods_adc)
+    { ACTION_WPS_VOLUP,     BUTTON_VOL_UP,               BUTTON_NONE },
+    { ACTION_WPS_VOLUP,     BUTTON_VOL_UP|BUTTON_REPEAT, BUTTON_NONE },
+    { ACTION_WPS_VOLDOWN,   BUTTON_VOL_DOWN,               BUTTON_NONE },
+    { ACTION_WPS_VOLDOWN,   BUTTON_VOL_DOWN|BUTTON_REPEAT, BUTTON_NONE },
+    // not working correctly
+    // { ACTION_WPS_SKIPNEXT,  BUTTON_EARBUD_NEXT|BUTTON_REL, BUTTON_EARBUD_NEXT },
+
     { ACTION_WPS_PLAY,        BUTTON_POWER|BUTTON_REL,     BUTTON_POWER },
     { ACTION_WPS_PLAY,        BUTTON_PLAY|BUTTON_REL,     BUTTON_PLAY },
     { ACTION_WPS_STOP,   BUTTON_PLAY|BUTTON_REPEAT,    BUTTON_PLAY },
@@ -117,6 +125,13 @@ static const struct button_mapping button_context_wps[]  = {
 static const struct button_mapping button_context_wps_locked[] = {
     { ACTION_WPS_VOLUP,     BUTTON_UP|BUTTON_REL,     BUTTON_UP },
     { ACTION_WPS_VOLDOWN,   BUTTON_DOWN|BUTTON_REL,    BUTTON_DOWN },
+
+    // wired earbud inline remote (earpods_adc)
+    { ACTION_WPS_VOLUP,     BUTTON_VOL_UP,               BUTTON_NONE },
+    { ACTION_WPS_VOLUP,     BUTTON_VOL_UP|BUTTON_REPEAT, BUTTON_NONE },
+    { ACTION_WPS_VOLDOWN,   BUTTON_VOL_DOWN,               BUTTON_NONE },
+    { ACTION_WPS_VOLDOWN,   BUTTON_VOL_DOWN|BUTTON_REPEAT, BUTTON_NONE },
+
     { ACTION_WPS_STOP,   BUTTON_POWER|BUTTON_REPEAT,    BUTTON_POWER },
 
     LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_WPS)
@@ -127,6 +142,12 @@ static const struct button_mapping button_context_settings[] = {
         { ACTION_SETTINGS_INCREPEAT,BUTTON_UP|BUTTON_REPEAT,    BUTTON_NONE },
         { ACTION_SETTINGS_DEC,      BUTTON_DOWN,                BUTTON_NONE },
         { ACTION_SETTINGS_DECREPEAT,BUTTON_DOWN|BUTTON_REPEAT,  BUTTON_NONE },
+
+        // wired earbud inline remote (earpods_adc)
+        { ACTION_SETTINGS_INC,       BUTTON_VOL_UP,                BUTTON_NONE },
+        { ACTION_SETTINGS_INCREPEAT, BUTTON_VOL_UP|BUTTON_REPEAT,  BUTTON_NONE },
+        { ACTION_SETTINGS_DEC,       BUTTON_VOL_DOWN,              BUTTON_NONE },
+        { ACTION_SETTINGS_DECREPEAT, BUTTON_VOL_DOWN|BUTTON_REPEAT,BUTTON_NONE },
 
         { ACTION_STD_PREV,          BUTTON_LEFT | BUTTON_REL,                BUTTON_LEFT },
         { ACTION_STD_PREVREPEAT,    BUTTON_LEFT|BUTTON_REPEAT,  BUTTON_NONE },
@@ -156,6 +177,12 @@ static const struct button_mapping button_goto_settings_right_is_inc_context[]  
 static const struct button_mapping button_context_list[]  = {
 //    {ACTION_LISTTREE_PGUP,       BUTTON_UP|BUTTON_REL,                  BUTTON_REC|BUTTON_UP},
 //    {ACTION_LISTTREE_PGDOWN,       BUTTON_DOWN|BUTTON_REL,                  BUTTON_REC|BUTTON_DOWN},
+
+    // wired earbud inline remote (earpods_adc)
+    { ACTION_LIST_VOLUP,    BUTTON_VOL_UP,                 BUTTON_NONE },
+    { ACTION_LIST_VOLUP,    BUTTON_VOL_UP|BUTTON_REPEAT,   BUTTON_NONE },
+    { ACTION_LIST_VOLDOWN,  BUTTON_VOL_DOWN,               BUTTON_NONE },
+    { ACTION_LIST_VOLDOWN,  BUTTON_VOL_DOWN|BUTTON_REPEAT, BUTTON_NONE },
 
     LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_STD)
 }; /* button_context_list */
@@ -214,6 +241,13 @@ static const struct button_mapping button_context_settings_right_is_inc[]  = {
         { ACTION_SETTINGS_DEC,      BUTTON_LEFT,                BUTTON_NONE },
         { ACTION_NONE,      BUTTON_LEFT|BUTTON_REL,                BUTTON_LEFT },
         { ACTION_SETTINGS_DECREPEAT,BUTTON_LEFT|BUTTON_REPEAT,  BUTTON_NONE },
+
+        // wired earbud inline remote (earpods_adc)
+        { ACTION_SETTINGS_INC,       BUTTON_VOL_UP,                BUTTON_NONE },
+        { ACTION_SETTINGS_INCREPEAT, BUTTON_VOL_UP|BUTTON_REPEAT,  BUTTON_NONE },
+        { ACTION_SETTINGS_DEC,       BUTTON_VOL_DOWN,              BUTTON_NONE },
+        { ACTION_SETTINGS_DECREPEAT, BUTTON_VOL_DOWN|BUTTON_REPEAT,BUTTON_NONE },
+
         { ACTION_STD_PREV,                  BUTTON_UP,                         BUTTON_NONE },
         { ACTION_STD_PREVREPEAT,            BUTTON_UP|BUTTON_REPEAT,           BUTTON_NONE },
         { ACTION_STD_NEXT,                  BUTTON_DOWN,                       BUTTON_NONE },

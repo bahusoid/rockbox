@@ -37,8 +37,11 @@
 #define BUTTON_PREV                 0x00000100
 #define BUTTON_NEXT                 0x00000200
 #define BUTTON_PLAY                 0x00000400
-#define BUTTON_MAIN                ((BUTTON_POWER|BUTTON_RIGHT|BUTTON_LEFT|BUTTON_UP|BUTTON_DOWN)|(BUTTON_PREV|BUTTON_NEXT|BUTTON_PLAY))
-
+// wired earbud inline remote
+#define BUTTON_VOL_UP               0x00000800
+#define BUTTON_VOL_DOWN             0x00001000
+#define BUTTON_DELAY_RELEASE        0x00400000
+#define BUTTON_MAIN                ((BUTTON_POWER|BUTTON_RIGHT|BUTTON_LEFT|BUTTON_UP|BUTTON_DOWN)|(BUTTON_PREV|BUTTON_NEXT|BUTTON_PLAY)|(BUTTON_VOL_UP|BUTTON_VOL_DOWN))
 
 /* Touchscreen virtual buttons */
 #define BUTTON_TOPLEFT      0x00001000
