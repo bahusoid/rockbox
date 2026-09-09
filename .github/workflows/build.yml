@@ -25,6 +25,7 @@ jobs:
           - name: xDuoo X3II
             arch: y
             platform: 242
+            type: ADL
 
           - name: Samsung YP-R0
             arch: x
@@ -138,7 +139,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        ../tools/configure --target=${{matrix.platform}} --type=${{matrix.type || 'N'}}
+        ../tools/configure --with-stack-protector=strong --target=${{matrix.platform}} --type=${{matrix.type || 'N'}}
         make -j
         make zip
 
@@ -157,7 +158,6 @@ jobs:
         path: build/bootloader*
 
     - name: Upload debug files
-      if: github.event.inputs.upload_debug
       uses: actions/upload-artifact@v7
       with:
         name: ${{matrix.name}}-debug
