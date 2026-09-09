@@ -8,8 +8,7 @@
 #
 
 # global CC options for all platforms
-CCOPTS="-W -Wall -Wextra -Wundef -Os -nostdlib -ffreestanding -Wstrict-prototypes -pipe -std=gnu99 -funit-at-a-time -fno-delete-null-pointer-checks -fno-strict-overflow -fno-common"
-
+CCOPTS="-W -Wall -Wextra -Wundef -Os -g -nostdlib -ffreestanding -Wstrict-prototypes -pipe -std=gnu99 -funit-at-a-time -fno-delete-null-pointer-checks -fno-strict-overflow -fno-common -fno-omit-frame-pointer"
 # LD options for the core
 LDOPTS=""
 # LD options for the core + plugins
