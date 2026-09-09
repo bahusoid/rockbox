@@ -25,7 +25,7 @@ jobs:
           - name: xDuoo X3II
             arch: y
             platform: 242
-            type: ADL
+            type: AD
 
           - name: Samsung YP-R0
             arch: x
