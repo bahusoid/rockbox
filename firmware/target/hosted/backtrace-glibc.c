@@ -20,11 +20,35 @@
  ****************************************************************************/
 #include "config.h"
 #include "system.h"
+#include "font.h"
 #include "lcd.h"
 #include <execinfo.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+
+#define HOSTED_BT_LINE_CHARS ((LCD_WIDTH / SYSFONT_WIDTH) - 2)
+
+static void hosted_backtrace_line(unsigned *line, const char *text)
+{
+    size_t len = strlen(text);
+    size_t pos = 0;
+
+    while (pos < len)
+    {
+        size_t chunk = len - pos;
+        if (chunk > HOSTED_BT_LINE_CHARS)
+            chunk = HOSTED_BT_LINE_CHARS;
+
+        static char buf[HOSTED_BT_LINE_CHARS + 1];
+        memcpy(buf, text + pos, chunk);
+        buf[chunk] = '\0';
+
+        lcd_puts(0, (*line)++, (unsigned char *)buf);
+        pos += chunk;
+    }
+}
 
 /* backtrace from the call-site of this function */
 void rb_backtrace(int pc, int sp, unsigned *line)
@@ -52,7 +76,8 @@ void rb_backtrace(int pc, int sp, unsigned *line)
 
     for(int i = 0; i < count; i++)
     {
-        lcd_putsf(0, (*line)++, "  %s", strings[i]);
+        fprintf(stderr, "bt[%d]: %s\n", i, strings[i]);
+        hosted_backtrace_line(line, strings[i]);
         lcd_update();
     }
 

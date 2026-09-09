@@ -20,7 +20,9 @@
  ****************************************************************************/
 #include <unistd.h>
 #include <signal.h>
+#include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #include <ucontext.h>
 #include <backtrace.h>
 
@@ -41,6 +43,44 @@ uintptr_t *stackend;
 
 /* forward-declare */
 bool os_file_exists(const char *ospath);
+
+#define HOSTED_EXCEPTION_LINE_CHARS ((LCD_WIDTH / SYSFONT_WIDTH) - 2)
+
+static void hosted_dump_line(int x, unsigned *line, const char *fmt, ...)
+{
+    char buf[192];
+    va_list ap;
+
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+
+    size_t len = strlen(buf);
+    size_t pos = 0;
+
+    while (pos < len)
+    {
+        size_t chunk = len - pos;
+        if (chunk > HOSTED_EXCEPTION_LINE_CHARS)
+            chunk = HOSTED_EXCEPTION_LINE_CHARS;
+
+        size_t split = chunk;
+        while (split > 1 && buf[pos + split - 1] != ' ' && pos + split < len)
+            split--;
+
+        if (split == 0 || split > chunk)
+            split = chunk;
+
+        char save = buf[pos + split];
+        buf[pos + split] = '\0';
+        lcd_puts(x, (*line)++, (unsigned char *)(buf + pos));
+        buf[pos + split] = save;
+
+        pos += split;
+        while (pos < len && buf[pos] == ' ')
+            pos++;
+    }
+}
 
 static void sig_handler(int sig, siginfo_t *siginfo, void *context)
 {
@@ -63,10 +103,20 @@ static void sig_handler(int sig, siginfo_t *siginfo, void *context)
     unsigned long pc = uc->uc_mcontext.pc;
     unsigned long sp = uc->uc_mcontext.gregs[29];
 
-    lcd_putsf(0, line++, "%s at %08lx", strsignal(sig), pc);
+    fprintf(stderr,
+            "signal=%d (%s) pc=%p sp=%p fault=%p si_code=%d\n",
+            sig, strsignal(sig), (void *)pc, (void *)sp,
+            siginfo ? siginfo->si_addr : NULL,
+            siginfo ? siginfo->si_code : 0);
+
+    hosted_dump_line(0, &line, "signal: %s", strsignal(sig));
+    hosted_dump_line(0, &line, "pc: 0x%08lx", pc);
+    hosted_dump_line(0, &line, "sp: 0x%08lx", sp);
 
     if(sig == SIGILL || sig == SIGFPE || sig == SIGSEGV || sig == SIGBUS || sig == SIGTRAP) {
-        lcd_putsf(0, line++, "address %p", siginfo->si_addr);
+        hosted_dump_line(0, &line, "fault: 0x%lx", (unsigned long)(siginfo ? siginfo->si_addr : 0));
+        if (siginfo != NULL && siginfo->si_code != 0)
+            hosted_dump_line(0, &line, "si_code: %d", siginfo->si_code);
     }
 
     if(!triggered)
