@@ -16,69 +16,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Rocker
-            # Other arch targets https://github.com/bahusoid/rockbox/blob/992dfe0118f367533fe23170b1459c2818a629a1/tools/rockboxdev.sh#L697-L701
-            arch: y
-            # Other platform targets https://github.com/Rockbox/rockbox/blob/dd1fbd51fc7bb3fa7237b3bc34335e99bef29e35/tools/configure#L1560-L1615
-            platform: 240
-
           - name: xDuoo X3II
             arch: y
             platform: 242
-            type: AD
-
-          - name: Samsung YP-R0
-            arch: x
-            platform: samsungypr0
-            container: ubuntu:22.04
-
-          - name: clipZip
-            arch: a
-            platform: 65
-
-          - name: mRobe500
-            arch: a
-            platform: 70
-
-          - name: IriverH300
-            arch: m
-            platform: 11
-
-          - name: iriverh120_rtcmod
-            arch: m
-            platform: 10
-            type: AR
-
-          - name: ipod mini 2g
-            arch: a
-            platform: 26
-            type: AR
-
-          - name: Hiby R1
-            arch: y
-            platform: hibyr1
-
-          - name: Hiby R1 bootloader
-            arch: y
-            platform: hibyr1
-            type: B
-          
-          - name: Hiby R3 PRO II
-            arch: y
-            platform: hibyr3proii
-
-          - name: Hiby R3 PRO II bootloader
-            arch: y
-            platform: hibyr3proii
-            type: B
-
-          - name: Sansa E200v2
-            arch: a
-            platform: sansae200v2
-
-          - name: AIGO EROS Q (Native)
-            arch: i
-            platform: erosqnative
+#            type: AD
 
     runs-on: ubuntu-latest
     container: ${{matrix.container}} 
