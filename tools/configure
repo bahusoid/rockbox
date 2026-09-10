@@ -8,7 +8,7 @@
 #
 
 # global CC options for all platforms
-CCOPTS="-W -Wall -Wextra -Wundef -Os -g -nostdlib -ffreestanding -Wstrict-prototypes -pipe -std=gnu99 -funit-at-a-time -fno-delete-null-pointer-checks -fno-strict-overflow -fno-common -fno-omit-frame-pointer"
+CCOPTS="-W -Wall -Wextra -Wundef -Os -g -nostdlib -ffreestanding -Wstrict-prototypes -pipe -std=gnu99 -funit-at-a-time -fno-delete-null-pointer-checks -fno-strict-overflow -fno-common"
 # LD options for the core
 LDOPTS=""
 # LD options for the core + plugins
@@ -618,7 +618,7 @@ mipselcc () {
  # mips is predefined, but we want it for paths. use __mips instead
  GCCOPTS="$CCOPTS -march=mips32 -mtune=r4600 -mno-mips16 -mno-long-calls -Umips"
  GCCOPTS="$GCCOPTS -ffunction-sections -msoft-float -G 0 -Wno-parentheses"
- #GCCOPTIMIZE="-fomit-frame-pointer"
+ GCCOPTIMIZE="-fomit-frame-pointer"
  endian="little"
  gccchoice="9.5.0"
 }
@@ -628,7 +628,7 @@ mipsr2elcc () {
  # mips is predefined, but we want it for paths. use __mips instead
  GCCOPTS="$CCOPTS -march=mips32r2 -mno-mips16 -mno-long-calls -Umips"
  GCCOPTS="$GCCOPTS -ffunction-sections -msoft-float -G 0 -Wno-parentheses"
- #GCCOPTIMIZE="-fomit-frame-pointer"
+ GCCOPTIMIZE="-fomit-frame-pointer"
  endian="little"
  gccchoice="9.5.0"
 }
@@ -796,7 +796,7 @@ androidndkcc()
             if [ ${?} != 0 ]; then
                 exit
             fi
-#            GCCOPTS="$GCCOPTS -fomit-frame-pointer"
+            GCCOPTS="$GCCOPTS -fomit-frame-pointer"
             ;;
         *)
             echo "ERROR: androidndkcc(): Unknown target architecture"
