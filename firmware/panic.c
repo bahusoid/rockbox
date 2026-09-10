@@ -42,7 +42,7 @@
 /* TODO: see comment above exception_dump in system-mips.c */
 char panic_buf[128];
 #else
-static char panic_buf[128];
+static char panic_buf[1024];
 #endif
 
 #define LINECHARS (LCD_WIDTH/SYSFONT_WIDTH) - 2
