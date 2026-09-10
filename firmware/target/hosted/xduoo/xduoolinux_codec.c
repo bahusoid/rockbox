@@ -120,15 +120,18 @@ int xduoo_get_outputs(void){
     const char * const sysfs_bal_switch = "/sys/class/switch/balance/state";
 #endif
 
-    sysfs_get_int(sysfs_lo_switch, &status);
-    if (status) ps = 1; // lineout
+    if (sysfs_get_int(sysfs_lo_switch, &status)) {
+        if (status) ps = 1; // lineout
+    }
 
-    sysfs_get_int(sysfs_hs_switch, &status);
-    if (status) ps = 2; // headset
+    if (sysfs_get_int(sysfs_hs_switch, &status)) {
+        if (status) ps = 2; // headset
+    }
 
 #if defined(XDUOO_X20)
-    sysfs_get_int(sysfs_bal_switch, &status);
-    if (status) ps = 3; // balanced output
+    if (sysfs_get_int(sysfs_bal_switch, &status)) {
+        if (status) ps = 3; // balanced output
+    }
 #endif
 
     xduoo_set_output(ps);
@@ -150,7 +153,7 @@ void xduoo_set_output(int ps)
 
 #if defined(XDUOO_X3II)
         /* Enable/disable headphone remote ADC */
-        sysfs_set_string("/sys/devices/platform/earpods_adc.0/earpods_adc/earpods_adc_sw", (ps == 2) ? "on" : "off");
+        //sysfs_set_string("/sys/devices/platform/earpods_adc.0/earpods_adc/earpods_adc_sw", (ps == 2) ? "on" : "off");
 #endif
     }
 }
