@@ -281,14 +281,15 @@ should_switch_tasks(struct thread_entry *thread)
         return THREAD_OK;
 #endif
     /* Just woke something therefore a thread is on the run queue */
-    struct thread_entry *current =
-        RTR_THREAD_FIRST(&__core_id_entry(core)->rtr);
-    if (LIKELY(thread->priority >= current->priority))
-        return THREAD_OK;
+    struct core_entry *corep = __core_id_entry(core);
+    RTR_LOCK(corep);
+    struct thread_entry *current = RTR_THREAD_FIRST(&corep->rtr);
+    bool keep_it =  current == NULL || thread->priority >= current->priority;
+    RTR_UNLOCK(corep);
 
-    /* There is a thread ready to run of higher priority on the same
-     * core as the current one; recommend a task switch. */
-    return THREAD_OK | THREAD_SWITCH;
+    /* If keep_it false - there is a thread ready to run of higher priority on the same
+   * core as the current one; recommend a task switch. */
+    return THREAD_OK | (keep_it ? 0 : THREAD_SWITCH);
 #else
     return THREAD_OK;
     (void)thread;
