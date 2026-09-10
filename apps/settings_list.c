@@ -1698,7 +1698,7 @@ const struct settings_list settings[] = {
                    ID2P(LANG_SET_BOOL_NO), ID2P(LANG_SET_BOOL_YES),
                    ID2P(LANG_ASK)),
     CHOICE_SETTING(0, usemrb, LANG_BOOKMARK_SETTINGS_MAINTAIN_RECENT_BOOKMARKS,
-                   BOOKMARK_NO, "use most-recent-bookmarks",
+                   BOOKMARK_ONE_PER_PLAYLIST, "use most-recent-bookmarks",
                    "off,on,unique only,one per track", NULL, 4, ID2P(LANG_SET_BOOL_NO),
                    ID2P(LANG_SET_BOOL_YES),
                    ID2P(LANG_BOOKMARK_SETTINGS_ONE_PER_PLAYLIST),
@@ -1895,7 +1895,7 @@ const struct settings_list settings[] = {
     TEXT_SETTING(0, autoresume_paths, "autoresume next track paths",
                  "/podcast:/podcasts", NULL, NULL),
     TEXT_SETTING(0, altmenu_paths, "alt settings paths",
-                 "", NULL, NULL),
+                 "/ABooks:/Audiobooks", NULL, NULL),
 
     OFFON_SETTING(0, runtimedb, LANG_RUNTIMEDB_ACTIVE, false,
                   "gather runtime data", NULL),
@@ -1905,7 +1905,7 @@ const struct settings_list settings[] = {
                  ROCKBOX_DIR, NULL, NULL),
 #endif
 
-        OFFON_SETTING(0, alt_settings_enable, LANG_ALT_SETTINGS, false,
+        OFFON_SETTING(0, alt_settings_enable, LANG_ALT_SETTINGS, true,
                 "alt settings enable", NULL),
            OFFON_SETTING(0, alt_reset_pitch, LANG_ALT_RESET_PITCH, true,
                 "alt reset pitch", NULL),
@@ -2423,7 +2423,7 @@ const struct settings_list settings[] = {
 
 #ifdef HAVE_QUICKSCREEN
    CUSTOM_SETTING(0, qs_items[QUICKSCREEN_TOP], LANG_TOP_QS_ITEM,
-                  NULL, "qs top",
+                  &global_settings.alt_skip_length, "qs top",
                   qs_load_from_cfg, qs_write_to_cfg,
                   qs_is_changed, qs_set_default),
    CUSTOM_SETTING(0, qs_items[QUICKSCREEN_LEFT], LANG_LEFT_QS_ITEM,
@@ -2435,7 +2435,7 @@ const struct settings_list settings[] = {
                   qs_load_from_cfg, qs_write_to_cfg,
                   qs_is_changed, qs_set_default),
    CUSTOM_SETTING(0, qs_items[QUICKSCREEN_BOTTOM], LANG_BOTTOM_QS_ITEM,
-                  NULL, "qs bottom",
+                  &global_settings.alt_skip_length, "qs bottom",
                   qs_load_from_cfg, qs_write_to_cfg,
                   qs_is_changed, qs_set_default),
    OFFON_SETTING(0, shortcuts_replaces_qs, LANG_USE_SHORTCUTS_INSTEAD_OF_QS,
