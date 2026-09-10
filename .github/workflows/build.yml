@@ -19,7 +19,7 @@ jobs:
           - name: xDuoo X3II
             arch: y
             platform: 242
-            type: AL
+#            type: AL
 
     runs-on: ubuntu-latest
     container: ${{matrix.container}} 
