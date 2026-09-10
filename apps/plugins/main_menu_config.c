@@ -215,6 +215,8 @@ enum plugin_status plugin_start(const void* parameter)
                 MENUITEM_STRINGLIST(menu, ID2P(LANG_MAIN_MENU), NULL,
                                     ID2P(LANG_MOVE_ITEM_UP),
                                     ID2P(LANG_MOVE_ITEM_DOWN),
+                                    ID2P(LANG_MOVE_ITEM_TO_TOP),
+                                    ID2P(LANG_MOVE_ITEM_TO_BOTTOM),
                                     ID2P(LANG_LOAD_DEFAULT_CONFIGURATION));
                 switch (rb->do_menu(&menu, NULL, NULL, false))
                 {
@@ -239,6 +241,32 @@ enum plugin_status plugin_start(const void* parameter)
                         changed = true;
                         break;
                     case 2:
+                        if (cur_sel == 0)
+                        {
+                            break;
+                        }
+                        while (cur_sel > 0)
+                        {
+                            swap_items(cur_sel, cur_sel - 1);
+                            cur_sel--;
+                        }
+                        rb->gui_synclist_select_item(&list, 0); /* speaks */
+                        changed = true;
+                        break;
+                    case 3:
+                        if (cur_sel + 1 == menu_item_count)
+                        {
+                            break;
+                        }
+                        while (cur_sel + 1 < menu_item_count)
+                        {
+                            swap_items(cur_sel, cur_sel + 1);
+                            cur_sel++;
+                        }
+                        rb->gui_synclist_select_item(&list, menu_item_count - 1); /* speaks */
+                        changed = true;
+                        break;
+                    case 4:
                         if (rb->yesno_pop_confirm(ID2P(LANG_LOAD_DEFAULT_CONFIGURATION)))
                         {
                             rb->root_menu_set_default(&rb->global_settings->root_menu_customized, NULL);
