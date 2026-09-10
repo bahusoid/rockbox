@@ -80,7 +80,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        ../tools/configure --with-stack-protector=strong --target=${{matrix.platform}} --type=${{matrix.type || 'N'}}
+        ../tools/configure --target=${{matrix.platform}} --type=${{matrix.type || 'N'}}
         make -j4
         make zip
 
