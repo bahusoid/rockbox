@@ -17757,3 +17757,32 @@
     *: "Start/Stop Playback"
   </voice>
 </phrase>
+<phrase>
+  id: LANG_MOVE_ITEM_TO_TOP
+  desc: in main_menu_config
+  user: core
+  <source>
+    *: "Move Item to Top"
+  </source>
+  <dest>
+    *: "Move Item to Top"
+  </dest>
+  <voice>
+    *: "Move Item to Top"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_MOVE_ITEM_TO_BOTTOM
+  desc: in main_menu_config
+  user: core
+  <source>
+    *: "Move Item to Bottom"
+  </source>
+  <dest>
+    *: "Move Item to Bottom"
+  </dest>
+  <voice>
+    *: "Move Item to Bottom"
+  </voice>
+</phrase>
+<phrase>
