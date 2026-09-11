@@ -17,8 +17,8 @@
 /* define this if you have access to the quickscreen */
 #define HAVE_QUICKSCREEN
 
-#define HAVE_HEADPHONE_DETECTION
-#define HAVE_LINEOUT_DETECTION
+//#define HAVE_HEADPHONE_DETECTION
+//#define HAVE_LINEOUT_DETECTION
 
 /* KeyPad configuration for plugins */
 #define CONFIG_KEYPAD XDUOO_X3II_PAD
@@ -45,10 +45,6 @@
 #define BATTERY_CAPACITY_MIN 2000  /* min. capacity selectable */
 #define BATTERY_CAPACITY_MAX 2000 /* max. capacity selectable */
 #define BATTERY_CAPACITY_INC 0   /* capacity increment */
-
-#define CURRENT_NORMAL 167      // 2.78mA * 60s
-#define CURRENT_BACKLIGHT 180
-#define CURRENT_MAX_CHG 500     // bursts higher if needed
 
 /* ROLO */
 #define BOOTFILE_EXT "x3ii"
