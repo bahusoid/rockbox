@@ -66,12 +66,35 @@ int hw_button_map(int keycode)
     }
 }
 
+static int earpods_button_map(int keycode)
+{
+    switch(keycode)
+    {
+    case KEY_VOLUMEUP:
+        return BUTTON_VOL_UP;
+    case KEY_VOLUMEDOWN:
+        return BUTTON_VOL_DOWN;
+    case KEY_FASTFORWARD:
+        return BUTTON_NEXT | BUTTON_DELAY_RELEASE;
+    case KEY_PLAYPAUSE:
+    case KEY_MEDIA:
+#ifdef KEY_HEADSETHOOK
+    case KEY_HEADSETHOOK:
+#endif
+        return BUTTON_PLAY | BUTTON_DELAY_RELEASE;
+    default:
+        return 0;
+    }
+}
+
 int button_map_with_id(int keycode, int id)
 {
-    //TODO: Decide how to handle earpod_adc
-    if (id < 4)
+    if (id == 3)
+        return earpods_button_map(keycode);
+
+    if (id < 3)
         return hw_button_map(keycode);
-    
+
     switch(keycode)
     {
         //Map bluetooth buttons:

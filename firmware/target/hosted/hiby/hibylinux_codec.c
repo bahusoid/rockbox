@@ -206,14 +206,16 @@ void hiby_set_output(int ps)
         last_ps = ps;
         alsa_controls_set_ints("Output Port Switch", 1, &last_ps);
         audiohw_set_volume(vol_l_hw, vol_r_hw);
+        
         // Enable/disable inline controls(OF also uses ps = 5 for inline controls)
-        // if (ps == 2)
-        // {
-        // sysfs_set_string("/sys/devices/platform/earpods_adc/earpods_adc/earpods_adc_sw", "on"); 
-        // } else if (last_ps == 2)
-        // {
-        //     sysfs_set_string("/sys/devices/platform/earpods_adc/earpods_adc/earpods_adc_sw", "off"); 
-        // }
+        if (ps == 2)
+        {
+            sysfs_set_string("/sys/devices/platform/earpods_adc/earpods_adc/earpods_adc_sw", "on");
+        }
+        else if (last_ps == 2)
+        {
+            sysfs_set_string("/sys/devices/platform/earpods_adc/earpods_adc/earpods_adc_sw", "off");
+        }
     }
 }
 
@@ -230,6 +232,7 @@ void audiohw_preinit(void)
 void audiohw_postinit(void)
 {
     logf("hw postinit");
+    hiby_get_outputs();
 }
 
 void audiohw_close(void)
