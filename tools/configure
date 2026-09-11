@@ -4037,7 +4037,7 @@ fi
     app_type="hibyos"
     modelname="xduoox3ii"
     target="XDUOO_X3II"
-    memory=8
+    memory=6
     mipsellinuxcc
     tool="cp "
     boottool="cp "
