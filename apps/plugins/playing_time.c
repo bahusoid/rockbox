@@ -546,6 +546,9 @@ enum plugin_status plugin_start(const void* parameter)
         rb->splash(HZ*2, "Nothing Playing");
         return status;
     }
+#ifdef HAVE_TOUCHSCREEN
+    rb->touchscreen_set_mode(rb->global_settings->touch_mode);
+#endif
 
     FOR_NB_SCREENS(i)
     {
