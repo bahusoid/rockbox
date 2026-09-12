@@ -120,7 +120,7 @@ static const struct button_mapping button_context_list[]  = {
     { ACTION_STD_PREVREPEAT,    BUTTON_TOPMIDDLE,               BUTTON_CENTER},
     { ACTION_STD_PREVREPEAT,    BUTTON_CENTER,                  BUTTON_BOTTOMMIDDLE},
 #endif
-    LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_CUSTOM2|CONTEXT_PREVIOUS)
+    LAST_ITEM_IN_LIST__NEXTLIST_PREVIOUS
 }; /* button_context_list */
 
 static const struct button_mapping button_context_tree[]  = {
