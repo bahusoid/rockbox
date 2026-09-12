@@ -25,31 +25,38 @@
 #include "config.h"
 
 /* Main unit's buttons */
-#define BUTTON_POWER                0x00000001
-#define BUTTON_RIGHT                 0x00000004 //Next
-#define BUTTON_LEFT                 0x00000008 //Play/Pause
-#define BUTTON_UP               0x00000010 //Volume Up
-#define BUTTON_DOWN             0x00000020 //Volume Down
-
-#define BUTTON_TOUCH                0x00000040
+#define BUTTON_POWER                1 << 0
+#define BUTTON_RIGHT                 1 << 1 //Next
+#define BUTTON_LEFT                 1 << 2 //Play/Pause
+#define BUTTON_UP               1 << 3 //Volume Up
+#define BUTTON_DOWN             1 << 4 //Volume Down
 
 //TODO: It's from bluetooth, should we define it as BUTTON_REMOTE?
-#define BUTTON_PREV                 0x00000100
-#define BUTTON_NEXT                 0x00000200
-#define BUTTON_PLAY                 0x00000400
-#define BUTTON_MAIN                ((BUTTON_POWER|BUTTON_RIGHT|BUTTON_LEFT|BUTTON_UP|BUTTON_DOWN)|(BUTTON_PREV|BUTTON_NEXT|BUTTON_PLAY))
+#define BUTTON_PREV                 1 << 5
+#define BUTTON_NEXT                 1 << 6
+#define BUTTON_PLAY                 1 << 7
+#define BUTTON_VOL_UP               1 << 8
+#define BUTTON_VOL_DOWN             1 << 9
+
+//Max up to 22 buttons (10 are reserved for touchscreen virtual buttons)
+#define  BUTTON_LAST_MAIN    BUTTON_VOL_DOWN
+
+#define BUTTON_MAIN                ((BUTTON_POWER|BUTTON_RIGHT|BUTTON_LEFT|BUTTON_UP|BUTTON_DOWN)|(BUTTON_PREV|BUTTON_NEXT|BUTTON_PLAY|BUTTON_VOL_UP|BUTTON_VOL_DOWN))
 
 
 /* Touchscreen virtual buttons */
-#define BUTTON_TOPLEFT      0x00001000
-#define BUTTON_TOPMIDDLE    0x00002000
-#define BUTTON_TOPRIGHT     0x00004000
-#define BUTTON_MIDLEFT      0x00008000
-#define BUTTON_CENTER       0x00010000
-#define BUTTON_MIDRIGHT     0x00020000
-#define BUTTON_BOTTOMLEFT   0x00040000
-#define BUTTON_BOTTOMMIDDLE 0x00080000
-#define BUTTON_BOTTOMRIGHT  0x00100000
+#define BUTTON_TOPLEFT      BUTTON_LAST_MAIN << 1
+#define BUTTON_TOPMIDDLE    BUTTON_LAST_MAIN << 2
+#define BUTTON_TOPRIGHT     BUTTON_LAST_MAIN << 3
+#define BUTTON_MIDLEFT      BUTTON_LAST_MAIN << 4
+#define BUTTON_CENTER       BUTTON_LAST_MAIN << 5
+#define BUTTON_MIDRIGHT     BUTTON_LAST_MAIN << 6
+#define BUTTON_BOTTOMLEFT   BUTTON_LAST_MAIN << 7
+#define BUTTON_BOTTOMMIDDLE BUTTON_LAST_MAIN << 8
+#define BUTTON_BOTTOMRIGHT  BUTTON_LAST_MAIN << 9
+
+#define BUTTON_TOUCH        BUTTON_LAST_MAIN << 10
+
 
 /* Software power-off */
 #define POWEROFF_BUTTON BUTTON_POWER
