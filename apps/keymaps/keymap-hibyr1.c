@@ -142,6 +142,9 @@ static const struct button_mapping button_goto_std_context[]  = {
     LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_STD)
 }; 
 
+static const struct button_mapping button_goto_list_context[]  = {
+    LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_LIST)
+};
 static const struct button_mapping button_goto_tree_context[]  = {
     LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_TREE)
 };
@@ -290,14 +293,17 @@ const struct button_mapping* target_get_context_mapping(int context)
             return button_context_wps;
 
         case CONTEXT_LIST:
-        case CONTEXT_LIST | CONTEXT_LOCKED:
             return button_context_list;
-        case CONTEXT_TREE | CONTEXT_LOCKED:
+
+        case CONTEXT_LIST | CONTEXT_LOCKED:
+            return button_goto_list_context;
+
         case CONTEXT_TREE:
-        case CONTEXT_CUSTOM|CONTEXT_TREE:
             return button_context_tree;
 
-        case CONTEXT_MAINMENU|CONTEXT_LOCKED:
+        case CONTEXT_TREE | CONTEXT_CUSTOM:
+        case CONTEXT_TREE | CONTEXT_LOCKED:
+        case CONTEXT_MAINMENU | CONTEXT_LOCKED:
         case CONTEXT_MAINMENU:
             return button_goto_tree_context;
 
