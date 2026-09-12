@@ -32,6 +32,7 @@
 #define logf rb->logf
 #else
 #define logf(...) do { } while(0)
+//#define logf(fmt, ...) printf(fmt "\n", ##__VA_ARGS__)
 #endif
 
 /* CORE_KEYREMAP_FILE */
@@ -688,7 +689,7 @@ static void keyremap_import_user_keys(void)
     char buf[MAX_PATH];
     struct browse_context browse = {
         .dirfilter = SHOW_ALL,
-        .flags = BROWSE_SELECTONLY,
+        .flags = BROWSE_SELECTONLY | BROWSE_DIRFILTER,
         .title = "Select Keymap",
         .icon = Icon_Plugin,
         .buf = buf,
