@@ -170,7 +170,7 @@ static void init_mad(void)
     mad_synth_init(&synth);
 }
 
-static int64_t get_file_pos(long newtime)
+static int64_t get_file_pos(long newtime, bool use_relative_seek)
 {
     int64_t pos = -1;
     struct mp3entry *id3 = ci->id3;
@@ -189,7 +189,7 @@ static int64_t get_file_pos(long newtime)
 
             /* Interpolate between this TOC mark and the next TOC mark */
             int skipms_from_toc = newtime - percent * pct_timestep;
-            if (skipms_from_toc < abs(skipms_from_curpos)) 
+            if (!use_relative_seek ||  skipms_from_toc < abs(skipms_from_curpos)) 
             {
                 unsigned int toc_sizestep = id3->filesize / 256;
                 unsigned int cur_toc = id3->toc[percent];
@@ -198,7 +198,7 @@ static int64_t get_file_pos(long newtime)
 
                 pos = cur_toc * toc_sizestep + (uint64_t) plength * skipms_from_toc / pct_timestep;
             }
-        } else if (newtime < abs(skipms_from_curpos)) {
+        } else if (!use_relative_seek || newtime < abs(skipms_from_curpos)) {
             /* No TOC exists, estimate the new position */
             pos = (uint64_t)newtime * id3->filesize / id3->length;
         }
@@ -397,7 +397,7 @@ enum codec_status codec_main(enum codec_entry_call_reason reason)
     return CODEC_OK;
 }
 
-bool seek_by_time(int64_t* samplesdone, unsigned long current_frequency, unsigned long elapsed_ms)
+bool seek_by_time(int64_t* samplesdone, unsigned long current_frequency, unsigned long elapsed_ms, bool use_relative_seek)
 {
     if (ci->id3->is_asf_stream) {
         asf_waveformatex_t *wfx = (asf_waveformatex_t *)(ci->id3->toc);
@@ -414,7 +414,7 @@ bool seek_by_time(int64_t* samplesdone, unsigned long current_frequency, unsigne
             reset_stream_buffer();
         }
     } else {
-        unsigned int newpos = elapsed_ms ? get_file_pos(elapsed_ms) : (ci->id3->first_frame_offset);
+        unsigned int newpos = elapsed_ms ? get_file_pos(elapsed_ms, use_relative_seek) : (ci->id3->first_frame_offset);
 
         *samplesdone = ((int64_t)elapsed_ms) * current_frequency / 1000;
 
@@ -480,8 +480,8 @@ enum codec_status codec_run(void)
         }
     }
     else if (ci->id3->elapsed)
-         /* Have elapsed time but not offset */
-        seek_by_time(&samplesdone, current_frequency, ci->id3->elapsed);
+        /* Have elapsed time but not offset */
+        seek_by_time(&samplesdone, current_frequency, ci->id3->elapsed, false);
     else
         ci->seek_buffer(ci->id3->first_frame_offset);
 
@@ -537,7 +537,7 @@ enum codec_status codec_run(void)
                 samples_to_skip = 0;
             }
 
-            bool success = seek_by_time(&samplesdone, current_frequency, param);
+            bool success = seek_by_time(&samplesdone, current_frequency, param, true);
             ci->seek_complete();
             if (!success)
                 break;
