@@ -15,7 +15,11 @@ Rockbox supports per-device key remapping through the built-in `keyremap` plugin
 A few example remaps are included in the [`keyremaps`](keyremaps/) folder:
 
 - [hibyr1-official-rockbox-wps.txt](keyremaps/hibyr1-official-rockbox-wps.txt)  
-  Restores the official Rockbox Hiby R1 keymap for the WPS (While Playing Screen).
+  Restores the official Rockbox Hiby R1 keymap for the WPS (While Playing Screen) + volume in lists.
+
+- [hibyr1-hibyos.txt](keyremaps/hibyr1-hibyos.txt)
+  Restores the OF HiBy OS keymap.
+  Note: Rockbox doesn't support playback control in lists. So Play resumes playback. Long power stops playback in lists; 
 
 - [hibyr1-short-power-lock.txt](keyremaps/hibyr1-short-power-lock.txt)  
   A short press of `Power` locks the device; a long press of `Power` handles play/pause in the WPS and stops playback in lists/menus.
