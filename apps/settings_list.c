@@ -1379,7 +1379,7 @@ const struct settings_list settings[] = {
                   0, 200, 300, 400, 500, 600, 700),
 #endif
 #if ((CONFIG_BATTERY_MEASURE & VOLTAGE_MEASURE))
-    TABLE_SETTING(F_ALLOW_ARBITRARY_VALS | F_CB_ON_SELECT_ONLY | F_CB_ONLY_IF_CHANGED, low_battery_poweroff_percent, LANG_LOW_BATTERY_POWER_OFF, -1,
+    TABLE_SETTING(F_ALLOW_ARBITRARY_VALS | F_CB_ON_SELECT_ONLY | F_CB_ONLY_IF_CHANGED | F_TEMPVAR, low_battery_poweroff_percent, LANG_LOW_BATTERY_POWER_OFF, -1,
                  "low battery power off",
                  off,
                  UNIT_PERCENT, formatter_unit_minusone_is_off, getlang_unit_minusone_is_off, set_shutoff_percent, 6,

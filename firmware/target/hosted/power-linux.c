@@ -35,8 +35,9 @@
 
 #ifdef BATTERY_DEV_NAME
 # define BATTERY_SYSFS_PATH     "/sys/class/power_supply/" BATTERY_DEV_NAME 
-#ifdef HAVE_HIBY_LINUX_POWER_CHARGE_LIMIT
-#define BATTERY_STATUS_PATH  "/sys/class/power_supply/axp_battery/status"
+
+#ifdef BATTERY_STATUS_DEV_NAME
+#define BATTERY_STATUS_PATH  "/sys/class/power_supply/" BATTERY_STATUS_DEV_NAME "/status"
 #else
 #define BATTERY_STATUS_PATH    BATTERY_SYSFS_PATH "/status"
 #endif

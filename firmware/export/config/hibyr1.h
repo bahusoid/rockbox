@@ -56,6 +56,7 @@
 
 /* Battery */
 #define BATTERY_TYPES_COUNT  1
+#define BATTERY_STATUS_DEV_NAME "axp_battery"
 
 /* Audio codec */
 #define HAVE_HIBY_LINUX_CODEC
