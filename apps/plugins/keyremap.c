@@ -1047,6 +1047,10 @@ next_line:
                         {
                             pact = pfirst + 1;
                             pfirst = NULL;
+                            while (*(pbuf - 1) == ' ')
+                            {
+                                pbuf--;
+                            }
                             *pbuf = '\0';
                             pbuf = "";
                             continue;
