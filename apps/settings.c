@@ -1098,6 +1098,7 @@ void settings_apply(bool read_disk)
 #ifdef HAVE_TOUCHSCREEN
     touchscreen_set_mode(global_settings.touch_mode);
     memcpy(&calibration_parameters, &global_settings.ts_calibration_data, sizeof(struct touchscreen_parameter));
+    set_touch_scrollbar_width(global_settings.touchscreen_scrollbar_width_mm);
 #endif
 
 #if defined(DX50) || defined(DX90)
