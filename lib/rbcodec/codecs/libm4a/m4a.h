@@ -93,6 +93,8 @@ typedef struct
 #if 0
     void *mdat;
 #endif
+    bool is_dash;
+    size_t sidx_box_start;
 } demux_res_t;
 
 int qtmovie_read(stream_t *stream, demux_res_t *demux_res);
@@ -117,6 +119,7 @@ int qtmovie_read(stream_t *stream, demux_res_t *demux_res);
 void stream_read(stream_t *stream, size_t len, void *buf);
 
 int32_t stream_tell(stream_t *stream);
+uint64_t stream_read_uint64(stream_t *stream);
 int32_t stream_read_int32(stream_t *stream);
 uint32_t stream_read_uint32(stream_t *stream);
 

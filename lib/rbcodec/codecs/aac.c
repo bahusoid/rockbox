@@ -25,12 +25,14 @@
 #include "libfaad/structs.h"
 #include "libfaad/decoder.h"
 
-CODEC_HEADER
-
 /* The maximum buffer size handled by faad. 12 bytes are required by libfaad
  * as headroom (see libfaad/bits.c). FAAD_BYTE_BUFFER_SIZE bytes are buffered
  * for each frame. */
 #define FAAD_BYTE_BUFFER_SIZE (2048-12)
+
+CODEC_HEADER
+
+uint64_t dash_sidx_get_seek_offset(stream_t *stream, demux_res_t *demux_res, uint64_t target_time_ms, uint64_t *out_segment_time_ms);
 
 /* this is the codec entry point */
 enum codec_status codec_main(enum codec_entry_call_reason reason)
@@ -42,6 +44,20 @@ enum codec_status codec_main(enum codec_entry_call_reason reason)
     }
 
     return CODEC_OK;
+}
+
+int stream_next_mdat(stream_t *file, demux_res_t *demux_res);
+static bool finished_mdat(stream_t *file, demux_res_t *demux_res)
+{
+    int32_t cur_pos = stream_tell(file);
+    uint32_t next_atom = demux_res->mdat_offset + demux_res->mdat_len;
+
+    if (cur_pos < next_atom)
+        return false;
+
+    if (cur_pos != next_atom)
+        stream_seek(file, next_atom);
+    return true;
 }
 
 /* this is called for each file to process */
@@ -127,6 +143,85 @@ enum codec_status codec_run(void)
         sbr_fac = 1;
     }
 #endif
+    //TODO: Probably move to separate codec aac_dash.c?
+    if (demux_res.is_dash) {
+        sound_samples_done = 0;
+        elapsed_time = 0;
+        if (param)
+        {
+            elapsed_time = param;
+            action = CODEC_ACTION_SEEK_TIME;
+        }
+
+        while (1) {
+            if (action == CODEC_ACTION_NULL)
+                action = ci->get_command(&param);
+
+            if (action == CODEC_ACTION_HALT)
+                break;
+
+            if (action == CODEC_ACTION_SEEK_TIME) {
+                uint64_t seek_time = (uint64_t)param;
+                uint64_t result;
+                uint64_t target_offset = dash_sidx_get_seek_offset(&input_stream, &demux_res, seek_time, &result);
+                stream_seek(&input_stream, target_offset);
+
+                //TODO:
+                //It's the start of the chunk
+                //For precise seeking need to parse the moof -> traf -> trun
+
+                elapsed_time = result;
+                sound_samples_done = (elapsed_time * (ci->id3->frequency / 100ULL))/10ULL;
+
+                ci->set_elapsed(elapsed_time);
+                NeAACDecPostSeekReset(decoder, 0);
+                ci->seek_complete();
+                action = CODEC_ACTION_NULL;
+                stream_next_mdat(&input_stream, &demux_res);
+            }
+
+            if (ci->curpos < demux_res.mdat_offset)
+                ci->seek_buffer(demux_res.mdat_offset);
+
+            buffer = ci->request_buffer(&n, FAAD_BYTE_BUFFER_SIZE);
+            if (n == 0)
+                break;
+
+            if (demux_res.mdat_len > 0 && n > demux_res.mdat_len)
+                n = demux_res.mdat_len;
+
+            ret = NeAACDecDecode(decoder, &frame_info, buffer, n);
+            if (ret == NULL || frame_info.error > 0) {
+                LOGF("FAAD: decode error '%s'\n",
+                     NeAACDecGetErrorMessage(frame_info.error));
+                return CODEC_ERROR;
+            }
+
+            ci->advance_buffer(frame_info.bytesconsumed);
+            ci->yield();
+
+            if (frame_info.samples > 0) {
+                ci->pcmbuf_insert(decoder->time_out[0], decoder->time_out[1],
+                                  frame_info.samples >> 1);
+                sound_samples_done += frame_info.samples >> 1;
+                elapsed_time = (sound_samples_done * 1000ULL) /
+                              ci->id3->frequency;
+                ci->set_elapsed(elapsed_time);
+            }
+
+            if (frame_info.bytesconsumed == 0)
+                break;
+            if (finished_mdat(&input_stream, &demux_res))
+            {
+                if (stream_next_mdat(&input_stream, &demux_res))
+                    continue;
+                break;
+            }
+        }
+
+        return CODEC_OK;
+    }
+
 
     i = 0;
 
@@ -300,10 +395,10 @@ enum codec_status codec_run(void)
                 lead_trim = 0;
             }
         }
-
         ++i;
     }
 
     LOGF("AAC: Decoded %lu samples\n", (unsigned long)sound_samples_done);
     return CODEC_OK;
 }
+
