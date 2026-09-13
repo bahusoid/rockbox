@@ -32,15 +32,37 @@
 
 /* Implementation of the stream.h functions used by libalac */
 
+#if defined(__GNUC__) || defined(__clang__)
+
+#define _Swap16(v) do { v = __builtin_bswap16(v); } while(0)
+
+#define _Swap32(v) do { v = __builtin_bswap32(v); } while(0)
+
+#define _Swap64(v) do { v = __builtin_bswap64(v); } while(0)
+
+#else
+
+#define _Swap16(v) do { \
+                   v = (((v) & 0x00FF) << 0x08) | \
+                       (((v) & 0xFF00) >> 0x08); } while (0)
+
 #define _Swap32(v) do { \
                    v = (((v) & 0x000000FF) << 0x18) | \
                        (((v) & 0x0000FF00) << 0x08) | \
                        (((v) & 0x00FF0000) >> 0x08) | \
                        (((v) & 0xFF000000) >> 0x18); } while(0)
 
-#define _Swap16(v) do { \
-                   v = (((v) & 0x00FF) << 0x08) | \
-                       (((v) & 0xFF00) >> 0x08); } while (0)
+#define _Swap64(v) do { \
+                   v = (((v) & 0x00000000000000FFULL) << 0x38) | \
+                       (((v) & 0x000000000000FF00ULL) << 0x28) | \
+                       (((v) & 0x0000000000FF0000ULL) << 0x18) | \
+                       (((v) & 0x00000000FF000000ULL) << 0x08) | \
+                       (((v) & 0x000000FF00000000ULL) >> 0x08) | \
+                       (((v) & 0x0000FF0000000000ULL) >> 0x18) | \
+                       (((v) & 0x00FF000000000000ULL) >> 0x28) | \
+                       (((v) & 0xFF00000000000000ULL) >> 0x38); } while(0)
+
+#endif
 
 /* A normal read without any byte-swapping */
 void stream_read(stream_t *stream, size_t size, void *buf)
@@ -70,6 +92,16 @@ uint32_t stream_read_uint32(stream_t *stream)
     stream_read(stream, 4, &v);
 #ifdef ROCKBOX_LITTLE_ENDIAN
     _Swap32(v);
+#endif
+    return v;
+}
+
+uint64_t stream_read_uint64(stream_t *stream)
+{
+    uint64_t v;
+    stream_read(stream, 8, &v);
+#ifdef ROCKBOX_LITTLE_ENDIAN
+    _Swap64(v);
 #endif
     return v;
 }
@@ -361,4 +393,73 @@ unsigned int m4a_seek_raw(demux_res_t* demux_res, stream_t* stream,
     }
 
     return 0;
+}
+
+
+//Returns the absolute file offset of the DASH subsegment containing the target time.
+uint64_t dash_sidx_get_seek_offset(stream_t* stream, demux_res_t* demux_res, uint64_t target_time_ms,
+                                   uint64_t* out_segment_time_ms)
+{
+    stream_seek(stream, demux_res->sidx_box_start);
+
+    uint32_t box_size = stream_read_uint32(stream);
+    stream_skip(stream, 4); /* Skip the "sidx" name tag */
+
+    uint64_t sidx_end_offset = demux_res->sidx_box_start + box_size;
+
+    /* 3. Read the version and flags */
+    uint32_t version_flags = stream_read_uint32(stream);
+    uint8_t version = version_flags >> 24;
+
+    stream_skip(stream, 4); /* Skip reference_ID */
+    uint32_t timescale = stream_read_uint32(stream);
+
+    if (timescale == 0)
+    {
+        return 0;
+    }
+
+    uint64_t earliest_pts;
+    uint64_t first_offset;
+
+    if (version == 0)
+    {
+        earliest_pts = stream_read_uint32(stream);
+        first_offset = stream_read_uint32(stream);
+    }
+    else
+    {
+        earliest_pts = stream_read_uint64(stream);
+        first_offset = stream_read_uint64(stream);
+    }
+
+    stream_skip(stream, 2); /* Skip reserved bytes */
+    uint16_t reference_count = stream_read_uint16(stream);
+
+    // Calculate absolute physical file position
+    uint64_t current_offset = sidx_end_offset + first_offset;
+    uint64_t current_time_units = earliest_pts;
+    uint64_t target_time_units = (target_time_ms * timescale) / 1000;
+
+    for (uint16_t i = 0; i < reference_count; i++)
+    {
+        uint32_t ref_info = stream_read_uint32(stream);
+        uint32_t subsegment_duration = stream_read_uint32(stream);
+        stream_skip(stream, 4); /* Skip SAP fields */
+
+        uint32_t referenced_size = ref_info & 0x7FFFFFFF;
+
+        if (current_time_units + subsegment_duration > target_time_units)
+        {
+            *out_segment_time_ms = (current_time_units * 1000) / timescale;
+            return current_offset;
+        }
+
+        current_time_units += subsegment_duration;
+        current_offset += referenced_size;
+    }
+
+    // If target is beyond the last segment, return the final calculated offset
+    *out_segment_time_ms = (current_time_units * 1000) / timescale;
+    return current_offset;
 }

@@ -29,6 +29,7 @@
  *
  */
 
+//#define LOGF_ENABLE
 //#define DEBUG
 
 #include <string.h>
@@ -52,6 +53,8 @@ typedef struct
     demux_res_t *res;
 } qtmovie_t;
 
+
+static bool read_chunk_stsd(qtmovie_t *qtmovie, size_t chunk_len);
 
 /* chunk handlers */
 static void read_chunk_ftyp(qtmovie_t *qtmovie, size_t chunk_len)
@@ -151,6 +154,62 @@ static bool read_chunk_esds(qtmovie_t *qtmovie, size_t chunk_len)
 
     /* will skip the remainder of the atom */
     return true;
+}
+
+/* Fragmented MP4/DASH segments may hold the audio sample description in
+ * nested boxes (for example inside moof/traf) rather than in the normal moov
+ * metadata. Read the actual box tree from qtmovie_read() instead of trying to
+ * synthesize AAC config values in the codec layer.
+ */
+static bool read_dash_codecdata(qtmovie_t *qtmovie, size_t chunk_len)
+{
+    uint32_t box_end = stream_tell(qtmovie->stream) + chunk_len;
+    uint32_t pos = stream_tell(qtmovie->stream);
+
+    while (pos + 8 <= box_end) {
+        uint32_t box_size = stream_read_uint32(qtmovie->stream);
+        uint32_t box_type = stream_read_uint32(qtmovie->stream);
+        uint32_t next_pos;
+
+        if (box_size <= 8 || pos + box_size > box_end)
+            break;
+
+        next_pos = pos + box_size;
+
+        if (box_type == MAKEFOURCC('e', 's', 'd', 's')) {
+            if (read_chunk_esds(qtmovie, box_size)) {
+                stream_seek(qtmovie->stream, box_end);
+                return true;
+            }
+            stream_seek(qtmovie->stream, box_end);
+            return false;
+        }
+
+        if (box_type == MAKEFOURCC('m', 'o', 'o', 'v') ||
+            box_type == MAKEFOURCC('t', 'r', 'a', 'k') ||
+            box_type == MAKEFOURCC('m', 'd', 'i', 'a') ||
+            box_type == MAKEFOURCC('m', 'i', 'n', 'f') ||
+            box_type == MAKEFOURCC('s', 't', 'b', 'l') ||
+            box_type == MAKEFOURCC('s', 't', 's', 'd') ||
+            box_type == MAKEFOURCC('m', 'p', '4', 'a') ||
+            box_type == MAKEFOURCC('m', 'o', 'o', 'f') ||
+            box_type == MAKEFOURCC('t', 'r', 'a', 'f')) {
+
+            uint32_t child_pos = stream_tell(qtmovie->stream);
+            if (read_dash_codecdata(qtmovie, box_size - 8)) {
+                stream_seek(qtmovie->stream, box_end);
+                return true;
+            }
+            stream_seek(qtmovie->stream, child_pos + box_size - 8);
+        } else {
+            stream_seek(qtmovie->stream, next_pos);
+        }
+
+        pos = stream_tell(qtmovie->stream);
+    }
+
+    stream_seek(qtmovie->stream, box_end);
+    return false;
 }
 
 static bool read_chunk_stsd(qtmovie_t *qtmovie, size_t chunk_len)
@@ -634,34 +693,11 @@ static bool read_chunk_stbl(qtmovie_t *qtmovie, size_t chunk_len)
 static bool read_chunk_minf(qtmovie_t *qtmovie, size_t chunk_len)
 {
     size_t size_remaining = chunk_len - 8;
-    uint32_t i;
-
-    /* Check for smhd, the only kind of minf we care about. MP4 video files
-     * normally put a video trak before the AAC trak. Older Rockbox code
-     * treated that vmhd as fatal, which made aac.codec unable to decode the
-     * audio from an otherwise ordinary .mp4/.m4v. Skip a non-audio minf and
-     * continue looking for the sound track. */
-    i = stream_read_uint32(qtmovie->stream);
-    if (i < 8 || i > size_remaining)
+    if (qtmovie->res->codecdata_len > 0)
     {
-        DEBUGF("unexpected size in media info: %ld\n", (long)i);
-        return false;
-    }
-
-    if (stream_read_uint32(qtmovie->stream) != MAKEFOURCC('s','m','h','d'))
-    {
-        stream_skip(qtmovie->stream, size_remaining - 8);
+        stream_skip(qtmovie->stream, size_remaining);
         return true;
     }
-    if (i != 16)
-    {
-        DEBUGF("unexpected sound header size: %ld\n", (long)i);
-        return false;
-    }
-
-    /* now skip the rest of the atom */
-    stream_skip(qtmovie->stream, 16 - 8);
-    size_remaining -= 16;
 
     while (size_remaining)
     {
@@ -681,14 +717,23 @@ static bool read_chunk_minf(qtmovie_t *qtmovie, size_t chunk_len)
         
         switch (sub_chunk_id)
         {
+        case MAKEFOURCC('s','m','h','d'):
+            if (sub_chunk_len != 16)
+            {
+                DEBUGF("unexpected sound header size: %ld\n", (long)sub_chunk_len);
+                return false;
+            }
+            stream_skip(qtmovie->stream, sub_chunk_len - 8);
+            break;
         case MAKEFOURCC('s','t','b','l'):
             if (!read_chunk_stbl(qtmovie, sub_chunk_len)) {
                 return false;
             }
             break;
         default:
-            /*DEBUGF("(minf) unknown chunk id: %c%c%c%c\n",
-                   SPLITFOURCC(sub_chunk_id));*/
+            /* minf contains other atoms before/after stbl (e.g. dinf) and we
+             * must not skip the whole container just because smhd is not first.
+             */
             stream_skip(qtmovie->stream, sub_chunk_len - 8);
             break;
         }
@@ -821,6 +866,54 @@ static void read_chunk_mdat(qtmovie_t *qtmovie, size_t chunk_len)
     qtmovie->res->mdat_len = size_remaining;
 }
 
+int stream_next_mdat(stream_t *file, demux_res_t *demux_res)
+{
+    qtmovie_t qtmovie;
+
+    /* construct the stream */
+    qtmovie.stream = file;
+    qtmovie.res = demux_res;
+
+    /* read the chunks */
+    while (1)
+    {
+        size_t chunk_len;
+        fourcc_t chunk_id;
+
+        chunk_len = stream_read_uint32(qtmovie.stream);
+        if (stream_eof(qtmovie.stream))
+        {
+            return 0;
+        }
+
+        if (chunk_len == 1)
+        {
+            //DEBUGF("need 64bit support\n");
+            return 0;
+        }
+        chunk_id = stream_read_uint32(qtmovie.stream);
+
+        //qtmovie.stream->ci->debugf("Found a chunk %c%c%c%c, length=%d\n",SPLITFOURCC(chunk_id),chunk_len);
+        switch (chunk_id)
+        {
+        case MAKEFOURCC('m','d','a','t'):
+            /* There can be empty mdats before the real one. If so, skip them */
+            if (chunk_len == 8)
+                break;
+            read_chunk_mdat(&qtmovie, chunk_len);
+            qtmovie.res->mdat_offset = stream_tell(qtmovie.stream);
+            return 1;
+            break;
+        default:
+            //qtmovie.stream->ci->debugf("Unknown chunk id: %c%c%c%c, length=%d\n",SPLITFOURCC(chunk_id),chunk_len);
+            //DEBUGF("(top) unknown chunk id: %c%c%c%c\n",SPLITFOURCC(chunk_id));
+            stream_skip(qtmovie.stream, chunk_len - 8);
+            break;
+        }
+    }
+    return 0;
+}
+
 int qtmovie_read(stream_t *file, demux_res_t *demux_res)
 {
     qtmovie_t qtmovie;
@@ -862,6 +955,20 @@ int qtmovie_read(stream_t *file, demux_res_t *demux_res)
                return 0;
             }
             break;
+        //DASH
+        case MAKEFOURCC('s','i','d','x'):
+            demux_res->sidx_box_start = stream_tell(qtmovie.stream) - 8;
+            //fallthrough
+        case MAKEFOURCC('m','o','o','f'):
+            demux_res->is_dash = true;
+            stream_skip(qtmovie.stream, chunk_len - 8);
+            break;
+        case MAKEFOURCC('t','r','a','f'):
+            /* Process track fragment atoms to detect AAC-HE */
+            if (qtmovie.res->codecdata_len == 0)
+                read_dash_codecdata(&qtmovie, chunk_len);
+            break;
+
         case MAKEFOURCC('m','d','a','t'):
             /* There can be empty mdats before the real one. If so, skip them */
             if (chunk_len == 8)
@@ -871,16 +978,17 @@ int qtmovie_read(stream_t *file, demux_res_t *demux_res)
             /* If we've already seen the format, assume there's nothing
                interesting after the mdat chunk (the file is "streamable").
                This avoids having to seek, which might cause rebuffering. */
-            if(qtmovie.res->format > 0)
+            if(qtmovie.res->format > 0 || (qtmovie.res->is_dash && qtmovie.res->codecdata_len > 0))
                 return 1;
             stream_skip(qtmovie.stream, chunk_len - 8);
             break;
 
             /*  these following atoms can be skipped !!!! */
-        case MAKEFOURCC('f','r','e','e'):
-            stream_skip(qtmovie.stream, chunk_len - 8);
-            break;
+        // case MAKEFOURCC('f','r','e','e'):
+        //     stream_skip(qtmovie.stream, chunk_len - 8);
+        //     break;
         default:
+            //qtmovie.stream->ci->debugf("Unknown chunk id: %c%c%c%c, length=%d\n",SPLITFOURCC(chunk_id),chunk_len);
             //DEBUGF("(top) unknown chunk id: %c%c%c%c\n",SPLITFOURCC(chunk_id));
             stream_skip(qtmovie.stream, chunk_len - 8);
             break;
@@ -889,5 +997,3 @@ int qtmovie_read(stream_t *file, demux_res_t *demux_res)
     }
     return 0;
 }
-
-
