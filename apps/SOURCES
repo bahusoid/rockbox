@@ -143,6 +143,9 @@ recorder/jpeg_load.c
 recorder/jpeg_idct_arm.S
 #endif
 #endif
+#ifdef HAVE_PNG
+recorder/png_load.c
+#endif
 #ifdef HAVE_ALBUMART
 recorder/albumart.c
 #endif

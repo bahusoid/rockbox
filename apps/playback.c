@@ -1992,10 +1992,17 @@ static int audio_load_albumart(struct track_info *infop,
                       : load_album_art_from_path(path, &user_data, is_current_track, i);
         }
 
-        /* We can only decode jpeg for embedded AA */
+        /* Embedded art: JPEG, and now PNG as well (apps/recorder/png_load.c).
+         * A BMP in a tag is still skipped - it is vanishingly rare, and it
+         * is the one format the tag parser cannot give a size for. */
         if (global_settings.album_art != AA_OFF &&
             hid < 0 && hid != ERR_BUFFER_FULL &&
-            track_id3->has_embedded_albumart && (track_id3->albumart.type & AA_CLEAR_FLAGS_MASK) == AA_TYPE_JPG)
+            track_id3->has_embedded_albumart &&
+            ((track_id3->albumart.type & AA_CLEAR_FLAGS_MASK) == AA_TYPE_JPG
+#ifdef HAVE_PNG
+             || (track_id3->albumart.type & AA_CLEAR_FLAGS_MASK) == AA_TYPE_PNG
+#endif
+            ))
         {
             if (is_current_track)
                 clear_last_folder_album_art();

@@ -79,15 +79,22 @@ static char* strip_filename(char* buf, int buf_size, const char* fullpath)
 }
 
 #ifdef USE_JPEG_COVER
+#ifdef HAVE_PNG
+static const char * const extensions[] = { "jpeg", "jpg", "png", "bmp" };
+static const unsigned char extension_lens[] = { 4, 3, 3, 3 };
+#define NUM_EXTENSIONS 4
+#else
 static const char * const extensions[] = { "jpeg", "jpg", "bmp" };
 static const unsigned char extension_lens[] = { 4, 3, 3 };
+#define NUM_EXTENSIONS 3
+#endif
 /* Try checking for several file extensions, return true if a file is found and
  * leaving the path modified to include the matching extension.
  */
 static bool try_exts(char *path, int len)
 {
     int i;
-    for (i = 0; i < 3; i++)
+    for (i = 0; i < NUM_EXTENSIONS; i++)
     {
         if (extension_lens[i] + len > MAX_PATH)
             continue;
@@ -208,6 +215,13 @@ bool search_albumart_files(const struct mp3entry *id3, const char *size_string,
         {
             snprintf (path, sizeof(path), "%sfolder.jpg", dir);
             found = file_exists(path);
+#ifdef HAVE_PNG
+            if (!found)
+            {
+                snprintf (path, sizeof(path), "%sfolder.png", dir);
+                found = file_exists(path);
+            }
+#endif
 #ifdef HAVE_CASE_SENSITIVE_FS
             if (!found)
             {
