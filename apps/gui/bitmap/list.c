@@ -794,6 +794,13 @@ static bool kinetic_start_scrolling(struct kinetic *k, struct gui_synclist *list
     return true;
 }
 
+static int touchscreen_scrollbar_width_px;
+
+void set_touch_scrollbar_width(int width_mm)
+{
+    touchscreen_scrollbar_width_px = (width_mm * lcd_get_dpi() * 10 + 127) / 254;
+}
+
 #define OUTSIDE    0
 #define TITLE_TEXT (1<<0)
 #define TITLE_ICON (1<<1)
@@ -834,22 +841,21 @@ static int get_click_location(struct gui_synclist *list, int x, int y)
         }
 
         /* check scrollbar if shown */
-        if (retval == OUTSIDE)
+        if (retval == OUTSIDE && list->scrollbar > 0)
         {
             bool on_scrollbar_clicked;
             int adj_x = x - text->x;
+            int scrollbar_width = MAX(SCROLLBAR_WIDTH, touchscreen_scrollbar_width_px);
             switch (list->scrollbar)
             {
-                case SCROLLBAR_OFF:
-                    /*fall-through*/
                 default:
                     on_scrollbar_clicked = false;
                     break;
                 case SCROLLBAR_LEFT:
-                    on_scrollbar_clicked = adj_x <= SCROLLBAR_WIDTH;
+                    on_scrollbar_clicked = adj_x <= scrollbar_width;
                     break;
                 case SCROLLBAR_RIGHT:
-                    on_scrollbar_clicked = adj_x > (text->x + text->width - SCROLLBAR_WIDTH);
+                    on_scrollbar_clicked = adj_x > (text->x + text->width - scrollbar_width);
                     break;
             }
             if (on_scrollbar_clicked)
