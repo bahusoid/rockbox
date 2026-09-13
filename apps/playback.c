@@ -1436,6 +1436,7 @@ static void audio_update_and_announce_next_track(const struct mp3entry *id3_next
 {
     struct mp3entry* id3 = id3_get(NEXTTRACK_ID3);
     bool same_track = 
+        id3_next != NULL &&
         // check if metadata was retrieved
         id3->length == id3_next->length &&
         strcmp(id3->path, id3_next->path) == 0;
