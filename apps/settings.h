@@ -832,7 +832,9 @@ struct user_settings
 #ifdef HAVE_TOUCHSCREEN
     int touch_mode;
     int touchscreen_exemptions;
+    int touchscreen_scrollbar_width_mm;
     struct touchscreen_parameter ts_calibration_data;
+
     struct list_kinetic_scroll_settings kinetic_scroll_accel;
     struct list_kinetic_scroll_settings kinetic_scroll_brake;
     struct list_kinetic_scroll_settings kinetic_scroll_decel;
