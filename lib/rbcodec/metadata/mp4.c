@@ -73,6 +73,19 @@
 #define MP4_udta FOURCC('u', 'd', 't', 'a')
 #define MP4_extra FOURCC('-', '-', '-', '-')
 
+/* Add new FOURCC codes for DASH format */
+#define MP4_sidx FOURCC('s', 'i', 'd', 'x')
+#define MP4_moof FOURCC('m', 'o', 'o', 'f')
+#define MP4_traf FOURCC('t', 'r', 'a', 'f')
+#define MP4_tfhd FOURCC('t', 'f', 'h', 'd')
+#define MP4_trun FOURCC('t', 'r', 'u', 'n')
+
+/* Structure to track fragments info */
+struct fragment_info {
+    uint64_t duration;
+    uint64_t size;
+};
+
 /* Read the tag data from an MP4 file, storing up to buffer_size bytes in
  * buffer.
  */
@@ -389,6 +402,70 @@ static void read_mp4_tag_i_from_n(int fd, int *i, char** i_from_n_string, uint32
     }
 }
 
+static bool read_mp4_sidx(int fd, struct mp3entry* id3, uint32_t size)
+{
+    uint32_t version;
+    uint16_t reference_count;
+    uint32_t timescale;
+    uint64_t earliest_pts;
+    uint64_t first_offset;
+
+    read_uint32be(fd, &version);
+    version >>= 24;  /* Only need first byte */
+
+    lseek(fd, 4, SEEK_CUR);  /* Skip reference_ID */
+    read_uint32be(fd, &timescale);
+
+    if (version == 0) {
+        uint32_t temp;
+        read_uint32be(fd, &temp);
+        earliest_pts = temp;
+        read_uint32be(fd, &temp);
+        first_offset = temp;
+    } else {
+        read_uint64be(fd, &earliest_pts);
+        read_uint64be(fd, &first_offset);
+    }
+
+    lseek(fd, 2, SEEK_CUR);  /* reserved */
+    read_uint16be(fd, &reference_count);
+
+    /* Process reference entries to calculate total duration and total size */
+    uint64_t total_duration = 0;
+    uint64_t total_size = 0;
+    
+    for (int i = 0; i < reference_count; i++) {
+        uint32_t ref_info;
+        uint32_t subsegment_duration;
+        
+        read_uint32be(fd, &ref_info);
+        read_uint32be(fd, &subsegment_duration);
+        lseek(fd, 4, SEEK_CUR);  /* Skip SAP fields */
+        
+        total_duration += subsegment_duration;
+        
+        /* Extract 31-bit referenced_size and add to total */
+        uint32_t referenced_size = ref_info & 0x7FFFFFFF;
+        total_size += referenced_size;
+    }
+
+    /* Store duration in ms */
+    if (timescale > 0) {
+        id3->length = (total_duration * 1000) / timescale;
+        
+        /* You can store total_size here if your struct supports it */
+        id3->filesize = total_size;
+
+        /* Mark as DASH format - check for AAC-HE */
+        if (id3->codectype == AFMT_UNKNOWN) {
+            /* Default to regular AAC, will be updated to HE if detected */
+            id3->codectype = AFMT_MP4_AAC;
+        }
+    }
+
+    return true;
+}
+
 static bool read_mp4_tags(int fd, struct mp3entry* id3,
                           uint32_t size_left)
 {
@@ -609,7 +686,105 @@ static bool read_mp4_tags(int fd, struct mp3entry* id3,
     return true;
 }
 
-static bool read_mp4_container(int fd, struct mp3entry* id3, 
+static bool check_aac_he_profile(int fd, uint32_t size, struct mp3entry* id3)
+{
+    /* Save current position */
+    long pos = lseek(fd, 0, SEEK_CUR);
+    uint32_t subsize;
+    uint32_t subtype;
+    bool is_he = false;
+
+    /* Look for esds atom which contains codec info */
+    while (size >= 8) {
+        read_mp4_atom(fd, &subsize, &subtype, size);
+        if (subtype == MP4_esds) {
+            if (read_mp4_esds(fd, id3, &subsize)) {
+                is_he = true;
+            }
+            break;
+        }
+        size -= 8;
+        lseek(fd, subsize, SEEK_CUR);
+        size -= subsize;
+    }
+
+    /* Restore position */
+    lseek(fd, pos, SEEK_CUR);
+    return is_he;
+}
+
+static bool read_mp4_trun(int fd, struct mp3entry* id3, uint32_t size)
+{
+    uint32_t version_flags;
+    uint32_t sample_count;
+    uint32_t data_offset = 0;
+    uint32_t first_sample_flags = 0;
+    uint32_t samples_per_frame = 1024; // Default AAC frame size
+    uint32_t total_size = 0; // Accumulator for data size
+
+    read_uint32be(fd, &version_flags);
+    read_uint32be(fd, &sample_count);
+    size -= 8;
+
+    /* Parse flags */
+    bool has_data_offset = version_flags & 0x000001;
+    bool has_first_sample_flags = version_flags & 0x000004;
+    bool has_sample_duration = version_flags & 0x000100;
+    bool has_sample_size = version_flags & 0x000200;
+    bool has_sample_flags = version_flags & 0x000400;
+
+    /* Read optional fields based on flags */
+    if (has_data_offset) {
+        read_uint32be(fd, &data_offset);
+        size -= 4;
+    }
+    if (has_first_sample_flags) {
+        read_uint32be(fd, &first_sample_flags);
+        size -= 4;
+    }
+
+    /* For each sample, accumulate duration and size */
+    uint32_t total_samples = 0;
+    for (uint32_t i = 0; i < sample_count && size >= 4; i++) {
+        if (has_sample_duration) {
+            uint32_t duration;
+            read_uint32be(fd, &duration);
+            size -= 4;
+            total_samples += duration;
+        } else {
+            total_samples += samples_per_frame;
+        }
+
+        /* Read and accumulate sample size */
+        if (has_sample_size) {
+            uint32_t sample_size_val;
+            read_uint32be(fd, &sample_size_val);
+            total_size += sample_size_val;
+            size -= 4;
+        }
+
+        /* Skip sample flags */
+        if (has_sample_flags) {
+            lseek(fd, 4, SEEK_CUR);
+            size -= 4;
+        }
+    }
+
+    /* Add to total sample count */
+    id3->samples += total_samples;
+    
+    /* If you need to store total_size, you can do it here assuming id3 supports it */
+    if (has_sample_size) { id3->filesize += total_size; }
+
+    /* Skip remaining bytes (e.g., sample-composition-time-offsets if present) */
+    if (size > 0) {
+        lseek(fd, size, SEEK_CUR);
+    }
+
+    return true;
+}
+
+static bool read_mp4_container(int fd, struct mp3entry* id3,
                                uint32_t size_left, bool skipTags)
 {
     uint32_t size    = 0;
@@ -617,6 +792,7 @@ static bool read_mp4_container(int fd, struct mp3entry* id3,
     uint32_t handler = 0;
     bool rc = true;
     bool done = false;
+    bool dash_processed = false;
     //int level = ++global_level;
     //DEBUGF("START CONTAINER %d\n", level);
     do
@@ -780,6 +956,12 @@ static bool read_mp4_container(int fd, struct mp3entry* id3,
             break;
 
         case MP4_mdat:
+            if (dash_processed)
+            {
+                done = true;
+                break;
+            }
+
             /* Some AAC files appear to contain additional empty mdat chunks.
                Ignore them. */
             if(size == 0)
@@ -812,6 +994,40 @@ static bool read_mp4_container(int fd, struct mp3entry* id3,
             }
             break;
 
+        case MP4_sidx:
+            read_mp4_sidx(fd, id3, size);
+            size = 0;
+            dash_processed = true;
+            break;
+
+/*        case MP4_moof:
+            // Process movie fragment
+            if (id3->codectype == AFMT_UNKNOWN) {
+                // For DASH content, need to examine audio config in fragments 
+                id3->codectype = AFMT_MP4_AAC; // Start with regular AAC
+            }
+            size_left += size;
+            continue;
+
+        case MP4_traf:
+            // Process track fragment atoms to detect AAC-HE
+            if (id3->codectype == AFMT_MP4_AAC) {
+                // Check if this fragment contains AAC-HE content
+                if (check_aac_he_profile(fd, size, id3)) {
+                    id3->codectype = AFMT_MP4_AAC_HE;
+                }
+            }
+            size_left += size;
+            continue;
+
+        case MP4_trun:
+            // Process track run for sample counting 
+            if (!id3->length) { // Only if we don't have duration from sidx
+                read_mp4_trun(fd, id3, size);
+                size = 0;
+            }
+            break;
+*/
         default:
             break;
         }
@@ -822,7 +1038,7 @@ static bool read_mp4_container(int fd, struct mp3entry* id3,
             lseek(fd, size, SEEK_CUR);
         }
     } while (rc && (size_left > 0) && (errno == 0) && !done);
-    
+
     //DEBUGF("END OF CONTAINER %d, rc:%d, size_left: %d, done: %d\n", level, size_left, done);
     return rc;
 }
@@ -831,12 +1047,14 @@ bool get_mp4_metadata(int fd, struct mp3entry* id3)
 {
     id3->codectype = AFMT_UNKNOWN;
     id3->filesize = 0;
+    id3->length = 0;
+    id3->samples = 0;
     errno = 0;
 
-    if (read_mp4_container(fd, id3, filesize(fd), false) 
-        && (errno == 0) 
-        && (id3->samples > 0) && (id3->frequency > 0) 
-        && (id3->filesize > 0))
+    if (read_mp4_container(fd, id3, filesize(fd), false)
+        && (errno == 0)
+        && (id3->frequency > 0)
+        )
     {
         if (id3->codectype == AFMT_UNKNOWN)
         {
@@ -844,9 +1062,24 @@ bool get_mp4_metadata(int fd, struct mp3entry* id3)
             return false;
         }
 
-        id3->length = ((int64_t) id3->samples * 1000) / id3->frequency;
-
         id3->vbr = true; /* ALAC is native VBR, AAC very unlikely is CBR. */
+
+        /* Calculate duration using best available source:
+         * 1. sidx duration (most accurate for DASH)
+         * 2. sample count from fragments (fallback for DASH) (not used for now)
+         * 3. stts sample table (for regular MP4)
+         */
+        if (!id3->length) {  // sidx not found
+            if (id3->samples > 0) {
+                id3->length = ((int64_t) id3->samples * 1000) / id3->frequency;
+                DEBUGF("MP4: using sample-based duration\n");
+            } else {
+                logf("No duration information found");
+                return false;
+            }
+        } else {
+            DEBUGF("MP4: using sidx duration\n");
+        }
 
         if (id3->length <= 0)
         {
