@@ -632,6 +632,17 @@ static const char* formatter_unit_0_is_off(char *buffer, size_t buffer_size,
     return buffer;
 }
 
+static const char* formatter_mm_0_is_off(char *buffer, size_t buffer_size,
+                                    int val, const char *unit)
+{
+    (void)unit;
+    if (val == 0)
+        return str(LANG_OFF);
+    else
+        snprintf(buffer, buffer_size, "%d mm", val);
+    return buffer;
+}
+
 static const char* formatter_unit_minusone_is_off(char *buffer, size_t buffer_size,
                                     int val, const char *unit)
 {
@@ -698,6 +709,11 @@ static int32_t get_precut_talkid(int value, int unit)
 {
     return TALK_ID_DECIMAL(-value, 1, unit);
 }
+
+#ifdef HAVE_TOUCHSCREEN
+
+#endif
+
 #endif /* __PCTOOL__ */
 
 struct eq_band_setting eq_defaults[EQ_NUM_BANDS] = {
@@ -2445,13 +2461,20 @@ const struct settings_list settings[] = {
 #endif /* HAVE_SPEAKER */
 #ifdef HAVE_TOUCHSCREEN
     CHOICE_SETTING(0, touch_mode, LANG_TOUCHSCREEN_MODE, DEFAULT_TOUCHSCREEN_MODE,
-                   "touchscreen mode", "point,grid", NULL, 2,
-                   ID2P(LANG_TOUCHSCREEN_POINT), ID2P(LANG_TOUCHSCREEN_GRID)),
+                    "touchscreen mode", "point,grid", NULL, 2,
+                    ID2P(LANG_TOUCHSCREEN_POINT), ID2P(LANG_TOUCHSCREEN_GRID)),
     CHOICE_SETTING(0, touchscreen_exemptions, LANG_TOUCHSCREEN_EXEMPTIONS,
-                   TOUCHSCREEN_EXEMPTIONS_OFF, "touchscreen exemptions",
-                   "off,wps,lists,wps and lists", NULL, 4,
-                   ID2P(LANG_OFF), ID2P(LANG_WPS_ACRONYM), ID2P(LANG_LISTS), 
-                   ID2P(LANG_WPS_AND_LISTS)),
+                    TOUCHSCREEN_EXEMPTIONS_OFF, "touchscreen exemptions",
+                    "off,wps,lists,wps and lists", NULL, 4,
+                    ID2P(LANG_OFF), ID2P(LANG_WPS_ACRONYM), ID2P(LANG_LISTS), 
+                    ID2P(LANG_WPS_AND_LISTS)),
+    TABLE_SETTING(F_ALLOW_ARBITRARY_VALS | F_CB_ON_SELECT_ONLY | F_TEMPVAR, touchscreen_scrollbar_width_mm,
+                  LANG_TOUCHSCREEN_SCROLLBAR_PADDING,
+                  5, "scrollbar touch width mm",
+                  off,
+                  UNIT_INT, formatter_mm_0_is_off, NULL, set_touch_scrollbar_width, 11,
+                  0,1,2,3,4,5,6,7,8,9,10),
+
     CUSTOM_SETTING(0, ts_calibration_data, -1,
                     &default_calibration_parameters, "touchscreen calibration",
                     tsc_load_from_cfg, tsc_write_to_cfg,
@@ -2611,8 +2634,7 @@ const struct settings_list settings[] = {
 #endif
 #if defined(HAVE_EROS_QN_CODEC)
     CHOICE_SETTING(0, hp_lo_select, LANG_HP_LO_SELECT, 0, "headphone lineout select",
-    "auto,headphone,lineout", hp_lo_select_apply, 3,
-    ID2P(LANG_AUTO), ID2P(LANG_HEADPHONE), ID2P(LANG_LINEOUT)),
+    "auto,headphone,lineout", hp_lo_select_apply, 3, ID2P(LANG_AUTO), ID2P(LANG_HEADPHONE), ID2P(LANG_LINEOUT)),
 #endif
     OFFON_SETTING(0, playback_log, LANG_LOGGING, false, "play log", NULL),
 #if defined(HAVE_GENERAL_PURPOSE_LED)

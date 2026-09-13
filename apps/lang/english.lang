@@ -10047,6 +10047,23 @@
   </voice>
 </phrase>
 <phrase>
+  id: LANG_TOUCHSCREEN_SCROLLBAR_PADDING
+  desc: in Settings -> General -> Display -> Touchscreen Settings
+  user: core
+  <source>
+    *: none
+    touchscreen: "Scroll Bar Touch Width"
+  </source>
+  <dest>
+    *: none
+    touchscreen: "Scroll Bar Touch Width"
+  </dest>
+  <voice>
+    *: none
+    touchscreen: "Scroll Bar Touch Width"
+  </voice>
+</phrase>
+<phrase>
   id: LANG_TOUCHSCREEN_MODE
   desc: in Settings -> General -> Display -> Touchscreen Settings
   user: core
