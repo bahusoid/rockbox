@@ -17,8 +17,8 @@
 /* define this if you have access to the quickscreen */
 #define HAVE_QUICKSCREEN
 
-#define HAVE_HEADPHONE_DETECTION
-#define HAVE_LINEOUT_DETECTION
+//#define HAVE_HEADPHONE_DETECTION
+//#define HAVE_LINEOUT_DETECTION
 
 /* KeyPad configuration for plugins */
 #define CONFIG_KEYPAD XDUOO_X3II_PAD
