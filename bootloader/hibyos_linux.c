@@ -693,7 +693,7 @@ int main(int argc, char **argv)
     #endif
 
     system_init();
-    core_allocator_init();
+    //core_allocator_init();
     kernel_init();
     paths_init();
     lcd_init();
