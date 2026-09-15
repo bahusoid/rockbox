@@ -163,6 +163,10 @@ if [[ "$do_inject" -eq 1 ]]; then
     cp "$bootloader" "$workingdir_in/rootfs/extracted/usr/bin/$bootloader_file"
     chmod 0755 "$workingdir_in/rootfs/extracted/usr/bin/$bootloader_file"
 
+    # backup original 'hiby_player.sh' as 'hiby_player_orig.sh'
+    cp -n "$workingdir_in/rootfs/extracted/usr/bin/hiby_player.sh" "$workingdir_in/rootfs/extracted/usr/bin/hiby_player_orig.sh"
+    chmod 0755 "$workingdir_in/rootfs/extracted/usr/bin/hiby_player_orig.sh"
+
     # create modified 'hiby_player.sh' script
     cat << EOF > "$workingdir_in/rootfs/extracted/usr/bin/hiby_player.sh"
 #!/bin/sh
