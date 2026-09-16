@@ -20,6 +20,10 @@
 #define HAVE_HEADPHONE_DETECTION
 #define HAVE_LINEOUT_DETECTION
 
+#ifdef HAVE_HEADPHONE_DETECTION
+#define USE_REMOTE /* Comment out to disable headphone remote */
+#endif
+
 /* KeyPad configuration for plugins */
 #define CONFIG_KEYPAD XDUOO_X3II_PAD
 
