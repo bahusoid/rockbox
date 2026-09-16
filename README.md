@@ -7,7 +7,7 @@
 
 # Rockbox Audiobook Mod
 
-This is a personalized version of Rockbox, integrating my own modifications with community patches. The main focus is to improve the audiobook experience, and it also includes dedicated HiBy enhancements.
+A custom Rockbox build focused on optimizing the audiobook experience and adding dedicated HiBy R1 enhancements.
 
 ## Core Features & Improvements
 
@@ -23,6 +23,12 @@ This is a personalized version of Rockbox, integrating my own modifications with
 
 Available in the [Development Build](#development-builds):
 * **Bookmark Filtering:** Filter existing bookmarks by the currently playing track (open the context menu in the Bookmarks list and select "Filter by Playing Track"). Useful when you have many bookmarks for different files in the same directory.
+* **Screen-Off Shutdown Beep:** Added an audible beep when powering off via the hardware button, preventing over-pressing in your pocket.
+  *Plot twist:* Voice Menu must be disabled to hear this. It's on by default but silent without a voice file installed for accessibility reasons. Disable it in *Settings -> General Settings -> Voice -> Voice Menu*.
+* **Tweaked Default Settings:** See the [full list of changes](https://github.com/bahusoid/rockbox/blob/Mod25.12.07/docs/mods/changed_defaults.md).
+* **New Codecs:**
+    * DSD256 support: `.dsf`, `.dff`, and SACD `.iso` playback. Thanks to **Black0ut111** and his [mod for FiiO M3K](https://github.com/Black0ut111/Hi-M3k-Rockbox) for [patch enabling DSD64 playback](https://github.com/Black0ut111/Hi-M3k-Rockbox/blob/main/patches/0041-dsd64-dsf-dff-playback.patch) (with my small addition removing the DSD64 limit).
+    * WIP `.m4a` DASH initial support (currently works only for AAC LC).
 ---
 
 ## HiBy-Specific Enhancements
@@ -35,31 +41,29 @@ Available in the [Development Build](#development-builds):
     *   Added support for Bluetooth headset media buttons.
     *   Added direct Bluetooth management in the Status menu (enable/disable, codec switching, reconnection).
 *   **Additional Community Patches** *(Note: Most of these are now integrated into the official Rockbox release and are retained here primarily for functional reference)*:
-    *   [USB DAC](https://gerrit.rockbox.org/r/c/rockbox/+/7674)
-    *   [Touchscreen Keyboard](https://gerrit.rockbox.org/r/c/rockbox/+/7695)
-    *   [Gestures, swipes, and kinetic scrolling](docs/mods/touch-controls.md)
+    *   USB DAC (found in Settings > General Settings > System > USB > USB DAC) by [@michaelmcallister](https://gerrit.rockbox.org/r/c/rockbox/+/7674)
+    *   Touchscreen Keyboard by [@michaelmcallister](https://gerrit.rockbox.org/r/c/rockbox/+/7695)
+    *   [Gestures, swipes, and kinetic scrolling](docs/mods/touch-controls.md) by @amachronic
 
 Available in the [Development Build](#development-builds):
 
-* **Optimized Background Checks:** Extends battery life.
+* **Extended runtime:** Reduced power consumption by optimizing frequent background checks.
 * **Battery Protection Options:** Added configurable limits for charging voltage, current, and low-battery power-off (*Settings -> General Settings -> System -> Limits*).
   *Shortcut:* Long-press 'System' in the Main Menu to open System Settings directly.
 * **Touchscreen Exemptions:** Added the ability to disable touch controls in WPS and/or Lists/Menus (*Settings -> General Settings -> Display -> Touchscreen Settings -> Touchscreen Exemptions*).
-* **Screen-Off Shutdown Beep:** Added an audible beep when powering off via hardware button with the screen off, preventing over-pressing in your pocket. *(Note: Voice Menu must be disabled to hear this).*
 * **Snappier Scrolling & Navigation:** Removed scrolling inertia when stopping. Disabled the right-half screen tap for the **Quickscreen** to prevent accidental activations when attempting to navigate **Back**.
 * **Touch-Friendly Lists:** Increased the default size of list elements. Fine tune it for your fingers via *Settings -> General Settings -> Display -> Touchscreen Settings -> Line Padding in Lists*.
 * **UI Enhancements:** Larger system font and various default theme tweaks.
 * **Key Remapping:** Made keymap remap friendly. Added documentation and ready-to-use examples. See [Key Remapping](docs/mods/keyremap.md).
-* **Bootloader Expansion:** Added support for loading the Open HiBy player.
-* Tweaked Default Settings
+* **Bootloader:** Support for custom firmwares (requires my [modified patcher](https://github.com/bahusoid/rockbox/blob/Mod25.12.07/tools/r1_patcher/r1_patcher.sh)).
 
 ---
 
 ## Development Builds
 
-The latest development builds are available from the [GitHub Actions workflow](https://github.com/bahusoid/rockbox/actions/workflows/build.yml?query=branch%3AMod25.12.07). Select the most recent successful run and download the build from the "Artifacts" section (at the bottom of the page). Ignore debug files. Note that the artifact is double-zipped.
+The latest development builds are available from the [GitHub Actions workflow](https://github.com/bahusoid/rockbox/actions/workflows/build.yml?query=branch%3AMod25.12.07). Select the most recent successful run and download the build from the "Artifacts" section (at the bottom of the page). Note that the artifact is double-zipped.
 
-These builds do not include extra resources like fonts or audiobook config. For the best experience, install a [full release](https://github.com/bahusoid/rockbox/releases) first, then update with a development build.
+For Hiby R1: These builds do not include extra resources (like fonts). For the best experience, install a [full release](https://github.com/bahusoid/rockbox/releases) first, then update with a development build.
 
 ---
 

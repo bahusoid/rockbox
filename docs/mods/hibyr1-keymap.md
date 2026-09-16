@@ -50,3 +50,5 @@ This keymap restores standard media controls while keeping essential Rockbox men
 - If you just want to turn on the screen, press **Power** + **Vol Up** (**Lock** combo).
 - In **Pitchscreen**, use **Long Power** to change mode (or tap right **OK** on screen).
 - In most non-WPS contexts, **OK** = **Next** and **Cancel** = **Play**. This takes some getting used to. If Left/Right buttons are required in current context, try **Power** + **Play**/**Next** (one example - keyboard).
+- Pressing the Power button for 10+ seconds will force-reboot the device.
+- You can adjust the keymap using the keyremap plugin. See [Key Remap](keyremap.md) for more details.

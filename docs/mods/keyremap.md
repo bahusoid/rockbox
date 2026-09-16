@@ -170,29 +170,6 @@ CONTEXT_STD = {
 }
 ```
 
-## Generating Keymaps with AI
-
-You can easily ask an AI to create a custom remap for you. Since modern AI models can browse the internet, you can simply give them the link to this guide.
-
-Copy and paste the template below into your AI chat (this box has a convenient copy button in the top right):
-
-```text
-Please write a custom Rockbox keymap for my Hiby R1. 
-First, read the documentation for the syntax, buttons, and contexts here: 
-[https://github.com/bahusoid/rockbox/blob/Mod25.12.07/docs/mods/keyremap.md](https://github.com/bahusoid/rockbox/blob/Mod25.12.07/docs/mods/keyremap.md)
-
-Here is what I want the buttons to do:
-[Describe what you want here, e.g., "long press on power locks the device", or "use volume buttons for list scrolling instead of navigation"]
-
-Apply these strict constraints based on the documentation:
-1. Output ONLY valid keymap text block syntax.
-2. Use exact button names (BUTTON_POWER, BUTTON_RIGHT, BUTTON_LEFT, BUTTON_UP, BUTTON_DOWN).
-3. Use exact context headers (e.g., CONTEXT_STD = { ... }).
-4. Account for PRE_BUTTON_CONDITION if differentiating between short and long presses on the same button.
-```
-
-*(If you are using an older AI without internet access, simply copy and paste this entire markdown page into the chat alongside your prompt).*
-
 ## Further reference
 
 - `apps/action.h`: all action and context names
