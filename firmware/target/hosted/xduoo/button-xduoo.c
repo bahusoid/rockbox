@@ -26,8 +26,6 @@
 #include "kernel.h"
 #include "xduoolinux_codec.h"
 
-#define USE_REMOTE /* Comment out to disable headphone remote */
-
 int button_map(int keycode)
 {
     switch(keycode)
