@@ -142,6 +142,9 @@ bool rename_temp_file(const char *tempfile,
 
     remove(file);
     rename(tempfile, file);
+#if defined(HAVE_STORAGE_FLUSH) && defined(HAVE_HOTSWAP)
+    storage_flush();
+#endif
     return true;
 }
 
