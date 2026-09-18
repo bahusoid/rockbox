@@ -44,6 +44,7 @@
 
 /* define this to enable JPEG decoding */
 #define HAVE_JPEG
+#define HAVE_PNG
 
 /* define this if you have a light associated with the buttons */
 #define HAVE_BUTTON_LIGHT

@@ -42,8 +42,6 @@
 
 #include "config.h"
 
-#ifdef HAVE_PNG
-
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -690,5 +688,3 @@ int clip_png_fd(int fd, int pos, int size, struct bitmap *bm, int maxsize,
     return png_decode(fd, size > 0 ? (off_t)pos + size : 0, bm, maxsize,
                       format);
 }
-
-#endif /* HAVE_PNG */
