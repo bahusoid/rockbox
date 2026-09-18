@@ -867,20 +867,17 @@ static int load_image(int fd, const char *path,
 #endif
     const int format = FORMAT_NATIVE | FORMAT_DITHER |
                        FORMAT_RESIZE | FORMAT_KEEP_ASPECT;
+
+    const char* ext = aa == NULL ? path + strlen(path) - 4 : NULL;
+
 #ifdef HAVE_PNG
     /* PNG first, because it is the one case the type is known for certain:
      * an embedded picture says what it is, and a file says so in its name.
      * Everything else falls through to the old order. */
-    if (aa != NULL &&
-        (aa->type & AA_CLEAR_FLAGS_MASK) == AA_TYPE_PNG)
-    {
+    if (aa != NULL && (aa->type & AA_CLEAR_FLAGS_MASK) == AA_TYPE_PNG)
         rc = clip_png_fd(fd, aa->pos, aa->size, bmp, (int)max_size, format);
-    }
-    else if (aa == NULL && strlen(path) > 4 &&
-             !strcasecmp(path + strlen(path) - 4, ".png"))
-    {
+    else if (ext != NULL && !strcasecmp(ext, ".png"))
         rc = read_png_fd(fd, bmp, (int)max_size, format);
-    }
     else
 #endif
 #ifdef HAVE_JPEG
@@ -888,7 +885,7 @@ static int load_image(int fd, const char *path,
         lseek(fd, aa->pos, SEEK_SET);
         rc = clip_jpeg_fd(fd, aa->type, aa->size, bmp, (int)max_size, format, NULL, NULL);
     }
-    else if (strcmp(path + strlen(path) - 4, ".bmp"))
+    else if (ext != NULL && !strcasecmp(ext, ".jpg"))
         rc = read_jpeg_fd(fd, 0, bmp, (int)max_size, format,NULL, NULL);
     else
 #endif
