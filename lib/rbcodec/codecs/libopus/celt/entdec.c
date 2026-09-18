@@ -136,17 +136,57 @@ void ec_dec_init(ec_dec *_this,unsigned char *_buf,opus_uint32 _storage){
   ec_dec_normalize(_this);
 }
 
+#if defined(OPUS_ARM_ASM) && !defined(OPUS_ARM_NO_EC_DIV)
+/*val/ext for ec_decode() and ec_decode_bin(), without a libgcc call.
+  Rockbox links one libgcc for every ARM target, built without CLZ, so both
+   ARMv4 and ARMv5E otherwise pay a shift-subtract __udivsi3 here, and these
+   two sites make 98.6% of the decoder's calls to it.
+  The quotient is only used as _ft-EC_MINI(s+1,_ft), so it matters only below
+   _ft, and every Opus caller has _ft<=32768.  Since val<rng<=(ext+1)*_ft, the
+   quotient is below 2*_ft: nine bits when _ft<=256, sixteen otherwise.  Any
+   larger quotient, which only a corrupt stream produces, returns 0xFFFF and
+   clamps to the same result the true quotient would.
+  Testing n>>j against d rather than n against d<<j keeps every step free of
+   overflow when the start is a bound, and gcc turns each step into
+   cmp / subls / orrls on both CPUs.  Checked exact against '/' over 80
+   million cases in test/ecdivtest.c.*/
+static OPUS_INLINE unsigned ec_dec_div16(opus_uint32 _n,opus_uint32 _d,
+ int _small){
+  unsigned s;
+  s=0;
+#define EC_DIV_STEP(_j) if((_n>>(_j))>=_d){_n-=_d<<(_j);s|=1U<<(_j);}
+  if(_small){
+    if((_n>>9)>=_d)return 0xFFFF;
+    goto from8;
+  }
+  if((_n>>16)>=_d)return 0xFFFF;
+  EC_DIV_STEP(15) EC_DIV_STEP(14) EC_DIV_STEP(13) EC_DIV_STEP(12)
+  EC_DIV_STEP(11) EC_DIV_STEP(10) EC_DIV_STEP(9)
+from8:
+  EC_DIV_STEP(8)  EC_DIV_STEP(7)  EC_DIV_STEP(6)  EC_DIV_STEP(5)
+  EC_DIV_STEP(4)  EC_DIV_STEP(3)  EC_DIV_STEP(2)  EC_DIV_STEP(1)
+  EC_DIV_STEP(0)
+#undef EC_DIV_STEP
+  return s;
+}
+# define EC_DEC_DIV(_n,_d,_ft) (ec_dec_div16(_n,_d,(_ft)<=256))
+#else
+# define EC_DEC_DIV(_n,_d,_ft) ((unsigned)((_n)/(_d)))
+#endif
+
 unsigned ec_decode(ec_dec *_this,unsigned _ft){
   unsigned s;
+  celt_sig_assert(_ft<=32768);
   _this->ext=celt_udiv(_this->rng,_ft);
-  s=(unsigned)(_this->val/_this->ext);
+  s=EC_DEC_DIV(_this->val,_this->ext,_ft);
   return _ft-EC_MINI(s+1,_ft);
 }
 
 unsigned ec_decode_bin(ec_dec *_this,unsigned _bits){
    unsigned s;
+   celt_sig_assert(_bits<=15);
    _this->ext=_this->rng>>_bits;
-   s=(unsigned)(_this->val/_this->ext);
+   s=EC_DEC_DIV(_this->val,_this->ext,1U<<_bits);
    return (1U<<_bits)-EC_MINI(s+1U,1U<<_bits);
 }
 
