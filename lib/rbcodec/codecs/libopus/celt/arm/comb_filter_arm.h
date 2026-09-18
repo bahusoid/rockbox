@@ -53,6 +53,12 @@ void comb_filter_const_armv4(opus_val32 *y, opus_val32 *x, int T, int N,
 void celt_sat_armv4(celt_sig *x, int n);
 #  define CELT_SAT celt_sat_armv4
 
+/* deemphasis_stereo_simple, the last stage before PCM. */
+#  define OVERRIDE_DEEMPH_STEREO
+void deemph_stereo_armv4(celt_sig *x0, celt_sig *x1, opus_val16 *pcm, int N,
+                         int coef0, celt_sig *mem);
+#  define DEEMPH_STEREO deemph_stereo_armv4
+
 # elif defined(OPUS_ARM_INLINE_EDSP) && (ARM_ARCH == 5)
 
 #  define OVERRIDE_COMB_FILTER_CONST
@@ -65,6 +71,11 @@ void comb_filter_const_armv5e(opus_val32 *y, opus_val32 *x, int T, int N,
 #  define OVERRIDE_CELT_SAT
 void celt_sat_armv5e(celt_sig *x, int n);
 #  define CELT_SAT celt_sat_armv5e
+
+#  define OVERRIDE_DEEMPH_STEREO
+void deemph_stereo_armv5e(celt_sig *x0, celt_sig *x1, opus_val16 *pcm, int N,
+                          int coef0, celt_sig *mem);
+#  define DEEMPH_STEREO deemph_stereo_armv5e
 
 # endif
 
