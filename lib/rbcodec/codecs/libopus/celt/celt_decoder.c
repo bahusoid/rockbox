@@ -433,8 +433,12 @@ void celt_synthesis(const CELTMode *mode, celt_norm *X, celt_sig * out_syn[],
    /* Saturate IMDCT output so that we can't overflow in the pitch postfilter
       or in the */
    c=0; do {
+#ifdef OVERRIDE_CELT_SAT
+      CELT_SAT(out_syn[c], N);
+#else
       for (i=0;i<N;i++)
          out_syn[c][i] = SATURATE(out_syn[c][i], SIG_SAT);
+#endif
    } while (++c<CC);
     _ogg_free(freq);
    RESTORE_STACK;
