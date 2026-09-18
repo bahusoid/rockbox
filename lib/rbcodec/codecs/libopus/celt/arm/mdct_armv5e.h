@@ -23,44 +23,54 @@
    POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef MDCT_ARMv4_H
-#define MDCT_ARMv4_H
+#ifndef MDCT_ARMv5E_H
+#define MDCT_ARMv5E_H
 
-/* Hand-written inner loops for the backward MDCT.  Only the three loops are
-   replaced; the setup around them stays in C, so mdct.c remains readable and
-   the assembly needs no knowledge of mdct_lookup.  See
-   celt/arm/mdct_armv4_asm.S for why the compiled loops lose.
+/* Hand-written inner loops for the backward MDCT, the ARMv5E counterpart of
+   arm/mdct_armv4.h.  The compiled loops on this architecture already use the
+   32x16 multiply; what they miss is the packed halfword operand, the
+   multiply-accumulate and the multi-register transfer.  See
+   celt/arm/mdct_armv5e_asm.S.
+
+   These are bit-exact with the C on this architecture, unlike the ARMv4
+   kernels, which are more accurate than theirs.
 
    Building with OPUS_ARM_NO_MDCT_ASM selects the C loops instead, which is
    how the two are compared. */
 
-#if defined(OPUS_ARM_INLINE_ASM) && defined(FIXED_POINT) \
- && !defined(OPUS_ARM_NO_MDCT_ASM)
+#if defined(OPUS_ARM_INLINE_EDSP) && defined(FIXED_POINT) \
+ && (ARM_ARCH == 5) && !defined(OPUS_ARM_NO_MDCT_ASM)
 
 #define OVERRIDE_MDCT_PREROT
 #define OVERRIDE_MDCT_POSTROT
 #define OVERRIDE_MDCT_MIRROR
 
-#define MDCT_PREROT  mdct_prerot_armv4
-#define MDCT_POSTROT mdct_postrot_armv4
+#define MDCT_PREROT  mdct_prerot_armv5e
+#define MDCT_POSTROT mdct_postrot_armv5e
 
-#define MDCT_MIRROR  mdct_mirror_armv4
+#ifdef OPUS_PFA
+#define OVERRIDE_MDCT_POSTROT_PFA
+#define MDCT_POSTROT_PFA mdct_postrot_pfa_armv5e
+void mdct_postrot_pfa_armv5e(const kiss_fft_scalar *S, kiss_fft_scalar *yp0,
+                             kiss_fft_scalar *yp1, const kiss_twiddle_scalar *t,
+                             const opus_int16 *pmap, int N4);
+#endif
+#define MDCT_MIRROR  mdct_mirror_armv5e
 
 /* step is a byte stride, so the caller scales by sizeof(kiss_fft_scalar). */
-void mdct_prerot_armv4(const kiss_fft_scalar *xp1,
-                       const kiss_fft_scalar *xp2,
-                       const kiss_twiddle_scalar *t,
-                       const opus_int16 *bitrev,
-                       kiss_fft_scalar *yp, int N4, int step);
+void mdct_prerot_armv5e(const kiss_fft_scalar *xp1,
+                        const kiss_fft_scalar *xp2,
+                        const kiss_twiddle_scalar *t,
+                        const opus_int16 *bitrev,
+                        kiss_fft_scalar *yp, int N4, int step);
 
-void mdct_postrot_armv4(kiss_fft_scalar *yp0, kiss_fft_scalar *yp1,
-                        const kiss_twiddle_scalar *t, int N4, int count);
+void mdct_postrot_armv5e(kiss_fft_scalar *yp0, kiss_fft_scalar *yp1,
+                         const kiss_twiddle_scalar *t, int N4, int count);
 
-
-void mdct_mirror_armv4(kiss_fft_scalar *xp1, kiss_fft_scalar *yp1,
-                       const opus_val16 *wp1, const opus_val16 *wp2,
-                       int count);
+void mdct_mirror_armv5e(kiss_fft_scalar *xp1, kiss_fft_scalar *yp1,
+                        const opus_val16 *wp1, const opus_val16 *wp2,
+                        int count);
 
 #endif
 
-#endif /* MDCT_ARMv4_H */
+#endif /* MDCT_ARMv5E_H */
