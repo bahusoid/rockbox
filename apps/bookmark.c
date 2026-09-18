@@ -821,6 +821,8 @@ static int bookmark_list_voice_cb(int list_index, void* data)
 /* ------------------------------------------------------------------------*/
 static int select_bookmark(const char* bookmark_file_name, bool show_dont_resume, char** selected_bookmark)
 {
+    extract_mount_path(bookmark_file_name);
+
     //TODO: extract to method and reuse in cycle
     int count = get_bookmark_count(bookmark_file_name);
     if (count < 1)
