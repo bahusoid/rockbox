@@ -33,6 +33,7 @@
 
 #include <math.h>
 #include "bands.h"
+#include "log2tan_table.h"
 #include "modes.h"
 #include "vq.h"
 #include "cwrs.h"
@@ -717,6 +718,7 @@ static void compute_theta(struct band_ctx *ctx, struct split_ctx *sctx,
 {
    int qn;
    int itheta=0;
+   int itheta_q=-1;   /* the quantiser index behind itheta */
    int delta;
    int imid, iside;
    int qalloc;
@@ -849,6 +851,7 @@ static void compute_theta(struct band_ctx *ctx, struct split_ctx *sctx,
          }
       }
       celt_assert(itheta>=0);
+      itheta_q = itheta;
       itheta = celt_udiv((opus_int32)itheta*16384, qn);
       if (encode && stereo)
       {
@@ -904,7 +907,25 @@ static void compute_theta(struct band_ctx *ctx, struct split_ctx *sctx,
       iside = bitexact_cos((opus_int16)(16384-itheta));
       /* This is the mid vs side allocation that minimizes squared error
          in that band. */
-      delta = FRAC_MUL16((N-1)<<7,bitexact_log2tan(iside,imid));
+      /* bitexact_log2tan here is a function of (qn, itheta_q) alone, and that
+         set is closed and small, so it is tabulated exactly: two EC_ILOG
+         ladders and four FRAC_MUL16 products become one indexed load.  The
+         bounds test is what makes the lookup safe rather than merely correct:
+         every decode path bounds itheta_q to [0,qn], but a table index must
+         not depend on that being true of a corrupt stream. */
+      {
+         /* qn needs no range test: compute_qn clamps qb to 8<<BITRES before
+            the shift, so qn is in [1,256] whatever the stream says, and the
+            offset table spans that.  itheta_q does need one -- it is decoded
+            -- and an unlisted qn falls back through the 0xFFFF sentinel. */
+         int lt;
+         unsigned o = log2tan_off[qn];
+         if (o != 0xFFFFu && (unsigned)itheta_q <= (unsigned)qn)
+            lt = log2tan_tab[o + itheta_q];
+         else
+            lt = bitexact_log2tan(iside,imid);
+         delta = FRAC_MUL16((N-1)<<7,lt);
+      }
    }
 
    sctx->inv = inv;
