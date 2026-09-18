@@ -75,24 +75,35 @@ typedef uint8_t jpeg_pix_t;
 #define IDCT_WS_SIZE (64 + TRANSPOSE_EXTRA_IDCT_WS + COLOR_EXTRA_IDCT_WS)
 
 #define MAX_BLOCKS 6
-
-/* This can't be in jpeg_load.h because plugin.h includes it, and it conflicts
- * with the definition in jpeg_decoder.h
+/* 
+ * 1. Define the common fields in a macro.
+ * Note: The function pointers still explicitly expect `struct file_buffer*`. 
+ * This is correct, as the underlying API will pass the base type.
  */
-struct jpeg
-{
+#define FILE_BUFFER_FIELDS                                         \
+    int fd;                                                        \
+    int buf_left;                                                  \
+    int buf_index;                                                 \
+    int (*read_buf)(struct file_buffer* p_jpeg, size_t count);     \
+    bool (*skip_bytes_seek)(struct file_buffer* p_jpeg);           \
+    void* custom_param;                                            \
+    unsigned long len;                                             \
+    unsigned char buf[JPEG_READ_BUF_SIZE];
+
+/* 2. Define the base struct */
+struct file_buffer {
+    FILE_BUFFER_FIELDS
+};
+
+/* 3. Define the extended struct using the macro */
+struct jpeg {    
 #ifdef JPEG_FROM_MEM
     unsigned char *data;
-#else
-    int fd;
-    int buf_left;
-    int buf_index;
-
-    int (*read_buf)(struct jpeg* p_jpeg, size_t count);
-    bool (*skip_bytes_seek)(struct jpeg* p_jpeg);
-    void* custom_param;
-#endif
     unsigned long len;
+#else
+    //DON'T MOVE! MUST BE FIRST IN STRUCTURE
+    FILE_BUFFER_FIELDS
+#endif
     unsigned long int bitbuf;
     int bitbuf_bits;
     int marker_ind;
@@ -139,7 +150,6 @@ struct jpeg
     int block_x[MAX_BLOCKS];
     int block_y[MAX_BLOCKS];
     bool resize;
-    unsigned char buf[JPEG_READ_BUF_SIZE];
     struct img_part part;
 };
 
@@ -885,12 +895,12 @@ INLINE void jpeg_putc(struct jpeg* p_jpeg)
 }
 #else
 
-static int read_buf(struct jpeg* p_jpeg, size_t count)
+static int read_buf(struct file_buffer* p_jpeg, size_t count)
 {
     return read(p_jpeg->fd, p_jpeg->buf, count);
 }
 
-INLINE void fill_buf(struct jpeg* p_jpeg)
+INLINE void fill_buf(struct file_buffer* p_jpeg)
 {
     p_jpeg->buf_left = p_jpeg->read_buf(p_jpeg, MIN(JPEG_READ_BUF_SIZE, p_jpeg->len));
     p_jpeg->buf_index = 0;
@@ -899,13 +909,13 @@ INLINE void fill_buf(struct jpeg* p_jpeg)
 }
 
 #ifdef HAVE_ALBUMART
-static int read_buf_id3_unsync(struct jpeg* p_jpeg, size_t count)
+static int read_buf_id3_unsync(struct file_buffer* p_jpeg, size_t count)
 {
     count = read(p_jpeg->fd, p_jpeg->buf, count);
     return id3_unsynchronize(p_jpeg->buf, count, (bool*) &p_jpeg->custom_param);
 }
 
-static int read_buf_vorbis_base64(struct jpeg* p_jpeg, size_t count)
+static int read_buf_vorbis_base64(struct file_buffer* p_jpeg, size_t count)
 {
     struct ogg_file* ogg = p_jpeg->custom_param;
     unsigned char* buf = p_jpeg->buf;
@@ -918,7 +928,7 @@ static int read_buf_vorbis_base64(struct jpeg* p_jpeg, size_t count)
 
 /* when pjpeg->read_buf involves additional data processing (like base64 decoding)
  * we can't use lseek and have to call pjpeg->read_buf for proper seek */
-static bool skip_bytes_read_buf(struct jpeg* p_jpeg)
+static bool skip_bytes_read_buf(struct file_buffer* p_jpeg)
 {
     do
     {
@@ -944,7 +954,7 @@ static unsigned char *jpeg_getc(struct jpeg* p_jpeg)
     return (p_jpeg->buf_index++) + p_jpeg->buf;
 }
 
-static bool skip_bytes_seek(struct jpeg* p_jpeg)
+static bool skip_bytes_seek(struct file_buffer* p_jpeg)
 {
     if (UNLIKELY(lseek(p_jpeg->fd, -p_jpeg->buf_left, SEEK_CUR) < 0))
         return false;
@@ -2311,7 +2321,7 @@ int read_jpeg_fd(int fd, int flags,
 const size_t JPEG_DECODE_OVERHEAD =
     /* Reserve an arbitrary amount for the decode buffer
      * FIXME: Somebody who knows what they're doing should look at this */
-    (38 * 1024)
+    (42 * 1024)
 #ifndef JPEG_FROM_MEM
     /* Unless the struct jpeg is defined statically, we need to allocate
      * it in the bitmap buffer as well */
