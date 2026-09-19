@@ -871,10 +871,8 @@ static int load_image(int fd, const char *path,
     const char* ext = aa == NULL ? path + strlen(path) - 4 : NULL;
 
 #ifdef HAVE_PNG
-    /* PNG first, because it is the one case the type is known for certain:
-     * an embedded picture says what it is, and a file says so in its name.
-     * Everything else falls through to the old order. */
-    if (aa != NULL && (aa->type & AA_CLEAR_FLAGS_MASK) == AA_TYPE_PNG)
+    //TODO: Add support for vorbis, unsync flags in png decoder (needs special handling like in jpeg decoder)
+    if (aa != NULL && aa->type == AA_TYPE_PNG)
         rc = clip_png_fd(fd, aa->pos, aa->size, bmp, (int)max_size, format);
     else if (ext != NULL && !strcasecmp(ext, ".png"))
         rc = read_png_fd(fd, bmp, (int)max_size, format);
@@ -984,6 +982,17 @@ int bufopen(const char *file, off_t offset, enum data_type type,
         size = BM_SIZE(aa->dim->width, aa->dim->height, FORMAT_NATIVE, false);
         size += sizeof(struct bitmap);
 
+        //TODO: Also handle PNG:
+/*
+        Here is the exact memory footprint calculation for decoding a 500x500 source into a 120x120 target:Output Bitmap (bm_size): 
+        The memory required for the final 120x120 image. Assuming a standard 16-bit color target for portable players (fb_data = 2 bytes), this requires 120 * 120 * 2 = 28,800 bytes.  
+        Accumulators: The destination row calculation requires bm->width * 4 * sizeof(uint32_t). For a 120px output width, this is 120 * 4 * 4 = 1,920 bytes.
+        Scanline Buffers: The decoder needs two rows of the source width plus 1 filter byte per row, calculated as 2 * (rowbytes + 1).
+        For a standard 24-bit RGB PNG: ((500 * 24 + 7) / 8) + 1 = 1,501 bytes per row, totaling 3,002 bytes. 
+        For a standard 32-bit RGBA PNG: ((500 * 32 + 7) / 8) + 1 = 2,001 bytes per row, totaling 4,002 bytes.
+        Decompressor Workspace: The fixed inflate_size context and up to inflate_align - 1 bytes for alignment padding.   
+        Pointer Padding: Up to 3 bytes to align the accumulator pointers.   
+*/
 #ifdef HAVE_JPEG
         /* JPEG loading requires extra memory
          * TODO: don't add unncessary overhead for .bmp images! */
