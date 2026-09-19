@@ -224,9 +224,29 @@ static void unfilter(struct png_ctx *p, int filter)
             break;
 
         case 2:                                     /* Up */
+#if defined(CPU_ARM)
+        {
+            uint32_t *c32 = (uint32_t *)cur;
+            uint32_t *p32 = (uint32_t *)prev;
+            int n_chunks = n / 4;
+            int rem = n % 4;
+            
+            for (i = 0; i < n_chunks; i++) {
+                uint32_t x = c32[i];
+                uint32_t y = p32[i];
+                /* 4-byte parallel SWAR addition modulo 256 */
+                c32[i] = ((x & 0x7F7F7F7F) + (y & 0x7F7F7F7F)) ^ ((x ^ y) & 0x80808080);
+            }
+            /* Handle tail bytes */
+            for (i = n - rem; i < n; i++)
+                cur[i] = (unsigned char)(cur[i] + prev[i]);
+            break;
+        }
+#else
             for (i = 0; i < n; i++)
                 cur[i] = (unsigned char)(cur[i] + prev[i]);
             break;
+#endif
 
         case 3:                                     /* Average */
             for (i = 0; i < bpp && i < n; i++)
@@ -353,9 +373,31 @@ static void emit_row(struct png_ctx *p, int dy)
             continue;
         }
 
+#if defined(CPU_ARM)
+        /* Fast fixed-point division to avoid slow __aeabi_uidiv on ARM */
+        static const uint32_t inv_n[32] = {
+            0, 65536, 32768, 21845, 16384, 13107, 10922, 9362,
+            8192, 7281, 6553, 5957, 5461, 5041, 4681, 4369,
+            4096, 3855, 3640, 3449, 3276, 3120, 2978, 2849,
+            2730, 2621, 2520, 2427, 2340, 2259, 2184, 2114
+        };
+
+        if (n < 32) {
+            uint32_t inv = inv_n[n];
+            r = (p->acc[dx * 3]     * inv) >> 16;
+            g = (p->acc[dx * 3 + 1] * inv) >> 16;
+            b = (p->acc[dx * 3 + 2] * inv) >> 16;
+        } else {
+            r = p->acc[dx * 3]     / n;
+            g = p->acc[dx * 3 + 1] / n;
+            b = p->acc[dx * 3 + 2] / n;
+        }
+#else
         r = p->acc[dx * 3]     / n;
         g = p->acc[dx * 3 + 1] / n;
         b = p->acc[dx * 3 + 2] / n;
+#endif
+
         dst[dx] = LCD_RGBPACK(r, g, b);
     }
 }
@@ -366,25 +408,47 @@ static void accumulate_row(struct png_ctx *p)
     int sw = p->width, dw = bm->width;
     int sh = p->height, dh = bm->height;
     int y = p->src_y;
+
+#if defined(CPU_ARM)
+    /* Prevent expensive __aeabi_ldivmod 64-bit software divisions on ARM.
+     * Max dimensions (4096 * 4096 = 16.7M) safely fit in signed 32-bit int. */
+    int dy0 = (y * dh) / sh;
+    int dy1 = ((y + 1) * dh) / sh;
+    bool is_8bit_rgb = (p->depth == 8 && (p->colour == PNG_RGB || p->colour == PNG_RGBA));
+#else
     int dy0 = (int)((int64_t)y * dh / sh);
     int dy1 = (int)((int64_t)(y + 1) * dh / sh);
+#endif
+
     int x, dy;
 
     for (x = 0; x < sw; x++)
     {
         unsigned r, g, b;
+
+#if defined(CPU_ARM)
+        int dx0 = (x * dw) / sw;
+        int dx1 = ((x + 1) * dw) / sw;
+
+        /* Hoist common format check out of pixel_at to prevent thrashing branch pipeline */
+        if (is_8bit_rgb) {
+            const unsigned char *s = p->cur + (size_t)x * p->channels;
+            r = s[0]; g = s[1]; b = s[2];
+        } else {
+            pixel_at(p, x, &r, &g, &b);
+        }
+#else
         int dx0 = (int)((int64_t)x * dw / sw);
         int dx1 = (int)((int64_t)(x + 1) * dw / sw);
-        int dx;
-
         pixel_at(p, x, &r, &g, &b);
+#endif
 
         if (dx1 <= dx0)
             dx1 = dx0 + 1;
         if (dx1 > dw)
             dx1 = dw;
 
-        for (dx = dx0; dx < dx1; dx++)
+        for (int dx = dx0; dx < dx1; dx++)
         {
             p->acc[dx * 3]     += r;
             p->acc[dx * 3 + 1] += g;
@@ -628,6 +692,17 @@ static int png_decode(int fd, off_t limit, struct bitmap *bm, int maxsize,
         avail -= (int)pad + (int)need;
     }
 
+#if defined(CPU_ARM)
+    /* Align the row allocation to 4 bytes to allow SWAR operations,
+     * padding with +4 so p.cur[-1] is safe and p.cur is exactly 4-byte aligned. */
+    rowalloc = (p.rowbytes + 4 + 3) & ~3;
+    if (2 * rowalloc > avail)
+        return -1;
+
+    memset(tail, 0, 2 * rowalloc);
+    p.cur  = tail + 4;
+    p.prev = tail + rowalloc + 4;
+#else
     /* Two scanlines, each with one byte in front of it for the filter, so
      * the two can be swapped without copying. */
     rowalloc = p.rowbytes + 1;
@@ -637,6 +712,7 @@ static int png_decode(int fd, off_t limit, struct bitmap *bm, int maxsize,
     memset(tail, 0, 2 * rowalloc);
     p.cur  = tail + 1;
     p.prev = tail + rowalloc + 1;
+#endif
 
     memset(p.acc, 0, sizeof(uint32_t) * 3 * bm->width);
     memset(p.cnt, 0, sizeof(uint32_t) * bm->width);
