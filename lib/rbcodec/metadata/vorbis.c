@@ -306,44 +306,83 @@ const char b64_codes[] =
 
 size_t base64_decode(const char *in, size_t in_len, unsigned char *out)
 {
-    size_t i = 0;
-    int val = 0;
-    size_t len = 0;
+    const unsigned char *src = (const unsigned char *)in;
+    unsigned char *dst = out;
+    size_t len = in_len;
 
-    while (i < in_len)
+    /* 1. Strip padding '=' upfront to eliminate checks in the hot loop */
+    while (len > 0 && src[len - 1] == '=') {
+        len--;
+    }
+
+    /* 2. Process complete 4-byte blocks (unrolled loop) */
+    size_t blocks = len / 4;
+    while (blocks--)
     {
-        if (in[i] == '=') //is it padding?
-        {
-            switch (i & 3)
-            {
-                case 2:
-                    out[len++] = (val >> 4) & 0xFF;
-                break;
-                case 3:
-                    out[len++] = (val >> 10) & 0xFF;
-                out[len++] = (val >>  2) & 0xFF;
-                break;
-            }
-            break;
-        }
-        int index = in[i] - B64_START_CHAR;
+        /* Unsigned casting ensures negative results (e.g. from space char) wrap to huge numbers */
+        unsigned int c1 = *src++ - B64_START_CHAR;
+        unsigned int c2 = *src++ - B64_START_CHAR;
+        unsigned int c3 = *src++ - B64_START_CHAR;
+        unsigned int c4 = *src++ - B64_START_CHAR;
+
 #ifdef SIMULATOR
-        if (index < 0 || index >= (int)ARRAYLEN(b64_codes) || b64_codes[index] < 0)
-        {
-            DEBUGF("Invalid base64 char: '%c', char code: %i.\n", in[i], in[i]);
-            break;
+        /* Single check handles both underflow and overflow due to unsigned wrapping */
+        if (c1 >= ARRAYLEN(b64_codes) || c2 >= ARRAYLEN(b64_codes) ||
+            c3 >= ARRAYLEN(b64_codes) || c4 >= ARRAYLEN(b64_codes)) {
+            DEBUGF("Invalid base64 char out of bounds.\n");
+            return dst - out;
         }
 #endif
-        val = (val << 6) | b64_codes[index];
 
-        if ((++i & 3) == 0)
-        {
-            out[len++] = (val >> 16) & 0xFF;
-            out[len++] = (val >> 8) & 0xFF;
-            out[len++] = val & 0xFF;
+        int v1 = b64_codes[c1];
+        int v2 = b64_codes[c2];
+        int v3 = b64_codes[c3];
+        int v4 = b64_codes[c4];
+
+#ifdef SIMULATOR
+        /* Branchless validation: if any value is -1, the sign bit is set in the OR result */
+        if ((v1 | v2 | v3 | v4) < 0) {
+            DEBUGF("Invalid base64 char code.\n");
+            return dst - out;
         }
+#endif
+
+        /* Inline shifts allow the compiler to use ARM's free barrel shifter */
+        *dst++ = (v1 << 2) | (v2 >> 4);
+        *dst++ = (v2 << 4) | (v3 >> 2);
+        *dst++ = (v3 << 6) | v4;
     }
-    return len;
+
+    /* 3. Handle the remaining 2 or 3 characters (padding chunk) */
+    size_t rem = len & 3;
+    if (rem == 2)
+    {
+        unsigned int c1 = *src++ - B64_START_CHAR;
+        unsigned int c2 = *src++ - B64_START_CHAR;
+
+#ifdef SIMULATOR
+        if (c1 >= ARRAYLEN(b64_codes) || c2 >= ARRAYLEN(b64_codes)) return dst - out;
+#endif
+
+        *dst++ = (b64_codes[c1] << 2) | (b64_codes[c2] >> 4);
+    }
+    else if (rem == 3)
+    {
+        unsigned int c1 = *src++ - B64_START_CHAR;
+        unsigned int c2 = *src++ - B64_START_CHAR;
+        unsigned int c3 = *src++ - B64_START_CHAR;
+
+#ifdef SIMULATOR
+        if (c1 >= ARRAYLEN(b64_codes) || c2 >= ARRAYLEN(b64_codes) || c3 >= ARRAYLEN(b64_codes)) return dst - out;
+#endif
+
+        int v1 = b64_codes[c1];
+        int v2 = b64_codes[c2];
+        *dst++ = (v1 << 2) | (v2 >> 4);
+        *dst++ = (v2 << 4) | (b64_codes[c3] >> 2);
+    }
+
+    return dst - out;
 }
 
 size_t base64_encoded_size(size_t inlen)
