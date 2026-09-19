@@ -109,6 +109,9 @@ struct OpusCustomDecoder {
    /* opus_val16 backgroundLogE[], Size = 2*mode->nbEBands */
 };
 
+static opus_val16 _exc[MAX_PERIOD+LPC_ORDER] IBSS_ATTR_LARGE;
+static opus_val16 fir_tmp[MAX_PERIOD] IBSS_ATTR_LARGE;
+
 #if defined(ENABLE_HARDENING) || defined(ENABLE_ASSERTIONS)
 /* Make basic checks on the CELT state to ensure we don't end
    up writing all over memory. */
@@ -593,8 +596,6 @@ static void celt_decode_lost(CELTDecoder * OPUS_RESTRICT st, int N, int LM)
       opus_val16 fade = Q15ONE;
       int pitch_index;
       VARDECL(opus_val32, etmp);
-      VARDECL(opus_val16, _exc);
-      VARDECL(opus_val16, fir_tmp);
 
       if (loss_count == 0)
       {
@@ -609,8 +610,6 @@ static void celt_decode_lost(CELTDecoder * OPUS_RESTRICT st, int N, int LM)
       exc_length = IMIN(2*pitch_index, MAX_PERIOD);
 
       ALLOC(etmp, overlap, opus_val32);
-      ALLOC(_exc, MAX_PERIOD+LPC_ORDER, opus_val16);
-      ALLOC(fir_tmp, exc_length, opus_val16);
       exc = _exc+LPC_ORDER;
       window = mode->window;
       c=0; do {
