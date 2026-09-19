@@ -22,9 +22,6 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
-//#define DEBUG
-//#define LOGF_ENABLE
-//#include "logf.h"
 
 #include "codeclib.h"
 #include "inttypes.h"
@@ -465,9 +462,9 @@ enum codec_status codec_run(void)
                     }
                     skip = header->preskip;
 
-                    st = opus_decoder_create_rockbox(sample_rate, header->channels, &ret);
+                    st = opus_decoder_create(sample_rate, header->channels, &ret);
                     if (ret != OPUS_OK) {
-                        LOGF("opus_decoder_create_rockbox failed %d", ret);
+                        LOGF("opus_decoder_create failed %d", ret);
                         goto done;
                     }
                     LOGF("Decoder inited");
@@ -506,7 +503,7 @@ enum codec_status codec_run(void)
                     ci->set_elapsed((granule_pos - header->preskip) / 48);
 
                     /* Decode audio packets */
-                    ret = opus_decode_rockbox(st, op.packet, op.bytes, output, MAX_FRAME_SIZE, 0);
+                    ret = opus_decode(st, op.packet, op.bytes, output, MAX_FRAME_SIZE, 0);
 
                     if (ret > skip) {
                         /* part of or entire output buffer is played */
@@ -515,7 +512,7 @@ enum codec_status codec_run(void)
                         skip = 0;
                     } else {
                         if (ret < 0) {
-                            LOGF("opus_decode_rockbox failed %d", ret);
+                            LOGF("opus_decode failed %d", ret);
                             goto done;
                         } else if (ret == 0)
                             break;

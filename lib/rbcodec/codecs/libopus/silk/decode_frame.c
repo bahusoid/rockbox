@@ -32,8 +32,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "main.h"
 #include "stack_alloc.h"
 #include "PLC.h"
-//#define LOGF_ENABLE
-//#include "logf.h"
+
 /****************/
 /* Decode frame */
 /****************/

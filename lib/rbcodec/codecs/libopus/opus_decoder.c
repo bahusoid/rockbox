@@ -37,9 +37,6 @@
 # pragma message "You appear to be compiling without optimization, if so opus will be very slow."
 #endif
 
-#define DEBUG
-#define LOGF_ENABLE
-
 #include <stdarg.h>
 #include "celt.h"
 #include "opus.h"
@@ -54,9 +51,6 @@
 #include "define.h"
 #include "mathops.h"
 #include "cpu_support.h"
-
-
-#include "logf.h"
 
 struct OpusDecoder {
    int          celt_dec_offset;
@@ -119,7 +113,7 @@ int opus_decoder_get_size(int channels)
    return align(sizeof(OpusDecoder))+silkDecSizeBytes+celtDecSizeBytes;
 }
 
-int opus_decoder_init_rockbox(OpusDecoder *st, opus_int32 Fs, int channels)
+int opus_decoder_init(OpusDecoder *st, opus_int32 Fs, int channels)
 {
    void *silk_dec;
    CELTDecoder *celt_dec;
@@ -166,7 +160,7 @@ int opus_decoder_init_rockbox(OpusDecoder *st, opus_int32 Fs, int channels)
 #define STATIC_DECODER_SIZE 26548 /* 26548 for 2ch 64bit environment  */
 static char s_dec[STATIC_DECODER_SIZE] IBSS_ATTR MEM_ALIGN_ATTR;
 
-OpusDecoder *opus_decoder_create_rockbox(opus_int32 Fs, int channels, int *error)
+OpusDecoder *opus_decoder_create(opus_int32 Fs, int channels, int *error)
 {
    int ret;
    OpusDecoder *st;
@@ -188,7 +182,7 @@ OpusDecoder *opus_decoder_create_rockbox(opus_int32 Fs, int channels, int *error
          *error = OPUS_ALLOC_FAIL;
       return NULL;
    }
-   ret = opus_decoder_init_rockbox(st, Fs, channels);
+   ret = opus_decoder_init(st, Fs, channels);
    if (error)
       *error = ret;
    if (ret != OPUS_OK)
@@ -753,8 +747,8 @@ int opus_decode_native(OpusDecoder *st, const unsigned char *data,
 
 #ifdef FIXED_POINT
 
-int opus_decode_rockbox(OpusDecoder *st, const unsigned char *data,
-      opus_int32 len, opus_int16 *pcm, int frame_size, int decode_fec)
+int opus_decode(OpusDecoder *st, const unsigned char *data,
+      opus_int32 len, opus_val16 *pcm, int frame_size, int decode_fec)
 {
    if(frame_size<=0)
       return OPUS_BAD_ARG;

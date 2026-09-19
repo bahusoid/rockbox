@@ -1436,7 +1436,6 @@ void quant_all_bands(int encode, const CELTMode *m, int start, int end,
    norm_offset = M*eBands[start];
    /* No need to allocate norm for the last band because we don't need an
       output in that band. */
-   //ALLOCH(_norm, C*(M*eBands[m->nbEBands-1]-norm_offset), celt_norm);
    ALLOC(_norm, C*(M*eBands[m->nbEBands-1]-norm_offset), celt_norm);
    norm = _norm;
    norm2 = norm + M*eBands[m->nbEBands-1]-norm_offset;
@@ -1670,6 +1669,5 @@ void quant_all_bands(int encode, const CELTMode *m, int start, int end,
    }
    *seed = ctx.seed;
 
-    //_ogg_free(norm);
    RESTORE_STACK;
 }
