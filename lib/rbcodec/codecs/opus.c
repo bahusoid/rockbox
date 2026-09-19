@@ -233,7 +233,7 @@ static int64_t seek_backwards(ogg_sync_state *oy, ogg_page *og,
 }
 
 static int opus_seek_page_granule(int64_t pos, int64_t curpos,
-                                   ogg_sync_state *oy, ogg_stream_state *os)
+                                   ogg_sync_state *oy)
 {
     /* TODO: Someone may want to try to implement seek to packet,
              instead of just to page (should be more accurate, not be any
@@ -301,9 +301,11 @@ static int opus_seek_page_granule(int64_t pos, int64_t curpos,
     if (pos == 0) {  /* start */
         *curbyteoffset = 0;
         ogg_sync_reset(oy);
-        ogg_stream_reset(os);
-        seek_ogg_page(0);
-        return 0;
+        if (seek_opus_tags())
+        {
+            seek_ogg_page(ci->curpos);
+            return 0;
+        }
     } else if (curpos > pos) {  /* backwards */
         offset = seek_backwards(oy,&og,pos);
 
@@ -418,7 +420,7 @@ enum codec_status codec_run(void)
 
                 LOGF("Opus seek page:%lld,%lld,%ld\n", (long long int)seek_target,
                      (long long int)page_granule, (long)param);
-                opus_seek_page_granule(seek_target, page_granule, oy, os);
+                opus_seek_page_granule(seek_target, page_granule, oy);
                 /* reset the state to help ensure that subsequent packets won't
                    use state set by unrelated packets processed before seek */
                 opus_decoder_ctl(st, OPUS_RESET_STATE);
