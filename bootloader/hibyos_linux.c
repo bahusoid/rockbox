@@ -46,6 +46,7 @@
 #include <sys/wait.h>
 #include <stdarg.h>
 #include "version.h"
+#include "fs_defines.h"
 
 //#define ENABLE_LOGGING
 //#define AUTO_ENABLE_ADB
@@ -497,9 +498,8 @@ int choice_screen(const char *title, bool center, int nr_choices, const char *ch
 
 void run_file(const char *name)
 {
-    char *dirname = BASE_DIR;
-    char *buf = malloc(strlen(dirname) + strlen(name) + 1);
-    sprintf(buf, "%s%s", dirname, name);
+    char buf[MAX_PATH];
+    sprintf(buf, "%s%s", BASE_DIR"/", name);
 
     lcd_clear_display();
     lcd_set_foreground(LCD_RGBPACK(255, 201, 0));
