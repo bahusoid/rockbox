@@ -369,7 +369,7 @@ static void emit_row(struct png_ctx *p, int dy)
             /* A destination column no source pixel reached, which happens
              * only on an upscale of a one-pixel-wide picture. Repeat the
              * one to its left rather than leaving a hole. */
-            dst[dx] = dx > 0 ? dst[dx - 1] : 0;
+            dst[dx] = dx > 0 ? dst[dx - 1] : FB_SCALARPACK(0);
             continue;
         }
 
