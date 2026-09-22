@@ -20,6 +20,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     realpath()    { grealpath "$@"; }
     stat()        { gstat "$@"; }
     split()       { gsplit "$@"; }
+    cp()          { gcp "$@"; }
     md5sum()      { gmd5sum "$@"; }
     genisoimage() { mkisofs "$@"; }
     
@@ -39,8 +40,9 @@ usage() {
     echo '  ./r1_patcher.sh r1.upt bootloader.r1' >&2
     echo '' >&2
     echo 'Advanced usage:' >&2
+    echo '  ./r1_patcher.sh r1.upt bootloader.r1 [path_to_startup_script]' >&2
     echo '  ./r1_patcher.sh --unpack r1.upt [working_dir]' >&2
-    echo '  ./r1_patcher.sh --inject-app bootloader.r1 [working_dir]' >&2
+    echo '  ./r1_patcher.sh --inject-app bootloader.r1 [working_dir] [path_to_startup_script]' >&2
     echo '  ./r1_patcher.sh --pack [working_dir] [output.upt]' >&2
     exit 1
 }
@@ -53,11 +55,12 @@ fi
 
 case "$mode" in
     "")
-        if [[ $# -ne 2 ]]; then
+        if [[ $# -lt 2 || $# -gt 3 ]]; then
             usage
         fi
         updatefile="$1"
         bootloader="$2"
+        startup_script="${3-}"
         workingdir="$(realpath -m ./working_dir)"
         updatefile_rb="${updatefile%.*}_rb.upt"
         do_unpack=1
@@ -78,11 +81,12 @@ case "$mode" in
         do_cleanup=0
         ;;
     --inject-app)
-        if [[ $# -lt 1 || $# -gt 2 ]]; then
+        if [[ $# -lt 1 || $# -gt 3 ]]; then
             usage
         fi
         bootloader="$1"
         workingdir="${2:-./working_dir}"
+        startup_script="${3-}"
         workingdir="$(realpath -m "$workingdir")"
         do_unpack=0
         do_inject=1
@@ -150,7 +154,7 @@ if [[ "$do_unpack" -eq 1 ]]; then
     cat "$workingdir_in/image_contents/ota_v0"/rootfs.squashfs.* > "$workingdir_in/rootfs/rootfs.squashfs"
 
     # extract rootfs
-    unsquashfs -f -d "$workingdir_in/rootfs/extracted" "$workingdir_in/rootfs/rootfs.squashfs"
+    unsquashfs -no-xattrs -f -d "$workingdir_in/rootfs/extracted" "$workingdir_in/rootfs/rootfs.squashfs"
 fi
 
 ################################################################################
@@ -163,12 +167,17 @@ if [[ "$do_inject" -eq 1 ]]; then
     cp "$bootloader" "$workingdir_in/rootfs/extracted/usr/bin/$bootloader_file"
     chmod 0755 "$workingdir_in/rootfs/extracted/usr/bin/$bootloader_file"
 
+    startup_script="${startup_script:-/usr/bin/hiby_player.sh}"
+    echo "Patch file: $startup_script"
+
+    startup_script_target="$workingdir_in/rootfs/extracted$startup_script"
+
     # backup original 'hiby_player.sh' as 'hiby_player_orig.sh'
-    cp -n "$workingdir_in/rootfs/extracted/usr/bin/hiby_player.sh" "$workingdir_in/rootfs/extracted/usr/bin/hiby_player_orig.sh"
+    cp --update=none "$startup_script_target" "$workingdir_in/rootfs/extracted/usr/bin/hiby_player_orig.sh"
     chmod 0755 "$workingdir_in/rootfs/extracted/usr/bin/hiby_player_orig.sh"
 
-    # create modified 'hiby_player.sh' script
-    cat << EOF > "$workingdir_in/rootfs/extracted/usr/bin/hiby_player.sh"
+    # create modified startup script
+    cat << EOF > "$startup_script_target"
 #!/bin/sh
 
 killall    hiby_player    &>/dev/null
@@ -180,7 +189,7 @@ killall -9 $bootloader_file    &>/dev/null
 /usr/bin/$bootloader_file
 sleep 1s
 EOF
-    chmod 0755 "$workingdir_in/rootfs/extracted/usr/bin/hiby_player.sh"
+    chmod 0755 "$startup_script_target"
 fi
 
 ################################################################################
