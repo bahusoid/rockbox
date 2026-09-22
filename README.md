@@ -21,7 +21,7 @@ A custom Rockbox build focused on optimizing the audiobook experience and adding
     *   **ImageViewer:** Uses the system JPEG decoder to efficiently load large JPEG images without preloading them into memory. Implements smart resize for frameless viewing and displays embedded album art from Ogg/Opus files.
 *   **Other Updates:** A wide array of other under-the-hood fixes and improvements. See the [full list of changes](https://github.com/Rockbox/rockbox/compare/master...bahusoid:rockbox:Mod25.12.07).
 
-Available in the [Development Build](#development-builds):
+Available in the latest release:
 * **Bookmark Filtering:** Filter existing bookmarks by the currently playing track (open the context menu in the Bookmarks list and select "Filter by Playing Track"). Useful when you have many bookmarks for different files in the same directory.
 * **Screen-Off Shutdown Beep:** Added an audible beep when powering off via the hardware button, preventing over-pressing in your pocket.
   *Plot twist:* Voice Menu must be disabled to hear this. It's on by default but silent without a voice file installed for accessibility reasons. Disable it in *Settings -> General Settings -> Voice -> Voice Menu*.
@@ -45,7 +45,7 @@ Available in the [Development Build](#development-builds):
     *   Touchscreen Keyboard by [@michaelmcallister](https://gerrit.rockbox.org/r/c/rockbox/+/7695)
     *   [Gestures, swipes, and kinetic scrolling](docs/mods/touch-controls.md) by @amachronic
 
-Available in the [Development Build](#development-builds):
+Available in the latest release:
 
 * **Extended runtime:** Reduced power consumption by optimizing frequent background checks.
 * **Battery Protection Options:** Added configurable limits for charging voltage, current, and low-battery power-off (*Settings -> General Settings -> System -> Limits*).
