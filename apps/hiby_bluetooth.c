@@ -22,6 +22,7 @@
 #include "lang.h"
 #include "settings.h"
 #include "hiby_bluetooth.h"
+#include <sys/wait.h>
 
 #if defined(HIBY_LINUX) && !defined(SIMULATOR)
 
@@ -100,6 +101,41 @@ static bool bt_prepare_stack(bool suspended);
 static void bt_connect_device(const struct bt_device *device);
 static void bt_disconnect(void);
 static bool is_busy = false;
+
+
+int run_with_timeout(const char *cmd, int timeout_secs) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        // child: execute command
+        execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+        _exit(127); // exec failed
+    }
+
+    // parent: wait with timeout
+    int status;
+    for (int i = 0; i < timeout_secs; i++) {
+        pid_t done = waitpid(pid, &status, WNOHANG);
+        if (done == pid) {
+            // child finished
+            if (WIFEXITED(status)) {
+                return WEXITSTATUS(status);
+            } else {
+                return -1; // abnormal termination
+            }
+        }
+        sleep(HZ/4);
+    }
+
+    // timeout reached → send SIGINT (Ctrl+C)
+    kill(pid, SIGINT);
+    // optionally escalate if still alive
+    sleep(1);
+    if (waitpid(pid, &status, WNOHANG) == 0) {
+        kill(pid, SIGKILL);
+        waitpid(pid, &status, 0);
+    }
+    return -2; // indicate timeout
+}
 
 void hiby_debug_log(const char *format, ...)
 {
