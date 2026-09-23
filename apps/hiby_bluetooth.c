@@ -96,7 +96,7 @@ static bool bt_wait_for_bluealsa_pcm(const char *mac, int timeout_ticks);
 static void bt_set_active_codec(const char *mac);
 static bool bt_bluealsa_pcm_ready(const char *mac);
 static bool bt_is_connected(const char *mac);
-static bool bt_prepare_stack(void);
+static bool bt_prepare_stack(bool suspended);
 static void bt_connect_device(const struct bt_device *device);
 static void bt_disconnect(void);
 static bool is_busy = false;
@@ -152,10 +152,10 @@ int count_items(const char *path, int max_count){
     return count;
 }
 
-bool bt_is_suspended_fast(void)
+bool bt_is_suspended_fast(bool check_boot_file)
 {
     return access(BT_SYS_PATH"/hci0", F_OK) != 0 
-    && access(PIVOT_ROOT BOOT_SETTING_FILE, F_OK) != 0;
+    && (!check_boot_file || access(PIVOT_ROOT BOOT_SETTING_FILE, F_OK) != 0);
 }
 
 bool bt_is_connected_fast(void)
@@ -811,9 +811,9 @@ bool bt_enable(void)
     //return system("bt-adapter --set \"Powered\" \"On\" | grep 'Powered: 1'") == 0;
 }
 
-static bool bt_prepare_stack(void)
+static bool bt_prepare_stack(bool suspended)
 {
-    if (bt_enable())
+    if (!suspended && bt_enable())
         return true;
 
     splash(0, ID2P(LANG_BT_SUSPENDED_RESUMING));
@@ -831,10 +831,11 @@ static void bt_show_devices(void)
 {
     wait_for_bt_init();
 
+    bool suspended = bt_is_suspended_fast(false);
     static struct bt_device devices[BT_MAX_DEVICES];
     int count;
 
-    if (!bt_enable())
+    if (suspended || !bt_enable())
     {
         const char *lines[] = {(const char *)str(LANG_BT_IS_SUSPENDED),
                               (const char *)str(LANG_BT_ENABLE_IT)};
@@ -843,7 +844,7 @@ static void bt_show_devices(void)
         if (gui_syncyesno_run(&message, NULL, NULL) != YESNO_YES)
             return;
 
-        if (!bt_prepare_stack())
+        if (!bt_prepare_stack(suspended))
         {
             //try to suspend again to avoid leaving it in a weird state
             bt_suspend();
@@ -893,7 +894,7 @@ static void bt_connect_device(const struct bt_device *device)
 
     splash(0, ID2P(LANG_BT_CONNECTING));
 
-    if (!bt_prepare_stack())
+    if (!bt_prepare_stack(false))
     {
         splash(HZ * 2, ID2P(LANG_BT_UNAVAILABLE));
         return;
@@ -1102,11 +1103,12 @@ static void bt_show_status(void)
     bool bt_on = false;
     int sel;
 
-    bool suspended = bt_is_suspended_fast();
+    bool suspended = bt_is_suspended_fast(true);
     if (!suspended)
     {
         wait_for_bt_init();
-        bt_on = bt_is_enabled();
+        suspended = bt_is_suspended_fast(false);
+        bt_on = !suspended && bt_is_enabled();
     }
     while (1)
     {
@@ -1178,7 +1180,7 @@ static void bt_show_status(void)
 
             if (t_info.selection == 0)
             {
-                bt_on = bt_prepare_stack();
+                bt_on = bt_prepare_stack(suspended);
             }
             else if (t_info.selection > 0)
             {
