@@ -1029,7 +1029,10 @@ static int bt_get_available_codecs(const char *mac,
     fp = popen(cmd, "r");
     if (!fp)
         return 0;
-
+/*
+    Available codecs: SBC AAC
+    Selected codec: AAC
+*/
     while (fgets(line, sizeof(line), fp))
     {
         if (strncmp(line, "Available codecs:", 17) == 0)
@@ -1073,7 +1076,7 @@ static void bt_show_codec_picker(const char *mac)
     data.items = codecs;
     data.count = count;
 
-    simplelist_info_init(&info, ID2P(LANG_BT_SELECT_CODEC), count, &data);
+    simplelist_info_init(&info, str(LANG_BT_SELECT_CODEC), count, &data);
     info.get_name = bt_strlist_name_cb;
     info.action_callback = bt_simplelist_ok_cancel;
     info.selection = -1;
@@ -1090,12 +1093,7 @@ static void bt_show_codec_picker(const char *mac)
         //This seems to work more reliable with active playback, but setting seems doesn't stick through reboots (?)
         //if (bt_route_to_bluetooth(mac, codecs[info.selection]))
 
-        if (bt_try_set_codec(pcm_path, codecs[info.selection]) && bt_route_to_bluetooth(mac, NULL))
-        {
-            //bt_set_active_codec(mac);
-            splashf(HZ, "%s: %s", ID2P(LANG_BT_CODEC), bt_active_codec );
-        }
-        else
+        if (!bt_try_set_codec(pcm_path, codecs[info.selection]) || !bt_route_to_bluetooth(mac, NULL))
             splash(HZ, ID2P(LANG_BT_CODEC_CHANGE_FAILED));
     }
 }
