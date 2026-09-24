@@ -53,6 +53,8 @@
 #include "inflate.h"
 #include "png_load.h"
 
+#include "../../firmware/export/lcd.h"
+
 #define PNG_MAX_DIM 4096
 
 enum png_colour {
@@ -398,7 +400,7 @@ static void emit_row(struct png_ctx *p, int dy)
         b = p->acc[dx * 3 + 2] / n;
 #endif
 
-        dst[dx] = FB_RGBPACK_LCD(r, g, b);
+        dst[dx] = FB_RGBPACK(r, g, b);
     }
 }
 
