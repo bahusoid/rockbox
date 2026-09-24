@@ -42,7 +42,6 @@
 
 #include "config.h"
 
-#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include "file.h"
@@ -52,6 +51,13 @@
 #include "resize.h"
 #include "inflate.h"
 #include "png_load.h"
+#include "metadata_common.h"
+#include "albumart_load_common.h"
+#include "alloca.h"
+//#include "jpeg_load.h"
+#ifndef JPEG_FROM_MEM
+#include "albumart_load_common.h"
+#endif
 
 #include "../../firmware/export/lcd.h"
 
@@ -67,9 +73,9 @@ enum png_colour {
 
 struct png_ctx
 {
+    FILE_BUFFER_FIELDS
     /* ---- the file ---------------------------------------------------- */
-    int      fd;
-    off_t    limit;         /* one past the last byte we may read         */
+    //off_t    limit;         /* one past the last byte we may read         */
     uint32_t chunk_left;    /* bytes left in the IDAT being read          */
     bool     ended;         /* IEND seen, or no more IDATs                */
 
@@ -99,9 +105,17 @@ struct png_ctx
 
 static bool rd_exact(struct png_ctx *p, void *buf, size_t n)
 {
-    if (p->limit > 0 && lseek(p->fd, 0, SEEK_CUR) + (off_t)n > p->limit)
-        return false;
-    return read(p->fd, buf, n) == (ssize_t)n;
+    unsigned char *out = buf;
+
+    while (n > 0)
+    {
+        unsigned char *c = filebuf_getc((struct file_buffer *)p);
+        if (!c)
+            return false;
+        *out++ = *c;
+        n--;
+    }
+    return true;
 }
 
 static bool rd_u32(struct png_ctx *p, uint32_t *out)
@@ -134,9 +148,7 @@ static bool skip_chunk(struct png_ctx *p, uint32_t len)
 {
     /* +4 for the CRC, which we do not check: a corrupt cover shows as a
      * corrupt cover, and the alternative is buffering the whole chunk. */
-    if (lseek(p->fd, len + 4, SEEK_CUR) < 0)
-        return false;
-    return true;
+    return skip_bytes((struct file_buffer *)p, (int)len + 4);
 }
 
 /* The reader inflate pulls from: the concatenation of every IDAT. */
@@ -158,7 +170,7 @@ static uint32_t png_reader(void *block, uint32_t block_size, void *ctx)
                 break;
 
             /* step over the finished chunk's CRC */
-            if (lseek(p->fd, 4, SEEK_CUR) < 0)
+            if (!skip_bytes((struct file_buffer *)p, 4))
                 break;
 
             for (;;)
@@ -194,8 +206,7 @@ static uint32_t png_reader(void *block, uint32_t block_size, void *ctx)
         if ((uint32_t)n > p->chunk_left)
             n = p->chunk_left;
 
-        n = read(p->fd, (unsigned char *)block + got, n);
-        if (n <= 0)
+        if (!rd_exact(p, (unsigned char *)block + got, n))
         {
             p->ended = true;
             break;
@@ -532,7 +543,7 @@ static uint32_t png_writer(const void *block, uint32_t block_size, void *ctx)
 
 /* ------------------------------------------------------------------ entry */
 
-static int png_decode(int fd, off_t limit, struct bitmap *bm, int maxsize,
+static int png_decode(int fd, int flags, struct bitmap *bm, int maxsize,
                       int format)
 {
     struct png_ctx p;
@@ -546,11 +557,34 @@ static int png_decode(int fd, off_t limit, struct bitmap *bm, int maxsize,
     bool got_ihdr = false;
 
     memset(&p, 0, sizeof(p));
-    p.fd = fd;
-    p.limit = limit;
+    struct ogg_file* ogg = NULL;
+    // we need 92 bytes for format probing, reuse some available space
+    unsigned char* buf_format =  (unsigned char*) bm->data;
 
-    if (!rd_exact(&p, sig, 8) ||
-        memcmp(sig, "\x89PNG\r\n\x1a\n", 8))
+    if (flags & AA_FLAG_VORBIS_BASE64)
+        ogg = alloca(sizeof(*ogg));
+    init_file_buffer((struct file_buffer *)&p, fd, flags, buf_format, ogg);
+
+    const char* sig_png = "\x89PNG\r\n\x1a\n";
+    int shift = 0;
+    // unsigned char *c = filebuf_getc((struct file_buffer *)&p);
+    // while (shift < 4)
+    // {
+    //     if (!c)
+    //         return -1;
+    //     if (*c == sig_png[shift++])
+    //         break;
+    // }
+    switch (*filebuf_getc((struct file_buffer *)&p))
+    {
+        case 0x89: shift = 1; break;
+        case 'P': shift = 2; break;
+        case 'N': shift = 3; break;
+        case 'G': shift = 4; break;
+        default: return -1;
+    }
+    if (!rd_exact(&p, sig, 8-shift) ||
+        memcmp(sig, sig_png + shift, 8 - shift))
         return -1;
 
     /* ---- the header chunks, up to the first IDAT --------------------- */
@@ -579,9 +613,9 @@ static int png_decode(int fd, off_t limit, struct bitmap *bm, int maxsize,
                 p.width > PNG_MAX_DIM || p.height > PNG_MAX_DIM)
                 return -1;
 
-            if (len > 13 && lseek(fd, len - 13, SEEK_CUR) < 0)
+            if (len > 13 && !skip_bytes((struct file_buffer *)&p, len - 13))
                 return -1;
-            if (lseek(fd, 4, SEEK_CUR) < 0)     /* CRC */
+            if (!skip_bytes((struct file_buffer *)&p, 4))     /* CRC */
                 return -1;
             got_ihdr = true;
             continue;
@@ -597,9 +631,9 @@ static int png_decode(int fd, off_t limit, struct bitmap *bm, int maxsize,
             if (!rd_exact(&p, p.palette, n))
                 return -1;
             p.palette_n = n / 3;
-            if (len > n && lseek(fd, len - n, SEEK_CUR) < 0)
+            if (len > n && !skip_bytes((struct file_buffer *)&p, len - n))
                 return -1;
-            if (lseek(fd, 4, SEEK_CUR) < 0)
+            if (!skip_bytes((struct file_buffer *)&p, 4))
                 return -1;
             continue;
         }
@@ -757,12 +791,9 @@ int read_png_fd(int fd, struct bitmap *bm, int maxsize, int format)
     return png_decode(fd, 0, bm, maxsize, format);
 }
 
-int clip_png_fd(int fd, int pos, int size, struct bitmap *bm, int maxsize,
+int clip_png_fd(int fd, int flags, int size, struct bitmap *bm, int maxsize,
                 int format)
 {
-    if (lseek(fd, pos, SEEK_SET) < 0)
-        return -1;
-
-    return png_decode(fd, size > 0 ? (off_t)pos + size : 0, bm, maxsize,
+    return png_decode(fd, flags, bm, maxsize,
                       format);
 }

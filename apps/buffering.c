@@ -872,8 +872,11 @@ static int load_image(int fd, const char *path,
 
 #ifdef HAVE_PNG
     //TODO: Add support for vorbis, unsync flags in png decoder (needs special handling like in jpeg decoder)
-    if (aa != NULL && aa->type == AA_TYPE_PNG)
-        rc = clip_png_fd(fd, aa->pos, aa->size, bmp, (int)max_size, format);
+    if (aa != NULL && (aa->type & AA_CLEAR_FLAGS_MASK) == AA_TYPE_PNG)
+    {
+        lseek(fd, aa->pos, SEEK_SET);
+        rc = clip_png_fd(fd, aa->type, aa->size, bmp, (int)max_size, format);
+    }
     else if (ext != NULL && !strcasecmp(ext, ".png"))
         rc = read_png_fd(fd, bmp, (int)max_size, format);
     else
