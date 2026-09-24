@@ -135,6 +135,7 @@ recorder/keyboard.c
 #endif
 recorder/peakmeter.c
 #if defined(HAVE_ALBUMART) || defined(HAVE_JPEG)
+recorder/albumart_load_common.c
 recorder/resize.c
 #endif
 #ifdef HAVE_JPEG
