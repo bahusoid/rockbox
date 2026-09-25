@@ -853,8 +853,7 @@ static bool bt_prepare_stack(bool suspended)
         return true;
 
     splash(0, ID2P(LANG_BT_SUSPENDED_RESUMING));
-    system("/usr/bin/bt_resume");
-    splash(0, ID2P(LANG_BT_DONE));
+    system("/usr/bin/bt_suspend && /usr/bin/bt_resume");
     int fd = open(BOOT_SETTING_FILE, O_RDWR | O_CREAT | O_TRUNC);
     close(fd);
 
