@@ -42,7 +42,7 @@
 #include "linked_list.h"
 
 /* Define LOGF_ENABLE to enable logf output in this file */
-/* #define LOGF_ENABLE */
+//#define LOGF_ENABLE
 #include "logf.h"
 
 #define BUF_MAX_HANDLES 384
@@ -869,16 +869,18 @@ static int load_image(int fd, const char *path,
                        FORMAT_RESIZE | FORMAT_KEEP_ASPECT;
 
     const char* ext = aa == NULL ? path + strlen(path) - 4 : NULL;
+#ifdef LOGF_ENABLE
+    long tick = current_tick;
+#endif
 
 #ifdef HAVE_PNG
-    //TODO: Add support for vorbis, unsync flags in png decoder (needs special handling like in jpeg decoder)
     if (aa != NULL && (aa->type & AA_CLEAR_FLAGS_MASK) == AA_TYPE_PNG)
     {
         lseek(fd, aa->pos, SEEK_SET);
         rc = clip_png_fd(fd, aa->type, aa->size, bmp, (int)max_size, format);
     }
     else if (ext != NULL && !strcasecmp(ext, ".png"))
-        rc = read_png_fd(fd, bmp, (int)max_size, format);
+        rc = read_png_fd(fd, 0, bmp, (int)max_size, format,NULL, NULL);
     else
 #endif
 #ifdef HAVE_JPEG
@@ -892,6 +894,7 @@ static int load_image(int fd, const char *path,
 #endif
         rc = read_bmp_fd(fd, bmp, (int)max_size, format, NULL);
 
+    logf("Loaded album art in %ld ms", (current_tick - tick) * 1000 / HZ);
     return rc + (rc > 0 ? sizeof(struct bitmap) : 0);
 }
 #endif /* HAVE_ALBUMART */

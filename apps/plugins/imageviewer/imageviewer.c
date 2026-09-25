@@ -1121,12 +1121,18 @@ static bool find_album_art(char *path, int *offset, int *filesize, int *status, 
             (*status) = get_image_type(np_file, false);
             return true;
         }
-        //Only non-progressive JPEG supports special album art (vorbis, unsync mp3)
-        if ((*flags & AA_CLEAR_FLAGS_MASK) == AA_TYPE_JPG)
+        switch ((*flags & AA_CLEAR_FLAGS_MASK))
         {
-            (*status) = IMAGE_JPEG;
+            case AA_TYPE_PNG:
+                (*status) = IMAGE_PNG;
+                break;
+            case AA_TYPE_JPG:
+                (*status) = IMAGE_JPEG;
+                break;
+            default:
+                break;
         }
-        else if (*status == IMAGE_UNKNOWN)
+        if (*status == IMAGE_UNKNOWN)
             return false;
     }
     rb->strcpy(np_file, current_track->path);

@@ -34,7 +34,13 @@
 #else
 #define resize_bitmap   simple_resize_bitmap
 #endif
+#ifndef read_image_fd
+#define read_image_fd   read_jpeg_fd
+#endif
 
+#if !defined(PLUGIN_UNSUPPORTED_FORMAT_ERROR)
+#define PLUGIN_SWITCH_DECODER_FORMAT_ERROR PLUGIN_JPEG_PROGRESSIVE
+#endif
 /**************** begin Application ********************/
 
 
@@ -158,7 +164,7 @@ static int load_image(char *filename, struct image_info *info,
     }
 
     /* check size of image needed to load image. */
-    size = read_jpeg_fd(fd, flags, &bmp, *buf_size, format  | FORMAT_RETURN_SIZE, cformat, NULL);
+    size = read_image_fd(fd, flags, &bmp, *buf_size, format  | FORMAT_RETURN_SIZE, cformat, NULL);
     struct dim img_dim = {.width = bmp.width, .height = bmp.height};
     bool resize = false;
 
@@ -175,7 +181,7 @@ static int load_image(char *filename, struct image_info *info,
             bmp.width = LCD_WIDTH;
             bmp.height = LCD_HEIGHT;
         }
-        size = read_jpeg_fd(fd, flags, &bmp, *buf_size, format  | FORMAT_RETURN_SIZE, cformat, NULL);
+        size = read_image_fd(fd, flags, &bmp, *buf_size, format  | FORMAT_RETURN_SIZE, cformat, NULL);
     }
 
     // Try to show it in fullscreen
@@ -233,7 +239,7 @@ static int load_image(char *filename, struct image_info *info,
             bmp.width = LCD_WIDTH*scale/dscale;
             bmp.height = LCD_HEIGHT*scale/dscale;
 
-            size = read_jpeg_fd(fd, flags, &bmp, *buf_size, format | FORMAT_RETURN_SIZE, cformat, NULL);
+            size = read_image_fd(fd, flags, &bmp, *buf_size, format | FORMAT_RETURN_SIZE, cformat, NULL);
             rb->lseek(fd, offset, SEEK_SET);
 
             if (dscale == 1)
@@ -278,16 +284,16 @@ static int load_image(char *filename, struct image_info *info,
             bmp.width /= 2;
             bmp.height /= 2;
             rb->lseek(fd, 0, SEEK_SET);
-            size = read_jpeg_fd(fd, flags, &bmp, *buf_size, format | FORMAT_RETURN_SIZE, cformat, NULL);
+            size = read_image_fd(fd, flags, &bmp, *buf_size, format | FORMAT_RETURN_SIZE, cformat, NULL);
         }
     }
 
     if (size <= 0)
     {
         rb->close(fd);
-#ifdef HAVE_LCD_COLOR
-        if (size < -1)
-            return PLUGIN_JPEG_PROGRESSIVE;
+#ifdef PLUGIN_SWITCH_DECODER_FORMAT_ERROR
+        if (PLUGIN_SWITCH_DECODER_FORMAT_ERROR > 0 && size < -1)
+            return PLUGIN_SWITCH_DECODER_FORMAT_ERROR;
 #endif
         rb->splashf(HZ, "read error %d", size);
         return PLUGIN_ERROR;
@@ -323,7 +329,7 @@ static int load_image(char *filename, struct image_info *info,
     /* actual loading */
     time = *rb->current_tick;
     rb->lseek(fd, offset, SEEK_SET);
-    size = read_jpeg_fd(fd, flags, &bmp, *buf_size, format, cformat, iv->cb_progress);
+    size = read_image_fd(fd, flags, &bmp, *buf_size, format, cformat, iv->cb_progress);
     rb->close(fd);
     time = *rb->current_tick - time;
 

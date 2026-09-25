@@ -30,7 +30,9 @@
 #include "plugin.h"
 #include "debug.h"
 #include "jpeg_load.h"
-#ifndef JPEG_FROM_MEM
+#ifdef JPEG_FROM_MEM
+#define file_buffer jpeg
+#else
 #include "albumart_load_common.h"
 #endif
 /*#define JPEG_BS_DEBUG*/
@@ -881,7 +883,7 @@ INLINE void jpeg_putc(struct jpeg* p_jpeg)
 
 
 
-#define jpeg_getc filebuf_getc
+#define jpeg_getc(f) filebuf_getc((struct file_buffer*)f)
 
 
 static void jpeg_putc(struct jpeg* p_jpeg)
@@ -893,7 +895,7 @@ static void jpeg_putc(struct jpeg* p_jpeg)
 
 #define e_skip_bytes(jpeg, count) \
 do {\
-    if (UNLIKELY(!skip_bytes((jpeg),(count)))) \
+    if (UNLIKELY(!skip_bytes((struct file_buffer*)jpeg,(count)))) \
         return -1; \
 } while (0)
 

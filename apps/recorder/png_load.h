@@ -17,7 +17,12 @@
  * scanlines - out of whatever is left past the finished picture. That is
  * at most ~105 KiB for a 4096 px source, which the JPEG reservation in
  * buffering.c already covers. */
-int read_png_fd(int fd, struct bitmap *bm, int maxsize, int format);
+int read_png_fd(int fd, int flags,
+                 struct bitmap *bm,
+                 int maxsize,
+                 int format,
+                 const struct custom_format *cformat,
+                 bool (*cb_progress)(int current, int total));
 
 /* The same, for art embedded in a tag: pos and size bound it. */
 int clip_png_fd(int fd, int pos, int size, struct bitmap *bm, int maxsize,

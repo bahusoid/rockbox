@@ -58,6 +58,7 @@
 #include "peakmeter.h"
 #include "bmp.h"
 #include "bidi.h"
+#include "png_load.h"
 
 #ifdef USB_ENABLE_HID
 #include "usbstack/usb_hid.h"
@@ -815,6 +816,9 @@ static const struct plugin_api rockbox_api = {
 #ifdef HAVE_JPEG
     read_jpeg_file,
     read_jpeg_fd,
+#endif
+#ifdef HAVE_PNG
+    read_png_fd,
 #endif
     screen_dump_set_hook,
 

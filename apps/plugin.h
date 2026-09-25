@@ -967,6 +967,12 @@ struct plugin_api {
                         int format, const struct custom_format *cformat,
                         bool (*cb_progress)(int current, int total));
 #endif
+#ifdef HAVE_PNG
+    int (*read_png_fd)(int fd, int flags, struct bitmap *bm, int maxsize,
+                       int format, const struct custom_format *cformat,
+                       bool (*cb_progress)(int current, int total));
+#endif
+
     void (*screen_dump_set_hook)(void (*hook)(int fh));
 
 #ifdef HAVE_WHEEL_POSITION

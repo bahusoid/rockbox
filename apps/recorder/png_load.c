@@ -555,6 +555,7 @@ static int png_decode(int fd, int flags, struct bitmap *bm, int maxsize,
     uint32_t len;
     char type[5];
     bool got_ihdr = false;
+    bool return_size = format & FORMAT_RETURN_SIZE;
 
     memset(&p, 0, sizeof(p));
     struct ogg_file* ogg = NULL;
@@ -708,8 +709,6 @@ static int png_decode(int fd, int flags, struct bitmap *bm, int maxsize,
         uintptr_t a = (uintptr_t)tail;
         uintptr_t pad = (-a) & (inflate_align - 1);
 
-        if ((int)pad + (int)inflate_size > avail)
-            return -1;
         it = (struct inflate *)(tail + pad);
         tail  += pad + inflate_size;
         avail -= (int)pad + (int)inflate_size;
@@ -720,8 +719,6 @@ static int png_decode(int fd, int flags, struct bitmap *bm, int maxsize,
         uintptr_t pad = (-a) & (sizeof(uint32_t) - 1);
         size_t need = (size_t)bm->width * 4 * sizeof(uint32_t);
 
-        if ((int)pad + (int)need > avail)
-            return -1;
         p.acc = (uint32_t *)(tail + pad);
         p.cnt = p.acc + (size_t)bm->width * 3;
         tail  += pad + need;
@@ -732,7 +729,10 @@ static int png_decode(int fd, int flags, struct bitmap *bm, int maxsize,
     /* Align the row allocation to 4 bytes to allow SWAR operations,
      * padding with +4 so p.cur[-1] is safe and p.cur is exactly 4-byte aligned. */
     rowalloc = (p.rowbytes + 4 + 3) & ~3;
-    if (2 * rowalloc > avail)
+    avail -= 2* rowalloc;
+    if (return_size)
+        return maxsize - avail;
+    if (avail < 0)
         return -1;
 
     memset(tail, 0, 2 * rowalloc);
@@ -742,7 +742,10 @@ static int png_decode(int fd, int flags, struct bitmap *bm, int maxsize,
     /* Two scanlines, each with one byte in front of it for the filter, so
      * the two can be swapped without copying. */
     rowalloc = p.rowbytes + 1;
-    if (2 * rowalloc > avail)
+    avail -= 2* rowalloc;
+    if (return_size)
+        return maxsize - avail;
+    if (avail < 0)
         return -1;
 
     memset(tail, 0, 2 * rowalloc);
@@ -786,9 +789,14 @@ static int png_decode(int fd, int flags, struct bitmap *bm, int maxsize,
     return bm_size;
 }
 
-int read_png_fd(int fd, struct bitmap *bm, int maxsize, int format)
+int read_png_fd(int fd, int flags,
+                 struct bitmap *bm,
+                 int maxsize,
+                 int format,
+                 const struct custom_format *cformat,
+                 bool (*cb_progress)(int current, int total))
 {
-    return png_decode(fd, 0, bm, maxsize, format);
+    return png_decode(fd, flags, bm, maxsize, format);
 }
 
 int clip_png_fd(int fd, int flags, int size, struct bitmap *bm, int maxsize,
