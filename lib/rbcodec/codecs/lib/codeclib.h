@@ -29,6 +29,13 @@
 
 extern struct codec_api *ci;
 
+#if (!defined(CPU_PP) && !defined(CPU_COLDFIRE))
+#define IBSS_ATTR_LARGE IBSS_ATTR
+#else
+#define IBSS_ATTR_LARGE
+#endif
+
+
 /* Standard library functions that are used by the codecs follow here */
 
 /* Get these functions 'out of the way' of the standard functions. Not doing
