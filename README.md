@@ -12,6 +12,7 @@ A custom Rockbox build focused on optimizing the audiobook experience and adding
     <td><img src="docs/mods/screenshots/chapters.png" width="240" alt="Chapters Menu"></td>
   </tr>
 </table>
+
 ## Core Features & Improvements
 
 *   **[Audiobooks](docs/mods/audiobook-mod.md):** A specialized, smart profile for audiobook listeners:
