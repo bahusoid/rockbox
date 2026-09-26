@@ -1,14 +1,17 @@
-<table>
-  <tr>
-    <td><img src="docs/mods/screenshots/wps.png" width="240" alt="WPS"></td>
-    <td><img src="docs/mods/screenshots/chapters.png" width="240" alt="Chapters"></td>
-  </tr>
-</table>
-
 # Rockbox Audiobook Mod
 
 A custom Rockbox build focused on optimizing the audiobook experience and adding dedicated HiBy R1 enhancements.
 
+**Downloads:** [HiBy R1](https://github.com/bahusoid/rockbox/releases) | [Other Devices (Dev Builds)](#development-builds)  
+**Docs:** [Audiobooks](https://github.com/bahusoid/rockbox/blob/Mod25.12.07/docs/mods/audiobook-mod.md) | [R1 Button Mapping](https://github.com/bahusoid/rockbox/blob/Mod25.12.07/docs/mods/hibyr1-keymap.md) | [Touch Controls](https://github.com/bahusoid/rockbox/blob/Mod25.12.07/docs/mods/touch-controls.md) | [Bluetooth](https://github.com/bahusoid/rockbox/blob/Mod25.12.07/docs/mods/bluetooth-hiby-x1600.md) | [Key Remapping](https://github.com/bahusoid/rockbox/blob/Mod25.12.07/docs/mods/key-remapping.md)
+
+## Screenshots
+<table>
+  <tr>
+    <td><img src="docs/mods/screenshots/wps.png" width="240" alt="WPS Playback Screen"></td>
+    <td><img src="docs/mods/screenshots/chapters.png" width="240" alt="Chapters Menu"></td>
+  </tr>
+</table>
 ## Core Features & Improvements
 
 *   **[Audiobooks](docs/mods/audiobook-mod.md):** A specialized, smart profile for audiobook listeners:
