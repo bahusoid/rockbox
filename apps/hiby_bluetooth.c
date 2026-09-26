@@ -44,6 +44,7 @@
 #include "gui/list.h"
 #include "pcm-alsa.h"
 #include "yesno.h"
+#include "talk.h"
 
 /* HiBy hosted build provides dynamic output routing helper in its
  * target-specific PCM implementation. */
@@ -273,6 +274,114 @@ static const char *bt_action_name_cb(int selected_item, void *data,
     }
     snprintf(buffer, buffer_len, "%s", items[selected_item]);
     return buffer;
+}
+
+static int bt_action_talk_item(int selected_item, void *data)
+{
+    const char **items = data;
+    (void)items;
+
+    if (selected_item < 0 || selected_item >= 3)
+        return 0;
+
+    switch (selected_item)
+    {
+        case 0:
+            talk_id(LANG_BT_STATUS, false);
+            break;
+        case 1:
+            talk_id(LANG_BT_DEVICES, false);
+            break;
+        case 2:
+            talk_id(LANG_BT_DISCONNECT, false);
+            break;
+    }
+
+    return 0;
+}
+
+static int bt_device_talk_item(int selected_item, void *data)
+{
+    struct bt_device_menu_data *ctx = data;
+
+    if (selected_item == 0)
+    {
+        talk_id(LANG_BT_SCAN_FOR_NEW, false);
+        return 0;
+    }
+
+    if (selected_item < 1 || selected_item > ctx->count)
+        return 0;
+
+    talk_spell(ctx->devices[selected_item - 1].name, false);
+    return 0;
+}
+
+static int bt_strlist_talk_item(int selected_item, void *data)
+{
+    struct bt_strlist_data *ctx = data;
+
+    if (selected_item < 0 || selected_item >= ctx->count)
+        return 0;
+
+    talk_spell(ctx->items[selected_item], false);
+    return 0;
+}
+
+static int bt_status_talk_item(int selected_item, void *data)
+{
+    (void)data;
+
+    if (selected_item < 0 || selected_item > 5)
+        return 0;
+
+    switch (selected_item)
+    {
+        case 0:
+            talk_id(LANG_BT_BLUETOOTH, false);
+            break;
+        case 1:
+            talk_id(LANG_BT_DEVICE, false);
+            break;
+        case 2:
+            talk_id(LANG_BT_CODEC, false);
+            break;
+        case 3:
+            talk_id(LANG_BT_MAC, false);
+            break;
+        case 4:
+            talk_id(LANG_BT_CONNECTED, false);
+            break;
+        case 5:
+            talk_id(LANG_BT_OUTPUT, false);
+            break;
+    }
+
+    return 0;
+}
+
+static int bt_toggle_talk_item(int selected_item, void *data)
+{
+    const char **items = data;
+    (void)items;
+
+    if (selected_item < 0 || selected_item >= 3)
+        return 0;
+
+    switch (selected_item)
+    {
+        case 0:
+            talk_id(LANG_ON, false);
+            break;
+        case 1:
+            talk_id(LANG_OFF, false);
+            break;
+        case 2:
+            talk_id(LANG_BT_SUSPEND, false);
+            break;
+    }
+
+    return 0;
 }
 
 static const char *bt_device_name_cb(int selected_item, void *data,
@@ -547,6 +656,7 @@ static int bt_choose_device(const char *title, struct bt_device *devices, int co
 
     simplelist_info_init(&info, (char *)title, total_count, &data);
     info.get_name = bt_device_name_cb;
+    info.get_talk = bt_device_talk_item;
     info.action_callback = bt_devicelist_callback;
     info.selection = selection + 1; /* +1 for the "Scan" entry */
     info.title_icon = Icon_Submenu;
@@ -1077,6 +1187,7 @@ static void bt_show_codec_picker(const char *mac)
 
     simplelist_info_init(&info, str(LANG_BT_SELECT_CODEC), count, &data);
     info.get_name = bt_strlist_name_cb;
+    info.get_talk = bt_strlist_talk_item;
     info.action_callback = bt_simplelist_ok_cancel;
     info.selection = -1;
     info.title_icon = Icon_Submenu;
@@ -1155,6 +1266,7 @@ static void bt_show_status(void)
 
         simplelist_info_init(&info, (char *)str(LANG_BT_STATUS), 0, &executed_action);
         info.action_callback = bt_simplelist_ok_cancel_return_action;
+        info.get_talk = bt_status_talk_item;
         info.selection = -1;
         simplelist_reset_lines();
 
@@ -1206,6 +1318,7 @@ static void bt_show_status(void)
             struct simplelist_info t_info;
             simplelist_info_init(&t_info, (char *)str(LANG_BT_BLUETOOTH), 3, (void *)toggle_items);
             t_info.get_name = bt_action_name_cb;
+            t_info.get_talk = bt_toggle_talk_item;
             t_info.action_callback = bt_simplelist_ok_cancel;
             t_info.selection = -1;
             simplelist_show_list(&t_info);
@@ -1273,6 +1386,7 @@ int hiby_bluetooth_menu(void)
             (int)(sizeof(action_items) / sizeof(action_items[0])),
             (void *)action_items);
         info.get_name = bt_action_name_cb;
+        info.get_talk = bt_action_talk_item;
         info.action_callback = bt_simplelist_ok_cancel;
         info.selection = -1;
         info.title_icon = Icon_Submenu;
