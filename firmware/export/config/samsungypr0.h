@@ -35,6 +35,7 @@
 
 /* define this to enable JPEG decoding */
 #define HAVE_JPEG
+#define HAVE_PNG
 
 /* define this if you have access to the quickscreen */
 #define HAVE_QUICKSCREEN
