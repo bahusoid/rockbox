@@ -18,12 +18,6 @@ CODEC_HEADER
 
 //_Static_assert(0, "IRAMSIZE= '" STR(IRAMSIZE) "' IBSS_ATTR = '" STR(IBSS_ATTR)"' CODEC_SIZE= '" STR(CODEC_SIZE) "' PLUGIN_BUFFER_SIZE= '" STR(PLUGIN_BUFFER_SIZE) "'");
 
-#if (!defined(CPU_PP) && !defined(CPU_COLDFIRE))
-#define IBSS_ATTR_LARGE IBSS_ATTR
-#else
-#define IBSS_ATTR_LARGE
-#endif
-
 static int32_t pcm[PCM_FRAMES * 2] IBSS_ATTR;
 static unsigned char left_block[DSF_BLOCK];
 static unsigned char right_block[DSF_BLOCK];
