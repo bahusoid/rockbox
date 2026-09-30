@@ -58,6 +58,14 @@ typedef uint8_t jpeg_pix_t;
 #endif
 #define JPEG_IDCT_TRANSPOSE
 #define JPEG_PIX_SZ (sizeof(jpeg_pix_t))
+/* Progressive JPEG: only the DC coefficients are decoded, which gives the
+   image at 1/8 scale for the resizer. PROG_STREAM: the first scan holds the
+   DC of every component needed, and is decoded as a baseline image is.
+   PROG_PLANES: the DC arrives in several scans, so each needed component's
+   DC is kept in a plane (one byte per block) until all have arrived. */
+#define PROG_NONE   0
+#define PROG_STREAM 1
+#define PROG_PLANES 2
 /* index into the per-scale arrays: luma or chroma in colour builds; a
    greyscale build only decodes chroma for RGB, which is at the luma scale */
 #ifdef HAVE_LCD_COLOR
@@ -118,6 +126,13 @@ struct jpeg
     bool jfif; /* saw a JFIF APP0 marker */
     unsigned char adobe; /* Adobe APP14 transform flag + 1, 0 if none */
     bool rgb; /* the components are R, G, B rather than Y, Cb, Cr */
+    unsigned char ncomp; /* components in the frame */
+    unsigned char progressive; /* PROG_NONE, PROG_STREAM or PROG_PLANES */
+    bool marker_pending; /* the bit reader stopped at a marker, FF read */
+    unsigned char scan_ns; /* components in the current scan */
+    unsigned char scan_ci[3]; /* their component indices */
+    unsigned char scan_ss, scan_se, scan_ah, scan_al; /* spectral, approx. */
+    unsigned char *dc_plane[3]; /* progressive: DC of each block, as pixels */
     int last_dc_val[3];
 #ifdef HAVE_LCD_COLOR
     int h_scale[2]; /* horizontal scalefactor = (2**N) / 8 */
@@ -1003,7 +1018,13 @@ static int process_markers(struct jpeg* p_jpeg)
 
     while (!done)
     {
-        c = e_getc(p_jpeg, -1);
+        if (p_jpeg->marker_pending)
+        {   /* the bit reader read this FF and put the marker code back */
+            p_jpeg->marker_pending = false;
+            c = 0xFF;
+        }
+        else
+            c = e_getc(p_jpeg, -1);
         if (c != 0xFF) /* no marker? */
         {
             JDEBUGF("Non-marker data\n");
@@ -1021,9 +1042,11 @@ static int process_markers(struct jpeg* p_jpeg)
             break; /* discard */
 
         case 0xC0: /* SOF Huff  - Baseline DCT */
+        case 0xC2: /* SOF Huff  - Progressive DCT, DC only: see below */
             {
                 JDEBUGF("SOF marker ");
                 ret |= SOF0;
+                p_jpeg->progressive = c == 0xC2 ? PROG_STREAM : PROG_NONE;
                 marker_size = e_getc(p_jpeg, -1) << 8; /* Highbyte */
                 marker_size |= e_getc(p_jpeg, -1); /* Lowbyte */
                 JDEBUGF("len: %d\n", marker_size);
@@ -1059,7 +1082,7 @@ static int process_markers(struct jpeg* p_jpeg)
                      || p_jpeg->frameheader[i].vertical_sampling > 2)
                     return -3; /* Unsupported SOF0 subsampling */
                 }
-                p_jpeg->blocks = n;
+                p_jpeg->blocks = p_jpeg->ncomp = n;
                 for (i=1; i<n; i++)
                 {   /* chroma must be one block per MCU, or sampled like
                        luma when that is 1x2 or 2x1 (2x2 on all components
@@ -1085,7 +1108,6 @@ static int process_markers(struct jpeg* p_jpeg)
             break;
 
         case 0xC1: /* SOF Huff  - Extended sequential DCT*/
-        case 0xC2: /* SOF Huff  - Progressive DCT*/
         case 0xC3: /* SOF Huff  - Spatial (sequential) lossless*/
         case 0xC5: /* SOF Huff  - Differential sequential DCT*/
         case 0xC6: /* SOF Huff  - Differential progressive DCT*/
@@ -1114,7 +1136,14 @@ static int process_markers(struct jpeg* p_jpeg)
                     marker_size--;
                     int sum = 0;
                     i = c & 0x0F; /* table index */
-                    if (i > 1)
+                    if (p_jpeg->progressive && (c & 0xF0))
+                    {   /* AC table: only DC is decoded, skip it */
+                        for (j=0; j<16; j++)
+                            sum += e_getc(p_jpeg, -1);
+                        e_skip_bytes(p_jpeg, sum);
+                        marker_size -= 16 + sum;
+                    }
+                    else if (i > 1)
                     {
                         return (-5); /* Huffman table index out of range */
                     } else {
@@ -1171,6 +1200,14 @@ static int process_markers(struct jpeg* p_jpeg)
         case 0xD9: /* End of Image */
             JDEBUGF("EOI\n");
             break;
+        case 0xD0: /* RSTm: met while skipping entropy data */
+        case 0xD1:
+        case 0xD2:
+        case 0xD3:
+        case 0xD4:
+        case 0xD5:
+        case 0xD6:
+        case 0xD7:
         case 0x01: /* for temp private use arith code */
             JDEBUGF("private\n");
             break; /* skip parameterless marker */
@@ -1184,32 +1221,50 @@ static int process_markers(struct jpeg* p_jpeg)
                 marker_size -= 2;
 
                 n = (marker_size-1-3)/2;
-                if (e_getc(p_jpeg, -1) != n || (n != 1 && n != 3)
-                    /* one scan with all components; multi-scan files and
-                       SOS before SOF are not supported (blocks = Nf here) */
-                    || n != p_jpeg->blocks)
+                if (e_getc(p_jpeg, -1) != n || n < 1 || n > p_jpeg->ncomp
+                    /* baseline: one scan with all components; multi-scan
+                       files and SOS before SOF are not supported */
+                    || (!p_jpeg->progressive && n != p_jpeg->ncomp))
                 {
                     return (-7); /* Unsupported SOS component specification */
                 }
                 marker_size--;
+                j = -1; /* previous component: scans keep frame order */
                 for (i=0; i<n; i++)
                 {
-                    p_jpeg->scanheader[i].ID = e_getc(p_jpeg, -1);
-                    if (p_jpeg->scanheader[i].ID != p_jpeg->frameheader[i].ID)
+                    int id = e_getc(p_jpeg, -1);
+                    int ci = j + 1;
+                    while (ci < p_jpeg->ncomp
+                        && p_jpeg->frameheader[ci].ID != id)
+                        ci++;
+                    if (ci >= p_jpeg->ncomp
+                     || (!p_jpeg->progressive && ci != i))
                     {
                         return (-7); /* components out of frame order */
                     }
-                    p_jpeg->scanheader[i].DC_select = (c = e_getc(p_jpeg, -1))
+                    j = ci;
+                    p_jpeg->scan_ci[i] = ci;
+                    p_jpeg->scanheader[ci].ID = id;
+                    p_jpeg->scanheader[ci].DC_select = (c = e_getc(p_jpeg, -1))
                         >> 4;
-                    p_jpeg->scanheader[i].AC_select = c & 0x0F;
+                    p_jpeg->scanheader[ci].AC_select = c & 0x0F;
                     marker_size -= 2;
-                    if (p_jpeg->scanheader[i].DC_select > 1
-                     || p_jpeg->scanheader[i].AC_select > 1)
+                    if (p_jpeg->scanheader[ci].DC_select > 1
+                     || (!p_jpeg->progressive
+                      && p_jpeg->scanheader[ci].AC_select > 1))
                     {
                         return (-5); /* Huffman table index out of range */
                     }
                 }
-                p_jpeg->rgb = n == 3 && jpeg_is_rgb(p_jpeg->jfif, p_jpeg->adobe,
+                p_jpeg->scan_ns = n;
+                p_jpeg->scan_ss = e_getc(p_jpeg, -1);
+                p_jpeg->scan_se = e_getc(p_jpeg, -1);
+                c = e_getc(p_jpeg, -1);
+                p_jpeg->scan_ah = c >> 4;
+                p_jpeg->scan_al = c & 0x0F;
+                marker_size -= 3;
+                p_jpeg->rgb = p_jpeg->ncomp == 3
+                    && jpeg_is_rgb(p_jpeg->jfif, p_jpeg->adobe,
                     p_jpeg->frameheader[0].ID, p_jpeg->frameheader[1].ID,
                     p_jpeg->frameheader[2].ID);
 #ifndef HAVE_LCD_COLOR
@@ -1220,7 +1275,6 @@ static int process_markers(struct jpeg* p_jpeg)
                   || p_jpeg->frameheader[0].vertical_sampling != 1))
                     return -3; /* Unsupported SOF0 subsampling */
 #endif
-                /* skip spectral information */
                 e_skip_bytes(p_jpeg, marker_size);
                 done = true;
             }
@@ -1640,35 +1694,41 @@ INLINE void fix_quant_tables(struct jpeg *p_jpeg)
 * is evaluated multiple times.
 */
 
+/* Add one byte of entropy data to the bit buffer. RSTm is noted for
+   search_restart; any other marker ends the scan: its code is put back for
+   process_markers, and zeros are read from then on. */
+INLINE void fill_bit_byte(struct jpeg* p_jpeg, int marker_ind)
+{
+    unsigned char byte = 0, marker;
+
+    if (LIKELY(!p_jpeg->marker_pending))
+    {
+        byte = d_getc(p_jpeg, 0);
+        if (UNLIKELY(byte == 0xFF)) /* byte stuffing or a marker */
+        {
+            marker = d_getc(p_jpeg, 0);
+            if ((marker & ~7) == 0xD0)
+            {
+                p_jpeg->marker_val = marker;
+                p_jpeg->marker_ind = marker_ind;
+            }
+            else if (marker)
+            {
+                jpeg_putc(p_jpeg);
+                p_jpeg->marker_pending = true;
+                byte = 0;
+            }
+        }
+    }
+    p_jpeg->bitbuf = (p_jpeg->bitbuf << 8) | byte;
+}
+
 static void fill_bit_buffer(struct jpeg* p_jpeg)
 {
-    unsigned char byte, marker;
-
     if (p_jpeg->marker_val)
         p_jpeg->marker_ind += 16;
-    byte = d_getc(p_jpeg, 0);
-    if (UNLIKELY(byte == 0xFF)) /* legal marker can be byte stuffing or RSTm */
-    {   /* simplification: just skip the (one-byte) marker code */
-        marker = d_getc(p_jpeg, 0);
-        if ((marker & ~7) == 0xD0)
-        {
-            p_jpeg->marker_val = marker;
-            p_jpeg->marker_ind = 8;
-        }
-    }
-    p_jpeg->bitbuf = (p_jpeg->bitbuf << 8) | byte;
-
-    byte = d_getc(p_jpeg, 0);
-    if (UNLIKELY(byte == 0xFF)) /* legal marker can be byte stuffing or RSTm */
-    {   /* simplification: just skip the (one-byte) marker code */
-        marker = d_getc(p_jpeg, 0);
-        if ((marker & ~7) == 0xD0)
-        {
-            p_jpeg->marker_val = marker;
-            p_jpeg->marker_ind = 0;
-        }
-    }
-    p_jpeg->bitbuf = (p_jpeg->bitbuf << 8) | byte;
+    fill_bit_byte(p_jpeg, 8);
+    fill_bit_byte(p_jpeg, 0);
     p_jpeg->bitbuf_bits += 16;
 #ifdef JPEG_BS_DEBUG
     DEBUGF("read in: %04X\n", p_jpeg->bitbuf & 0xFFFF);
@@ -1831,6 +1891,14 @@ static void search_restart(struct jpeg *p_jpeg)
     } /* end slow decode */ \
 }
 
+/* Section F.2.2.1: decode a DC coefficient difference */
+static int decode_dc_diff(struct jpeg *p_jpeg, struct derived_tbl *tbl)
+{
+    int s, r;
+    huff_decode_dc(p_jpeg, tbl, s, r);
+    return HUFF_EXTEND(r, s);
+}
+
 static struct img_part *store_row_jpeg(void *jpeg_args)
 {
     struct jpeg *p_jpeg = ((void**) jpeg_args)[0];
@@ -1882,20 +1950,21 @@ static struct img_part *store_row_jpeg(void *jpeg_args)
                 const int16_t *qt = p_jpeg->quanttable[
                     p_jpeg->frameheader[ci].quanttable_select];
 
-                /* Section F.2.2.1: decode the DC coefficient difference */
-                huff_decode_dc(p_jpeg, dctbl, s, r);
+                s = decode_dc_diff(p_jpeg, dctbl);
 
 #ifndef HAVE_LCD_COLOR
                 if (!ci || p_jpeg->rgb)
 #endif
                 {
-                    s = HUFF_EXTEND(r, s);
                     p_jpeg->last_dc_val[ci] += s;
                     /* output it (assumes zag[0] = 0) */
-                    block[0] = MULTIPLY16(p_jpeg->last_dc_val[ci], qt[0]);
+                    block[0] = MULTIPLY16(p_jpeg->last_dc_val[ci]
+                                          << p_jpeg->scan_al, qt[0]);
                     /* coefficient buffer must be cleared */
                     MEMSET(block+1, 0,
                            p_jpeg->zero_need[SCALE_IDX(ci)] * sizeof(int));
+                    if (p_jpeg->progressive)
+                        goto block_end; /* a DC scan has no AC data */
                     /* Section F.2.2.2: decode the AC coefficients */
                     while(true)
                     {
@@ -1926,6 +1995,10 @@ static struct img_part *store_row_jpeg(void *jpeg_args)
                             goto block_end;
                     }  /* for k */
                 }
+#ifndef HAVE_LCD_COLOR
+                if (p_jpeg->progressive)
+                    goto block_end; /* a DC scan has no AC data */
+#endif
                 for (; k < 64; k++)
                 {
                     huff_decode_ac(p_jpeg, actbl, s);
@@ -2031,6 +2104,141 @@ block_end:
     p_jpeg->out_ptr += b_width;
 
     return &(p_jpeg->part);
+}
+
+/* PROG_PLANES: decode a DC scan (Ss = 0, Ah = 0) into the planes of its
+   components. At 1/8 scale the DC coefficient alone is the pixel: the 1x1
+   IDCT is DC * q / 8 + 128 (as libjpeg's jpeg_idct_1x1). */
+static void dc_scan_to_planes(struct jpeg *p_jpeg)
+{
+    int h0 = p_jpeg->frameheader[0].horizontal_sampling;
+    int v0 = p_jpeg->frameheader[0].vertical_sampling;
+    int ns = p_jpeg->scan_ns;
+    int mcus_x = p_jpeg->x_mbl, mcus_y = p_jpeg->y_mbl;
+    int restart = p_jpeg->restart_interval;
+    int i, mx, my, bx, by;
+
+    if (ns == 1)
+    {   /* non-interleaved: one block per MCU, over the component's own
+           blocks rather than whole MCUs (T.81 A.2.2) */
+        struct frame_component *fc = &p_jpeg->frameheader[p_jpeg->scan_ci[0]];
+        mcus_x = ((p_jpeg->x_size * fc->horizontal_sampling + h0 - 1) / h0
+                  + 7) / 8;
+        mcus_y = ((p_jpeg->y_size * fc->vertical_sampling + v0 - 1) / v0
+                  + 7) / 8;
+    }
+    p_jpeg->bitbuf_bits = 0;
+    p_jpeg->marker_val = p_jpeg->marker_ind = 0;
+    p_jpeg->last_dc_val[0] = p_jpeg->last_dc_val[1] =
+        p_jpeg->last_dc_val[2] = 0;
+
+    for (my = 0; my < mcus_y; my++)
+    {
+        for (mx = 0; mx < mcus_x; mx++)
+        {
+            if (p_jpeg->restart_interval)
+            {   /* before the MCU, so the scan's end is not searched */
+                if (restart == 0)
+                {
+                    restart = p_jpeg->restart_interval;
+                    search_restart(p_jpeg);
+                    p_jpeg->last_dc_val[0] = p_jpeg->last_dc_val[1] =
+                        p_jpeg->last_dc_val[2] = 0;
+                }
+                restart--;
+            }
+            for (i = 0; i < ns; i++)
+            {
+                int c = p_jpeg->scan_ci[i];
+                struct frame_component *fc = &p_jpeg->frameheader[c];
+                int hc = ns == 1 ? 1 : fc->horizontal_sampling;
+                int vc = ns == 1 ? 1 : fc->vertical_sampling;
+                int stride = p_jpeg->x_mbl * fc->horizontal_sampling;
+                int q = p_jpeg->quanttable[fc->quanttable_select][0];
+                struct derived_tbl *dctbl =
+                    &p_jpeg->dc_derived_tbls[p_jpeg->scanheader[c].DC_select];
+                unsigned char *plane = p_jpeg->dc_plane[c];
+
+                for (by = 0; by < vc; by++)
+                    for (bx = 0; bx < hc; bx++)
+                    {
+                        p_jpeg->last_dc_val[c] += decode_dc_diff(p_jpeg,
+                                                                 dctbl);
+                        if (plane)
+                            plane[(my * vc + by) * stride + mx * hc + bx] =
+                                range_limit((((p_jpeg->last_dc_val[c]
+                                    << p_jpeg->scan_al) * q + 4) >> 3) + 128);
+                    }
+            }
+        }
+        yield();
+    }
+}
+
+/* PROG_PLANES: decode the DC scans of the components in need (a bit mask),
+   skipping all other scans, until each of them has arrived. */
+static int decode_dc_planes(struct jpeg *p_jpeg, int need)
+{
+    int done = 0;
+    while (true)
+    {
+        int i, have = 0, status;
+        for (i = 0; i < p_jpeg->scan_ns; i++)
+            have |= BIT_N(p_jpeg->scan_ci[i]);
+        if (p_jpeg->scan_ss == 0 && p_jpeg->scan_ah == 0 && (have & ~done))
+        {
+            dc_scan_to_planes(p_jpeg);
+            done |= have;
+        }
+        if ((done & need) == need)
+            return 0;
+        status = process_markers(p_jpeg); /* skips to the next scan */
+        if (status < 0)
+            return status;
+        if (status & DHT) /* a DC table may have been redefined */
+            fix_huff_tables(p_jpeg);
+    }
+}
+
+/* PROG_PLANES: output one row at 1/8 scale from the DC planes, replicating
+   subsampled chroma, in the layout store_row_jpeg uses. */
+static struct img_part *store_row_planes(void *jpeg_args)
+{
+    struct jpeg *p_jpeg = (struct jpeg*) jpeg_args;
+    int h0 = p_jpeg->frameheader[0].horizontal_sampling;
+    int width = p_jpeg->x_mbl * h0;
+    int row = p_jpeg->cur_row++;
+    unsigned char *out = (unsigned char *)p_jpeg->img_buf;
+    int x;
+#ifdef HAVE_LCD_COLOR
+    int c;
+    for (c = 0; c < 3; c++)
+    {
+        struct frame_component *fc = &p_jpeg->frameheader[c];
+        int hs = h0 - fc->horizontal_sampling; /* 1 when subsampled */
+        int vs = p_jpeg->frameheader[0].vertical_sampling
+               - fc->vertical_sampling;
+        const unsigned char *src = p_jpeg->dc_plane[c]
+            + (row >> vs) * p_jpeg->x_mbl * fc->horizontal_sampling;
+        unsigned char *o = out + (p_jpeg->rgb ? 2 - c : c);
+        for (x = 0; x < width; x++, o += JPEG_PIX_SZ)
+            *o = src[x >> hs];
+    }
+#else
+    const unsigned char *src = p_jpeg->dc_plane[0] + row * width;
+    if (p_jpeg->rgb)
+    {   /* luma from R, G and B (JFIF weights); all are 1x1 */
+        const unsigned char *g = p_jpeg->dc_plane[1] + row * width;
+        const unsigned char *b = p_jpeg->dc_plane[2] + row * width;
+        for (x = 0; x < width; x++)
+            out[x] = (77 * src[x] + 150 * g[x] + 29 * b[x] + 128) >> 8;
+    }
+    else
+        MEMCPY(out, src, width);
+#endif
+    p_jpeg->part.len = width;
+    p_jpeg->part.buf = p_jpeg->img_buf;
+    return &p_jpeg->part;
 }
 
 /******************************************************************************
@@ -2189,6 +2397,29 @@ int clip_jpeg_fd(int fd, int flags,
         return -(status * 16);
     if (!(status & DHT)) /* if no Huffman table present: */
         default_huff_tbl(p_jpeg); /* use default */
+    int c, dc_need = 0; /* PROG_PLANES: components whose DC is kept */
+    if (p_jpeg->progressive)
+    {   /* only of use to the resizer: the image is decoded at 1/8 scale.
+           The first scan must be DC (T.81 G.1.1.1.1: DC precedes AC). */
+        if (!(format & FORMAT_RESIZE) || p_jpeg->scan_ss || p_jpeg->scan_ah)
+            return -4;
+#ifdef HAVE_LCD_COLOR
+        dc_need = BIT_N(p_jpeg->ncomp) - 1;
+#else
+        dc_need = p_jpeg->rgb ? 7 : 1; /* luma, unless it is RGB */
+#endif
+        if (p_jpeg->scan_ns == p_jpeg->ncomp)
+            dc_need = 0; /* PROG_STREAM: all in the first scan */
+        else if (dc_need == 1 && p_jpeg->scan_ns == 1 && !p_jpeg->scan_ci[0])
+        {   /* greyscale from a luma DC scan: one block per MCU */
+            p_jpeg->blocks = 1;
+            p_jpeg->frameheader[0].horizontal_sampling = 1;
+            p_jpeg->frameheader[0].vertical_sampling = 1;
+            dc_need = 0;
+        }
+        else
+            p_jpeg->progressive = PROG_PLANES;
+    }
     fix_headers(p_jpeg); /* derive Huffman and other lookup-tables */
 
     /*the dim array in rockbox is limited to 2^15-1 pixels, so we cannot resize
@@ -2223,6 +2454,8 @@ int clip_jpeg_fd(int fd, int flags,
     }
     p_jpeg->h_scale[0] = calc_scale(p_jpeg->x_size, bm->width);
     p_jpeg->v_scale[0] = calc_scale(p_jpeg->y_size, bm->height);
+    if (p_jpeg->progressive)
+        p_jpeg->h_scale[0] = p_jpeg->v_scale[0] = 0; /* DC only */
     JDEBUGF("luma IDCT size: %dx%d\n", BIT_N(p_jpeg->h_scale[0]),
         BIT_N(p_jpeg->v_scale[0]));
     if ((p_jpeg->x_size << p_jpeg->h_scale[0]) >> 3 == bm->width &&
@@ -2246,11 +2479,14 @@ int clip_jpeg_fd(int fd, int flags,
         (p_jpeg->x_size << p_jpeg->h_scale[0]) >> 3,
         (p_jpeg->y_size << p_jpeg->v_scale[0]) >> 3,
         bm->width, bm->height);
-    fix_quant_tables(p_jpeg);
+    if (p_jpeg->progressive != PROG_PLANES) /* planes use the raw DC q */
+        fix_quant_tables(p_jpeg);
     int decode_w = BIT_N(p_jpeg->h_scale[0]) - 1;
     int decode_h = BIT_N(p_jpeg->v_scale[0]) - 1;
     src_dim.width = (p_jpeg->x_size << p_jpeg->h_scale[0]) >> 3;
     src_dim.height = (p_jpeg->y_size << p_jpeg->v_scale[0]) >> 3;
+    if (!src_dim.width || !src_dim.height)
+        return -4; /* progressive (1/8 scale) under 8 pixels */
 #ifdef JPEG_IDCT_TRANSPOSE
     if (p_jpeg->v_scale[0] > 2)
         p_jpeg->zero_need[0] = (decode_w << 3) + decode_h;
@@ -2295,36 +2531,61 @@ int clip_jpeg_fd(int fd, int flags,
         p_jpeg->frameheader[0].vertical_sampling - 2;
     decode_buf_size *= JPEG_PIX_SZ;
     JDEBUGF("decode buffer size: %d\n", decode_buf_size);
+    int plane_size = 0;
+    for (c = 0; c < 3; c++)
+        if (dc_need & BIT_N(c))
+            plane_size += p_jpeg->x_mbl * p_jpeg->y_mbl
+                * p_jpeg->frameheader[c].horizontal_sampling
+                * p_jpeg->frameheader[c].vertical_sampling;
+    /* resize_on_load: buffer for 1 line + 2 spare lines */
+    int resize_size = resize ?
+#ifdef HAVE_LCD_COLOR
+        sizeof(struct uint32_argb)
+#else
+        sizeof(uint32_t)
+#endif
+        * 3 * bm->width : 0;
     if (return_size)
     {
         return (buf_start - (char *) bm->data) + decode_buf_size
-               + (resize
-                      ?
-                      /* buffer for 1 line + 2 spare lines */
-#ifdef HAVE_LCD_COLOR
-                      sizeof(struct uint32_argb)
-#else
-                      sizeof(uint32_t)
-#endif
-                      * 3 * bm->width
-                      : 0);
+               + plane_size + resize_size;
     }
 
     if (buf_end - buf_start < decode_buf_size)
         return -1;
+    if (plane_size
+     && buf_end - buf_start < decode_buf_size + plane_size + resize_size)
+        return -13; /* progressive: no room to keep the DC of each block */
 
     fix_huff_tables(p_jpeg);
 
     p_jpeg->img_buf = (jpeg_pix_t *)buf_start;
     buf_start += decode_buf_size;
-    maxsize = buf_end - buf_start;
     memset(p_jpeg->img_buf, 0, decode_buf_size);
+    for (c = 0; c < 3; c++)
+        if (dc_need & BIT_N(c))
+        {
+            p_jpeg->dc_plane[c] = (unsigned char *)buf_start;
+            buf_start += p_jpeg->x_mbl * p_jpeg->y_mbl
+                * p_jpeg->frameheader[c].horizontal_sampling
+                * p_jpeg->frameheader[c].vertical_sampling;
+        }
+    memset(p_jpeg->img_buf + decode_buf_size / JPEG_PIX_SZ, 0, plane_size);
+    maxsize = buf_end - buf_start;
     p_jpeg->mcu_row = 0;
     p_jpeg->restart = p_jpeg->restart_interval;
     rset.rowstart = 0;
     rset.rowstop = bm->height;
     rset.rowstep = 1;
     p_jpeg->resize = resize;
+    struct img_part *(*store_row)(void *) = store_row_jpeg;
+    if (dc_need)
+    {
+        status = decode_dc_planes(p_jpeg, dc_need);
+        if (status < 0)
+            return status;
+        store_row = store_row_planes;
+    }
     void* jpeg_args[] = {p_jpeg, cb_progress};
     p_jpeg->set_rows = bm->height;
     p_jpeg->cur_row = 0;
@@ -2332,8 +2593,7 @@ int clip_jpeg_fd(int fd, int flags,
     {
         if (resize_on_load(bm, dither, &src_dim, &rset, buf_start, maxsize,
             cformat, IF_PIX_FMT(p_jpeg->blocks == 1 || p_jpeg->rgb ? 0 : 1,)
-            store_row_jpeg,
-            jpeg_args))
+            store_row, jpeg_args))
             return bm_size;
         return -1;
     } else {
@@ -2355,7 +2615,7 @@ int clip_jpeg_fd(int fd, int flags,
         struct img_part *part;
         for (row = 0; row < bm->height; row++)
         {
-            part = store_row_jpeg(jpeg_args);
+            part = store_row(p_jpeg);
             if (part == NULL)
                 return -1;
 
